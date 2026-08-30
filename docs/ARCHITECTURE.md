@@ -26,6 +26,32 @@ emit(event)
 
 This order gives deterministic replay and lets agents deliberate over a situation that already contains the triggering observation.
 
+Every envelope carries a schema version. Deterministic upcasters adapt old
+payloads at read/projection time without rewriting canonical history.
+
+## Portable durability
+
+Noema has one semantic runtime with two deployment profiles:
+
+```text
+embedded                         distributed
+SQLite event store               PostgreSQL event store
+in-process event bus              transactional outbox → NATS JetStream
+single runtime                    durable inbox → one or more runtimes
+```
+
+In distributed mode, committing an event and its outbox record is one database
+transaction. The publisher and consumer use renewable leases with fencing
+tokens. Delivery is intentionally at least once: event IDs deduplicate runtime
+observations, while a stable idempotency key crosses the capability boundary
+for external effects. A broker transports events; it is never canonical history.
+
+The same application policy and capability code runs in either profile.
+If concurrent publishers deliver store sequences out of order, the receiving
+kernel rebuilds its situation projection from canonical database order before
+notifying local subscribers about the late event. Broker history already
+present at runtime startup is not treated as a new stimulus.
+
 ## Situation graph
 
 The built-in projection supports:
@@ -57,6 +83,19 @@ material event
 
 Each transition is persisted as an event.
 
+On restart, an agent rebuilds successful idempotency keys and reconstructs
+authorized actions that have no terminal outcome. Only idempotent capabilities
+are retried automatically; non-idempotent actions are durably abandoned for
+explicit reconciliation and a new authorization.
+
+## Model boundary
+
+Model providers implement a small, provider-neutral request/response contract.
+A context assembler selects a bounded view from the situation model. Structured
+model output is schema-validated into `ActionIntent` values, then goes through
+the same critics, policy, authorization, and capability boundary as deterministic
+reasoners. Models never receive capability credentials.
+
 ## Async semantics
 
 - Per-subscription FIFO delivery is guaranteed.
@@ -65,8 +104,9 @@ Each transition is persisted as an event.
 - Agent workers consume a priority queue.
 - Actions are concurrency-limited independently from deliberation workers.
 - Capability timeouts and retries are explicit.
-- Idempotency is opt-in through an action key.
+- Idempotency is explicit through an action key supplied to the capability.
 - Scheduled events create autonomous internal stimuli.
+- Distributed delivery uses leases and fencing to reject stale acknowledgements.
 
 ## Multi-agent systems
 
@@ -92,7 +132,11 @@ Coordination occurs through events, not direct hidden calls.
 | Situation inference | `SituationDetector` |
 | Authorization | `PolicyRule` / `PolicyEngine` |
 | Persistence | `EventStore` |
+| Distributed transport | `EventBroker` |
+| Model inference | `ModelProvider` |
+| Model context | `ContextAssembler` |
 | Telemetry | `TelemetrySink` |
+| Tracing | `Tracer` |
 | Projection | custom `SituationModel` projector |
 
 ## Non-goals of the core
@@ -104,8 +148,11 @@ The core does not choose:
 - a prompt format;
 - a particular personality;
 - a fixed reasoning loop;
-- a distributed broker;
 - a cloud platform;
 - a human-approval UI.
 
 Those choices belong in adapters and deployments.
+
+See [Architecture principles](ARCHITECTURE_PRINCIPLES.md),
+[ADR 0001](adr/0001-portable-durable-agent.md), and the
+[engineering roadmap](ROADMAP.md).

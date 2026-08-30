@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,10 +25,10 @@ class WorkItem:
     def overdue(self) -> bool:
         if self.deadline is None:
             return False
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         deadline = self.deadline
         if deadline.tzinfo is None:
-            deadline = deadline.replace(tzinfo=timezone.utc)
+            deadline = deadline.replace(tzinfo=UTC)
         return deadline <= now
 
 
@@ -91,7 +91,7 @@ class AttentionAllocator:
 
 @dataclass(slots=True)
 class AttentionLease:
-    account: "AttentionAccount"
+    account: AttentionAccount
     lease_id: str
     reserved: float
     settled: bool = False
@@ -102,7 +102,7 @@ class AttentionLease:
         await self.account._settle(self.lease_id, self.reserved, actual_cost)
         self.settled = True
 
-    async def __aenter__(self) -> "AttentionLease":
+    async def __aenter__(self) -> AttentionLease:
         return self
 
     async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:

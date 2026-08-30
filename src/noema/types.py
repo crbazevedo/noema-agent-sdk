@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TypeAlias
 
 JSONScalar: TypeAlias = str | int | float | bool | None
@@ -13,7 +13,7 @@ JSONObject: TypeAlias = dict[str, JSONValue]
 def utc_now() -> datetime:
     """Return a timezone-aware UTC timestamp."""
 
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_datetime(value: str | datetime | None) -> datetime | None:
@@ -21,5 +21,5 @@ def parse_datetime(value: str | datetime | None) -> datetime | None:
         return value
     parsed = datetime.fromisoformat(value)
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed

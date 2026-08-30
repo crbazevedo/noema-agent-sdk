@@ -66,16 +66,12 @@ class AuthorityTests(unittest.IsolatedAsyncioTestCase):
     def test_trust_ledger_starts_conservative_and_learns(self) -> None:
         ledger = TrustLedger()
         self.assertEqual(
-            ledger.recommended_authority(
-                "worker", reversible=True, risk=RiskLevel.LOW
-            ),
+            ledger.recommended_authority("worker", reversible=True, risk=RiskLevel.LOW),
             AuthorityLevel.OBSERVE,
         )
         for _ in range(30):
             ledger.record("worker", success=True)
         self.assertGreaterEqual(
-            ledger.recommended_authority(
-                "worker", reversible=True, risk=RiskLevel.LOW
-            ),
+            ledger.recommended_authority("worker", reversible=True, risk=RiskLevel.LOW),
             AuthorityLevel.ACT_REVERSIBLE,
         )

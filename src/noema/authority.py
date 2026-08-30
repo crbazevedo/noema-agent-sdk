@@ -6,10 +6,55 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import IntEnum
 from math import sqrt
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 from .types import JSONObject, JSONValue
+
+ACTION_INTENT_JSON_SCHEMA: JSONObject = {
+    "type": "object",
+    "properties": {
+        "intent_id": {"type": "string"},
+        "capability": {"type": "string"},
+        "arguments": {"type": "object"},
+        "rationale": {"type": "string"},
+        "expected_value": {"type": "number"},
+        "information_value": {"type": "number"},
+        "risk_reduction": {"type": "number"},
+        "attention_cost": {"type": "number", "minimum": 0},
+        "switching_cost": {"type": "number", "minimum": 0},
+        "branch_cost": {"type": "number", "minimum": 0},
+        "risk": {"type": "integer", "enum": [0, 1, 2, 3, 4]},
+        "reversible": {"type": "boolean"},
+        "required_authority": {"type": "integer", "enum": [0, 1, 2, 3, 4]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "alternatives": {"type": "array", "items": {"type": "string"}},
+        "falsifiers": {"type": "array", "items": {"type": "string"}},
+        "idempotency_key": {"type": ["string", "null"]},
+        "metadata": {"type": "object"},
+    },
+    "required": [
+        "intent_id",
+        "capability",
+        "arguments",
+        "rationale",
+        "expected_value",
+        "information_value",
+        "risk_reduction",
+        "attention_cost",
+        "switching_cost",
+        "branch_cost",
+        "risk",
+        "reversible",
+        "required_authority",
+        "confidence",
+        "alternatives",
+        "falsifiers",
+        "idempotency_key",
+        "metadata",
+    ],
+    "additionalProperties": False,
+}
 
 if TYPE_CHECKING:
     from .capabilities import CapabilitySpec
@@ -85,6 +130,37 @@ class ActionIntent:
             "metadata": dict(self.metadata),
         }
 
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, object]) -> ActionIntent:
+        """Construct an intent only after validating its canonical schema."""
+
+        from .schema import validate_json_schema
+
+        validate_json_schema(payload, ACTION_INTENT_JSON_SCHEMA)
+        data = cast(Mapping[str, Any], payload)
+        return cls(
+            capability=str(data["capability"]),
+            arguments=dict(data["arguments"]),
+            rationale=str(data["rationale"]),
+            expected_value=float(data["expected_value"]),
+            information_value=float(data["information_value"]),
+            risk_reduction=float(data["risk_reduction"]),
+            attention_cost=float(data["attention_cost"]),
+            switching_cost=float(data["switching_cost"]),
+            branch_cost=float(data["branch_cost"]),
+            risk=RiskLevel(int(data["risk"])),
+            reversible=bool(data["reversible"]),
+            required_authority=AuthorityLevel(int(data["required_authority"])),
+            confidence=float(data["confidence"]),
+            alternatives=tuple(str(value) for value in data["alternatives"]),
+            falsifiers=tuple(str(value) for value in data["falsifiers"]),
+            idempotency_key=(
+                str(data["idempotency_key"]) if data["idempotency_key"] is not None else None
+            ),
+            intent_id=str(data["intent_id"]),
+            metadata=dict(data["metadata"]),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class AutonomyProfile:
@@ -96,7 +172,7 @@ class AutonomyProfile:
     require_falsifiers_above_risk: RiskLevel = RiskLevel.HIGH
 
     @classmethod
-    def sovereign(cls) -> "AutonomyProfile":
+    def sovereign(cls) -> AutonomyProfile:
         """Run without human approval while retaining explicit policy checks."""
 
         return cls(
@@ -141,8 +217,8 @@ class PolicyEngine:
     def authorize(
         self,
         intent: ActionIntent,
-        capability: "CapabilitySpec",
-        situation: "SituationSnapshot",
+        capability: CapabilitySpec,
+        situation: SituationSnapshot,
     ) -> AuthorizationDecision:
         effective_authority = max(intent.required_authority, capability.required_authority)
         effective_risk = max(intent.risk, capability.risk_level)
@@ -183,10 +259,7 @@ class PolicyEngine:
                 effective_authority,
                 effective_risk,
             )
-        if (
-            effective_risk >= self.profile.require_falsifiers_above_risk
-            and not intent.falsifiers
-        ):
+        if effective_risk >= self.profile.require_falsifiers_above_risk and not intent.falsifiers:
             return AuthorizationDecision(
                 False,
                 "high-risk actions require explicit falsifiers",
@@ -236,7 +309,7 @@ class TrustEstimate:
 
         return max(0.0, self.mean - 2.0 * sqrt(self.variance))
 
-    def updated(self, *, success: bool, weight: float = 1.0) -> "TrustEstimate":
+    def updated(self, *, success: bool, weight: float = 1.0) -> TrustEstimate:
         if weight <= 0:
             raise ValueError("weight must be positive")
         if success:

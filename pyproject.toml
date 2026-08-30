@@ -1,14 +1,14 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "noema-agent-sdk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Async, event-sourced, situation-aware SDK for autonomous agent systems."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [
   { name = "Carlos R. B. Azevedo" }
 ]
@@ -23,7 +23,6 @@ keywords = [
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -33,6 +32,32 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+postgres = [
+  "psycopg[binary]>=3.2",
+]
+nats = [
+  "nats-py>=2.9",
+]
+openai = [
+  "openai>=1.66",
+]
+otel = [
+  "opentelemetry-sdk>=1.27",
+  "opentelemetry-exporter-otlp-proto-grpc>=1.27",
+]
+distributed = [
+  "psycopg[binary]>=3.2",
+  "nats-py>=2.9",
+  "opentelemetry-sdk>=1.27",
+  "opentelemetry-exporter-otlp-proto-grpc>=1.27",
+]
+all = [
+  "psycopg[binary]>=3.2",
+  "nats-py>=2.9",
+  "openai>=1.66",
+  "opentelemetry-sdk>=1.27",
+  "opentelemetry-exporter-otlp-proto-grpc>=1.27",
+]
 dev = [
   "build>=1.2",
   "mypy>=1.11",
@@ -53,6 +78,7 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "ASYNC"]
+ignore = ["ASYNC109", "ASYNC110"]
 
 [tool.mypy]
 python_version = "3.11"

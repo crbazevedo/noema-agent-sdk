@@ -27,7 +27,7 @@ class EventCollector:
         self.events: list[Event] = []
         self._subscription_id: str | None = None
 
-    async def start(self) -> "EventCollector":
+    async def start(self) -> EventCollector:
         self._subscription_id = await self.kernel.bus.subscribe(self.pattern, self._collect)
         return self
 

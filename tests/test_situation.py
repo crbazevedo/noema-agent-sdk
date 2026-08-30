@@ -67,7 +67,9 @@ class SituationTests(unittest.IsolatedAsyncioTestCase):
         snapshot = await kernel.snapshot()
         self.assertEqual(snapshot.fact("api.health"), "ok")
         self.assertEqual(snapshot.entities["service:api"].kind, "service")
-        self.assertEqual(snapshot.relations_from("team:platform", kind="owns")[0].target_id, "service:api")
+        self.assertEqual(
+            snapshot.relations_from("team:platform", kind="owns")[0].target_id, "service:api"
+        )
         self.assertEqual(len(snapshot.active_goals()), 1)
         self.assertEqual(len(snapshot.open_commitments()), 1)
         self.assertEqual(len(snapshot.active_risks()), 1)

@@ -6,7 +6,7 @@ import asyncio
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from .events import Event
@@ -59,7 +59,7 @@ class AsyncScheduler:
 
     def at(self, when: datetime, event_factory: EventFactory) -> ScheduleHandle:
         if when.tzinfo is None:
-            when = when.replace(tzinfo=timezone.utc)
+            when = when.replace(tzinfo=UTC)
         schedule_id = str(uuid4())
         task = asyncio.create_task(
             self._run_once(when, event_factory),
@@ -103,6 +103,6 @@ class AsyncScheduler:
             await self.kernel.emit(event_factory())
 
     async def _run_once(self, when: datetime, event_factory: EventFactory) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         await asyncio.sleep(max(0.0, (when - now).total_seconds()))
         await self.kernel.emit(event_factory())

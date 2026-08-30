@@ -301,7 +301,9 @@ class CognitiveController:
                 elif critique.confidence_delta:
                     current = replace(
                         current,
-                        confidence=min(1.0, max(0.0, current.confidence + critique.confidence_delta)),
+                        confidence=min(
+                            1.0, max(0.0, current.confidence + critique.confidence_delta)
+                        ),
                     )
             reviews.append(IntentReview(original, current, tuple(critiques)))
         return DecisionTrace(

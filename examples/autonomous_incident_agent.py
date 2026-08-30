@@ -14,16 +14,17 @@ from noema import (
     CapabilitySpec,
     CognitiveController,
     Event,
-    NoemaKernel,
     NoemaSystem,
     OpportunityCostCritic,
     PolicyEngine,
     RuleBasedReasoner,
+    deployment_from_env,
 )
 
 
 async def main() -> None:
-    kernel = NoemaKernel()
+    deployment = await deployment_from_env()
+    kernel = deployment.kernel
     capabilities = CapabilityRegistry()
     simulated_services = {"api": "degraded"}
 
@@ -46,11 +47,19 @@ async def main() -> None:
         )
 
     capabilities.register_function(
-        CapabilitySpec("inspect_service", "Inspect current service health"),
+        CapabilitySpec(
+            "inspect_service",
+            "Inspect current service health",
+            idempotent=True,
+        ),
         inspect_service,
     )
     capabilities.register_function(
-        CapabilitySpec("restart_service", "Restart a degraded service"),
+        CapabilitySpec(
+            "restart_service",
+            "Restart a degraded service",
+            idempotent=True,
+        ),
         restart_service,
     )
 
@@ -100,7 +109,11 @@ async def main() -> None:
         capabilities=capabilities,
         policy=PolicyEngine(),
     )
-    system = NoemaSystem(kernel=kernel, agents=[agent])
+    system = NoemaSystem(
+        kernel=kernel,
+        agents=[agent],
+        services=deployment.services,
+    )
 
     async with system:
         await system.emit(

@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
+from typing import cast
 
-from .events import AsyncEventBus, Event
+from .delivery import TransactionalDeliveryStore, event_topic
+from .events import AsyncEventBus, Event, EventSchemaRegistry
 from .situation import SituationModel, SituationSnapshot
 from .store import EventStore, InMemoryEventStore
+from .tracing import NullTracer, Tracer
 
 
 class NoemaKernel:
@@ -19,11 +22,23 @@ class NoemaKernel:
         store: EventStore | None = None,
         bus: AsyncEventBus | None = None,
         situation: SituationModel | None = None,
+        schemas: EventSchemaRegistry | None = None,
+        tracer: Tracer | None = None,
+        distributed: bool = False,
+        topic_prefix: str = "noema",
     ) -> None:
         self.store = store or InMemoryEventStore()
         self.bus = bus or AsyncEventBus()
         self.situation = situation or SituationModel()
+        self.schemas = schemas or EventSchemaRegistry()
+        self.tracer = tracer or NullTracer()
+        self.distributed = distributed
+        self.topic_prefix = topic_prefix
+        if distributed and not callable(getattr(self.store, "append_with_outbox", None)):
+            raise TypeError("distributed kernels require a transactional delivery store")
         self._emit_lock = asyncio.Lock()
+        self._startup_sequence = 0
+        self._pending_broker_echoes: set[str] = set()
         self._started = False
         self._stopped = False
 
@@ -37,22 +52,67 @@ class NoemaKernel:
         if self._started:
             return
         if replay:
-            events = await self.store.read()
-            await self.situation.rebuild(events)
+            await self._rebuild_situation()
+        self._startup_sequence = await self.store.latest_sequence()
         await self.bus.start()
         self._started = True
 
     async def emit(self, event: Event) -> Event:
+        return await self._commit(event, distribute=True)
+
+    async def ingest(self, event: Event) -> Event:
+        """Commit a broker-delivered event without creating another outbox row."""
+
+        return await self._commit(event, distribute=False)
+
+    async def _commit(self, event: Event, *, distribute: bool) -> Event:
         if not self._started:
             await self.start()
-        async with self._emit_lock:
-            stored = await self.store.append(event)
-            if stored.sequence is not None and stored.sequence <= self.situation.version:
-                # Idempotent re-emission of an already projected event.
+        attributes = {
+            "noema.event_id": event.id,
+            "noema.event_type": event.type,
+            "noema.event_source": event.source,
+        }
+        if event.correlation_id is not None:
+            attributes["noema.correlation_id"] = event.correlation_id
+        async with self.tracer.span("noema.event.commit", attributes):
+            async with self._emit_lock:
+                if self.distributed and distribute:
+                    delivery_store = cast(TransactionalDeliveryStore, self.store)
+                    stored = await delivery_store.append_with_outbox(
+                        event,
+                        topic=event_topic(event, prefix=self.topic_prefix),
+                    )
+                else:
+                    stored = await self.store.append(event)
+                if stored.sequence is not None and stored.sequence <= self.situation.version:
+                    if distribute:
+                        # Idempotent local re-emission of canonical history.
+                        return stored
+                    if stored.id in self._pending_broker_echoes:
+                        # The broker echoed an event already projected by this runtime.
+                        self._pending_broker_echoes.discard(stored.id)
+                        return stored
+                    if stored.sequence <= self._startup_sequence:
+                        # A new durable consumer may receive history already rebuilt at start.
+                        return stored
+                    # Concurrent outbox publishers may deliver database sequences out of
+                    # order. Rebuild the projection from canonical order before notifying
+                    # local subscribers about this late arrival.
+                    await self._rebuild_situation()
+                    projected = self.schemas.normalize(stored)
+                    await self.bus.publish(projected)
+                    return stored
+                projected = self.schemas.normalize(stored)
+                await self.situation.apply(projected)
+                await self.bus.publish(projected)
+                if distribute:
+                    self._pending_broker_echoes.add(stored.id)
                 return stored
-            await self.situation.apply(stored)
-            await self.bus.publish(stored)
-            return stored
+
+    async def _rebuild_situation(self) -> None:
+        events = await self.store.read()
+        await self.situation.rebuild(self.schemas.normalize(event) for event in events)
 
     async def emit_many(self, events: Sequence[Event]) -> tuple[Event, ...]:
         stored: list[Event] = []
@@ -84,7 +144,7 @@ class NoemaKernel:
         self._stopped = True
         self._started = False
 
-    async def __aenter__(self) -> "NoemaKernel":
+    async def __aenter__(self) -> NoemaKernel:
         await self.start()
         return self
 

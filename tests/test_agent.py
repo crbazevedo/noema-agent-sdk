@@ -40,17 +40,14 @@ class AutonomousAgentTests(unittest.IsolatedAsyncioTestCase):
                 facts={f"service.{arguments['service']}.health": "healthy"},
             )
 
-        registry.register_function(
-            CapabilitySpec("inspect_service", "Inspect a service"), inspect
-        )
-        registry.register_function(
-            CapabilitySpec("restart_service", "Restart a service"), restart
-        )
+        registry.register_function(CapabilitySpec("inspect_service", "Inspect a service"), inspect)
+        registry.register_function(CapabilitySpec("restart_service", "Restart a service"), restart)
 
         def rule(request):
-            if request.trigger.type == "external.metric" and float(
-                request.trigger.payload["error_rate"]
-            ) > 0.2:
+            if (
+                request.trigger.type == "external.metric"
+                and float(request.trigger.payload["error_rate"]) > 0.2
+            ):
                 return ActionIntent(
                     "inspect_service",
                     {"service": request.trigger.payload["service"]},

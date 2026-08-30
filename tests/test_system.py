@@ -20,6 +20,24 @@ from noema.testing import wait_for
 
 
 class MultiAgentSystemTests(unittest.IsolatedAsyncioTestCase):
+    async def test_partial_startup_rolls_back_runtime_services(self) -> None:
+        class FailingService:
+            stopped = False
+
+            async def start(self) -> None:
+                raise RuntimeError("injected startup failure")
+
+            async def stop(self) -> None:
+                self.stopped = True
+
+        kernel = NoemaKernel()
+        service = FailingService()
+        system = NoemaSystem(kernel=kernel, services=[service])
+        with self.assertRaisesRegex(RuntimeError, "injected startup failure"):
+            await system.start()
+        self.assertTrue(service.stopped)
+        self.assertFalse(kernel.started)
+
     async def test_agents_coordinate_through_shared_situation_events(self) -> None:
         kernel = NoemaKernel()
         calls: list[str] = []

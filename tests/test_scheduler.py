@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import unittest
 
 from noema import AsyncScheduler, Event, NoemaKernel

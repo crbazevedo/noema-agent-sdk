@@ -6,6 +6,7 @@ Async, event-sourced, situation-aware primitives for autonomous agent systems.
 from .agent import AgentStatus, AutonomousAgent, AutonomousAgentConfig
 from .attention import AttentionAccount, AttentionAllocator, AttentionWeights, WorkItem
 from .authority import (
+    ACTION_INTENT_JSON_SCHEMA,
     ActionIntent,
     AuthorityLevel,
     AuthorizationDecision,
@@ -23,9 +24,43 @@ from .capabilities import (
     CapabilitySpec,
     FunctionCapability,
 )
+from .delivery import (
+    EventBroker,
+    InboxClaim,
+    InboxConsumer,
+    InboxDisposition,
+    InMemoryBroker,
+    OutboxPublisher,
+    OutboxRecord,
+    TransactionalDeliveryStore,
+    event_topic,
+)
+from .deployment import Deployment, DeploymentMode, deployment_from_env
 from .detectors import DeadlineRiskDetector, DetectorEngine, SituationDetector
-from .events import AsyncEventBus, Event
+from .events import (
+    CURRENT_EVENT_SCHEMA_VERSION,
+    AsyncEventBus,
+    Event,
+    EventSchemaRegistry,
+)
 from .kernel import NoemaKernel
+from .models import (
+    DELIBERATION_JSON_SCHEMA,
+    ContextAssembler,
+    DefaultContextAssembler,
+    ModelCapabilities,
+    ModelMessage,
+    ModelProvider,
+    ModelRequest,
+    ModelResponse,
+    ModelRouter,
+    ModelUsage,
+    RecordingModelProvider,
+    ReplayModelProvider,
+    StaticModelProvider,
+    StructuredModelReasoner,
+    model_request_fingerprint,
+)
 from .reasoning import (
     ActionOutcome,
     CapabilityExistenceCritic,
@@ -58,11 +93,13 @@ from .situation import (
     SituationSnapshot,
 )
 from .store import EventStore, InMemoryEventStore, SQLiteEventStore, copy_events
-from .system import NoemaSystem
+from .system import NoemaSystem, RuntimeService
 from .telemetry import InMemoryTelemetry, JsonlTelemetry, Metric, TelemetrySink
+from .tracing import NullTracer, OpenTelemetryTracer, Span, Tracer
 
 __all__ = [
     "ActionIntent",
+    "ACTION_INTENT_JSON_SCHEMA",
     "ActionOutcome",
     "AgentStatus",
     "AsyncEventBus",
@@ -89,12 +126,17 @@ __all__ = [
     "Critic",
     "Critique",
     "DeadlineRiskDetector",
+    "DELIBERATION_JSON_SCHEMA",
     "DecisionTrace",
     "DeliberationRequest",
     "DeliberationResult",
     "DetectorEngine",
+    "Deployment",
+    "DeploymentMode",
     "Entity",
     "Event",
+    "EventBroker",
+    "EventSchemaRegistry",
     "EventStore",
     "Fact",
     "FalsificationCritic",
@@ -103,29 +145,58 @@ __all__ = [
     "GoalStatus",
     "Hypothesis",
     "InMemoryEventStore",
+    "InMemoryBroker",
     "InMemoryTelemetry",
     "JsonlTelemetry",
     "Metric",
+    "ModelCapabilities",
+    "ModelMessage",
+    "ModelProvider",
+    "ModelRequest",
+    "ModelResponse",
+    "ModelRouter",
+    "ModelUsage",
     "NoemaKernel",
     "NoemaSystem",
+    "NullTracer",
     "Opportunity",
     "OpportunityCostCritic",
     "PolicyEngine",
+    "OutboxPublisher",
+    "OutboxRecord",
+    "OpenTelemetryTracer",
+    "InboxClaim",
+    "InboxConsumer",
+    "InboxDisposition",
+    "RecordingModelProvider",
+    "ReplayModelProvider",
     "Reasoner",
     "Relation",
     "Risk",
     "RiskLevel",
     "RuleBasedReasoner",
+    "RuntimeService",
     "SQLiteEventStore",
     "ScheduleHandle",
     "SituationDetector",
     "SituationModel",
     "SituationSnapshot",
+    "Span",
+    "StaticModelProvider",
+    "StructuredModelReasoner",
     "TelemetrySink",
+    "Tracer",
+    "TransactionalDeliveryStore",
     "TrustEstimate",
     "TrustLedger",
     "WorkItem",
     "copy_events",
+    "CURRENT_EVENT_SCHEMA_VERSION",
+    "ContextAssembler",
+    "DefaultContextAssembler",
+    "deployment_from_env",
+    "event_topic",
+    "model_request_fingerprint",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -10,6 +10,7 @@ Every event includes:
 - `subject`: optional affected entity;
 - `timestamp`: timezone-aware UTC time;
 - `sequence`: durable store order;
+- `schema_version`: positive version used by deterministic upcasters;
 - `correlation_id`: shared transaction / episode;
 - `causation_id`: immediate parent event;
 - `priority`: delivery priority for agent queues;
@@ -47,8 +48,10 @@ agent.stopped
 agent.cycle_failed
 decision.proposed
 decision.authorized
+decision.reauthorized
 decision.denied
 decision.deferred
+action.dispatched
 action.started
 action.succeeded
 action.failed
@@ -73,6 +76,23 @@ external.metric
 
 ## Delivery and durability
 
-Events are persisted before publication. The local bus provides at-least-once-compatible semantics; consumers should use event IDs and action idempotency keys when external effects require deduplication.
+Events are persisted before publication. The local bus provides
+at-least-once-compatible semantics; consumers use event IDs and action
+idempotency keys when external effects require deduplication.
 
-Distributed exactly-once effects require an outbox/inbox adapter and capability-side idempotency. Those are deliberately not faked by the in-process core.
+In distributed mode the PostgreSQL transaction writes the event and outbox row
+together. A leased publisher sends the event through the configured broker; a
+durable inbox claims delivery before the kernel ingests it. Lease fencing
+rejects stale completion after ownership changes.
+
+This does not claim exactly-once effects. Network failure can occur after an
+external system applies an effect and before Noema records success. A capability
+that enables automatic retry must therefore honor the supplied business
+idempotency key. Non-idempotent capabilities are never automatically retried.
+
+## Schema evolution
+
+`EventSchemaRegistry` registers one deterministic upcaster per adjacent schema
+version. Normalization preserves event identity, ordering, correlation, and
+causation. Stored events are immutable; evolution happens at the projection
+boundary rather than through history rewrites.

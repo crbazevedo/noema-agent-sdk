@@ -19,6 +19,10 @@ from .types import JSONObject, JSONValue, parse_datetime, utc_now
 
 EventHandler = Callable[["Event"], Awaitable[None]]
 EventErrorHandler = Callable[["Event", BaseException], Awaitable[None]]
+EventValidator = Callable[["Event"], None]
+EventUpcaster = Callable[["Event"], "Event"]
+
+CURRENT_EVENT_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +40,7 @@ class Event:
     priority: int = 0
     sequence: int | None = None
     metadata: Mapping[str, JSONValue] = field(default_factory=dict)
+    schema_version: int = CURRENT_EVENT_SCHEMA_VERSION
 
     def __post_init__(self) -> None:
         if not self.type or not self.type.strip():
@@ -44,13 +49,15 @@ class Event:
             raise ValueError("event source must be non-empty")
         if self.timestamp.tzinfo is None:
             raise ValueError("event timestamp must be timezone-aware")
+        if self.schema_version <= 0:
+            raise ValueError("event schema_version must be positive")
         object.__setattr__(self, "payload", dict(self.payload))
         object.__setattr__(self, "metadata", dict(self.metadata))
 
-    def with_sequence(self, sequence: int) -> "Event":
+    def with_sequence(self, sequence: int) -> Event:
         return replace(self, sequence=sequence)
 
-    def caused_by(self, parent: "Event", *, source: str | None = None) -> "Event":
+    def caused_by(self, parent: Event, *, source: str | None = None) -> Event:
         """Return a copy linked to a parent event's causal chain."""
 
         return replace(
@@ -73,10 +80,11 @@ class Event:
             "sequence": self.sequence,
             "payload": dict(self.payload),
             "metadata": dict(self.metadata),
+            "schema_version": self.schema_version,
         }
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> "Event":
+    def from_dict(cls, data: Mapping[str, Any]) -> Event:
         timestamp = parse_datetime(data.get("timestamp"))
         if timestamp is None:
             timestamp = utc_now()
@@ -87,20 +95,83 @@ class Event:
             subject=str(data["subject"]) if data.get("subject") is not None else None,
             timestamp=timestamp,
             correlation_id=(
-                str(data["correlation_id"])
-                if data.get("correlation_id") is not None
-                else None
+                str(data["correlation_id"]) if data.get("correlation_id") is not None else None
             ),
             causation_id=(
-                str(data["causation_id"])
-                if data.get("causation_id") is not None
-                else None
+                str(data["causation_id"]) if data.get("causation_id") is not None else None
             ),
             priority=int(data.get("priority", 0)),
             sequence=int(data["sequence"]) if data.get("sequence") is not None else None,
             payload=dict(data.get("payload", {})),
             metadata=dict(data.get("metadata", {})),
+            schema_version=int(data.get("schema_version", CURRENT_EVENT_SCHEMA_VERSION)),
         )
+
+
+class EventSchemaRegistry:
+    """Validate and upcast typed event payloads without rewriting history.
+
+    Stored events retain the schema version in which they were originally
+    observed.  Upcasters create a projection-time representation, preserving
+    the event id and causal metadata while keeping the append-only log intact.
+    """
+
+    def __init__(self) -> None:
+        self._current: dict[str, int] = {}
+        self._validators: dict[tuple[str, int], EventValidator] = {}
+        self._upcasters: dict[tuple[str, int], EventUpcaster] = {}
+
+    def register(
+        self,
+        event_type: str,
+        version: int,
+        *,
+        validator: EventValidator | None = None,
+        upcast_to_next: EventUpcaster | None = None,
+    ) -> None:
+        if not event_type:
+            raise ValueError("event_type must be non-empty")
+        if version <= 0:
+            raise ValueError("schema version must be positive")
+        key = (event_type, version)
+        if key in self._validators or key in self._upcasters:
+            raise ValueError(f"schema already registered: {event_type} v{version}")
+        if validator is not None:
+            self._validators[key] = validator
+        if upcast_to_next is not None:
+            self._upcasters[key] = upcast_to_next
+        self._current[event_type] = max(version, self._current.get(event_type, 0))
+
+    def current_version(self, event_type: str) -> int:
+        return self._current.get(event_type, CURRENT_EVENT_SCHEMA_VERSION)
+
+    def normalize(self, event: Event) -> Event:
+        current = self.current_version(event.type)
+        if event.schema_version > current:
+            raise ValueError(
+                f"unsupported future schema for {event.type}: v{event.schema_version} > v{current}"
+            )
+        normalized = event
+        while normalized.schema_version < current:
+            upcaster = self._upcasters.get((normalized.type, normalized.schema_version))
+            if upcaster is None:
+                raise ValueError(
+                    f"missing upcaster for {normalized.type} v{normalized.schema_version}"
+                )
+            previous = normalized
+            normalized = upcaster(normalized)
+            expected = previous.schema_version + 1
+            if normalized.schema_version != expected:
+                raise ValueError(
+                    f"upcaster for {previous.type} v{previous.schema_version} "
+                    f"must produce v{expected}"
+                )
+            if normalized.id != previous.id or normalized.sequence != previous.sequence:
+                raise ValueError("event upcasters must preserve id and sequence")
+        validator = self._validators.get((normalized.type, normalized.schema_version))
+        if validator is not None:
+            validator(normalized)
+        return normalized
 
 
 @dataclass(slots=True)

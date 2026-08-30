@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
-from noema import AsyncEventBus, Event
+from noema import AsyncEventBus, Event, EventSchemaRegistry
 
 
 class EventBusTests(unittest.IsolatedAsyncioTestCase):
@@ -56,3 +57,34 @@ class KernelIdempotencyTests(unittest.IsolatedAsyncioTestCase):
         await kernel.bus.drain()
         self.assertEqual(received, [event.id])
         await kernel.stop()
+
+
+class EventSchemaTests(unittest.TestCase):
+    def test_schema_version_round_trip_and_projection_upcast(self) -> None:
+        legacy = Event("external.metric", "test", {"percent": 50}, schema_version=1)
+        restored = Event.from_dict(legacy.to_dict())
+        self.assertEqual(restored.schema_version, 1)
+
+        registry = EventSchemaRegistry()
+        registry.register(
+            "external.metric",
+            1,
+            upcast_to_next=lambda event: replace(
+                event,
+                payload={"ratio": float(event.payload["percent"]) / 100},
+                schema_version=2,
+            ),
+        )
+        registry.register(
+            "external.metric",
+            2,
+            validator=lambda event: (
+                None
+                if "ratio" in event.payload
+                else (_ for _ in ()).throw(ValueError("ratio required"))
+            ),
+        )
+        current = registry.normalize(legacy)
+        self.assertEqual(current.schema_version, 2)
+        self.assertEqual(current.payload["ratio"], 0.5)
+        self.assertEqual(current.id, legacy.id)

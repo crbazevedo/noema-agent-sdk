@@ -1,71 +1,82 @@
 # Engineering roadmap
 
-The substrate is deliberately operational before the research program begins.
-Research should now be performed by implementing competing policies and replaying them against identical event histories.
+Noema's responsibility is persistent autonomous agency. Deployment, model,
+tool, and interoperability choices remain adapters around the same semantics.
 
-## W1 — Distributed durability
+Security, observability, deterministic replay, and local operation are
+cross-cutting release gates rather than a final wave.
 
-- broker adapter protocol;
-- transactional outbox/inbox;
-- distributed leases;
-- capability-side exactly-once keys;
-- worker crash recovery;
-- event schema versioning.
+## v0.2 — Portable Durable Agent
 
-## W2 — Model-backed reasoning
+Implemented:
 
-- structured-output `Reasoner` adapters;
-- model routing by task and budget;
-- tool-result grounding;
-- context construction from situation queries;
-- model-call telemetry and replay fixtures;
-- deterministic mock model.
+- PostgreSQL `EventStore`;
+- transactional outbox and durable inbox with fencing-token leases;
+- NATS JetStream and deterministic in-memory broker adapters;
+- event schema versioning and projection-time upcasting;
+- action lifecycle, durable idempotency restoration, and crash recovery;
+- model-provider/context/router contracts;
+- OpenAI Responses and OpenAI-compatible local adapters;
+- structured `ActionIntent` boundary validation;
+- OpenTelemetry tracing port and OTLP adapter;
+- replayable JSONL model fixtures;
+- embedded/distributed deployment profiles and Docker Compose topology.
 
-## W3 — Durable cognition and memory
+Acceptance: the autonomous incident application contains no mode-specific
+policy branch and runs with both `MODE=embedded` and `MODE=distributed`.
 
-- episodic retrieval from event history;
-- semantic assertions linked to evidence events;
-- contradiction tracking;
-- hypothesis lifecycle and posterior updates;
-- commitment and maintenance-debt projections.
+## v0.3 — Persistent Cognitive Agent
 
-## W4 — Adaptive metacontrol
+- episodic indexes over event history;
+- semantic assertions linked to evidence;
+- hypotheses, contradictions, and validity intervals;
+- PostgreSQL/pgvector and local SQLite/FTS projections;
+- context assembly by relevance, evidence, freshness, and confidence;
+- maintenance debt and commitment recovery.
 
-- learned cognitive-mode selection;
-- value-of-computation estimates;
-- branch-opening and branch-closing policies;
-- attention replenishment and fatigue models;
-- counterfactual policy replay.
+Acceptance: after a multi-day restart, an agent reconstructs relevant world
+and cognitive state without replaying its full transcript into a model.
 
-## W5 — Agent contracts
+## v0.4 — Agent Society
 
-- capability discovery;
-- typed task offers and bids;
-- delegation contracts;
-- evidence-weighted trust by domain;
-- rehabilitation and exploration quotas;
-- multi-agent disagreement protocols.
+- MCP capability adapter and A2A agent adapter;
+- capability manifests and discovery;
+- typed task offers, bids, awards, progress, result, failure, cancellation;
+- domain-specific trust, authority, rehabilitation, and exploration;
+- durable multi-agent cancellation and contracting.
 
-## W6 — Autonomous research harness
+Acceptance: a Noema agent delegates to a non-Noema A2A agent and consumes an
+MCP server without exposing Noema's internal memory or runtime protocol.
 
-- scenario generator;
-- baseline agent policies;
-- randomized interventions;
-- event-trace replay;
-- ablation runner;
-- calibration, regret, maintenance, and intervention metrics;
-- artifact and report generation.
+## v0.5 — Reflective Autonomous System
 
-## W7 — Production operation
+- explicit value-of-computation policies;
+- wall-clock, call, cost, branch, action, and recursion ceilings;
+- adaptive reasoning depth and strategy selection;
+- shadow-mode bandit/learned controllers;
+- counterfactual policy replay and experiment comparison.
 
-- sandbox adapters;
-- secrets isolation;
-- policy-as-code integration;
-- OpenTelemetry sink;
-- dashboards and incident timelines;
-- deployment templates;
-- chaos testing.
+Acceptance: learned control cannot execute before deterministic shadow
+evaluation, and identical captured inputs reproduce the same semantic trace.
 
-## Immediate implementation priority
+## v0.6 — Situated Continuity
 
-The next code should be a model-provider adapter plus a replayable experiment runner. Those two layers let the SDK become its own research instrument without changing the core runtime.
+- temporal semantics, source cursors, freshness, and awake epochs;
+- wake reconciliation and an orientation barrier;
+- substrate/sensor contracts and adaptive perception;
+- provenance-bearing situation capsules and artifact retention;
+- user, workflow, and agent ecology models;
+- durable delegations, work leases, and opportunity windows;
+- macOS reference sidecar and simulated sleep/wake flagship demo.
+
+See [`SITUATED_CONTINUITY.md`](SITUATED_CONTINUITY.md) for its invariants and
+dependency sequence.
+
+## Ongoing production ratchet
+
+- poison-message quarantine and operator repair tools;
+- sandbox adapters and secret-reference resolution;
+- tenant isolation and policy-as-code adapters;
+- performance/fault benchmarks at 1M+ events and 100-agent clusters;
+- optional Temporal durable-execution adapter;
+- Kafka/Redpanda transport adapter without changing core semantics.

@@ -11,10 +11,13 @@ import asyncio
 import json
 import sqlite3
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Protocol
 
+from .delivery import InboxClaim, InboxDisposition, OutboxRecord
 from .events import Event
+from .types import utc_now
 
 
 class EventStore(Protocol):
@@ -60,8 +63,7 @@ class InMemoryEventStore:
             events = [
                 event
                 for event in self._events
-                if (event.sequence or 0) > after_sequence
-                and (types is None or event.type in types)
+                if (event.sequence or 0) > after_sequence and (types is None or event.type in types)
             ]
         return events if limit is None else events[:limit]
 
@@ -105,30 +107,87 @@ class SQLiteEventStore:
                 causation_id TEXT,
                 priority INTEGER NOT NULL,
                 payload_json TEXT NOT NULL,
-                metadata_json TEXT NOT NULL
+                metadata_json TEXT NOT NULL,
+                schema_version INTEGER NOT NULL DEFAULT 1
+            )
+            """
+        )
+        columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(events)").fetchall()
+        }
+        if "schema_version" not in columns:
+            connection.execute(
+                "ALTER TABLE events ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1"
+            )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_type_sequence ON events(event_type, sequence)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS outbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT NOT NULL UNIQUE REFERENCES events(event_id),
+                topic TEXT NOT NULL,
+                event_json TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                available_at TEXT NOT NULL,
+                lease_owner TEXT,
+                lease_until TEXT,
+                fencing_token INTEGER NOT NULL DEFAULT 0,
+                last_error TEXT,
+                created_at TEXT NOT NULL,
+                published_at TEXT
             )
             """
         )
         connection.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_type_sequence "
-            "ON events(event_type, sequence)"
+            "CREATE INDEX IF NOT EXISTS idx_outbox_ready "
+            "ON outbox(published_at, available_at, lease_until)"
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS inbox (
+                message_id TEXT NOT NULL,
+                consumer_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                available_at TEXT NOT NULL,
+                lease_until TEXT,
+                fencing_token INTEGER NOT NULL DEFAULT 0,
+                last_error TEXT,
+                received_at TEXT NOT NULL,
+                completed_at TEXT,
+                PRIMARY KEY (message_id, consumer_id)
+            )
+            """
         )
         connection.commit()
 
     async def append(self, event: Event) -> Event:
         self._ensure_open()
         async with self._lock:
-            return await asyncio.to_thread(self._append_sync, event)
+            return await asyncio.to_thread(self._append_sync, event, None)
 
-    def _append_sync(self, event: Event) -> Event:
+    async def append_with_outbox(self, event: Event, *, topic: str) -> Event:
+        """Atomically append the canonical event and its transport projection."""
+
+        self._ensure_open()
+        if not topic:
+            raise ValueError("outbox topic must be non-empty")
+        async with self._lock:
+            return await asyncio.to_thread(self._append_sync, event, topic)
+
+    def _append_sync(self, event: Event, outbox_topic: str | None) -> Event:
+        self._connection.execute("BEGIN IMMEDIATE")
         try:
             cursor = self._connection.execute(
                 """
                 INSERT INTO events (
                     event_id, event_type, source, subject, timestamp,
                     correlation_id, causation_id, priority,
-                    payload_json, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    payload_json, metadata_json, schema_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(event_id) DO NOTHING
                 """,
                 (
                     event.id,
@@ -141,17 +200,42 @@ class SQLiteEventStore:
                     event.priority,
                     json.dumps(dict(event.payload), separators=(",", ":"), sort_keys=True),
                     json.dumps(dict(event.metadata), separators=(",", ":"), sort_keys=True),
+                    event.schema_version,
                 ),
             )
+            if cursor.rowcount:
+                if cursor.lastrowid is None:
+                    raise RuntimeError("SQLite did not return an event sequence")
+                stored = event.with_sequence(int(cursor.lastrowid))
+            else:
+                row = self._connection.execute(
+                    "SELECT * FROM events WHERE event_id = ?", (event.id,)
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("event insert conflicted without an existing event")
+                stored = self._row_to_event(row)
+            if outbox_topic is not None:
+                now = utc_now().isoformat()
+                self._connection.execute(
+                    """
+                    INSERT INTO outbox (
+                        event_id, topic, event_json, available_at, created_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(event_id) DO NOTHING
+                    """,
+                    (
+                        stored.id,
+                        outbox_topic,
+                        json.dumps(stored.to_dict(), separators=(",", ":"), sort_keys=True),
+                        now,
+                        now,
+                    ),
+                )
             self._connection.commit()
-            return event.with_sequence(int(cursor.lastrowid))
-        except sqlite3.IntegrityError:
-            row = self._connection.execute(
-                "SELECT * FROM events WHERE event_id = ?", (event.id,)
-            ).fetchone()
-            if row is None:
-                raise
-            return self._row_to_event(row)
+            return stored
+        except BaseException:
+            self._connection.rollback()
+            raise
 
     async def read(
         self,
@@ -200,6 +284,304 @@ class SQLiteEventStore:
         ).fetchone()
         return int(row["latest"])
 
+    async def claim_outbox(
+        self,
+        worker_id: str,
+        *,
+        limit: int,
+        lease_seconds: float,
+    ) -> list[OutboxRecord]:
+        self._ensure_open()
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._claim_outbox_sync,
+                worker_id,
+                limit,
+                lease_seconds,
+            )
+
+    def _claim_outbox_sync(
+        self,
+        worker_id: str,
+        limit: int,
+        lease_seconds: float,
+    ) -> list[OutboxRecord]:
+        now = utc_now()
+        lease_until = now + timedelta(seconds=lease_seconds)
+        self._connection.execute("BEGIN IMMEDIATE")
+        try:
+            rows = self._connection.execute(
+                """
+                SELECT * FROM outbox
+                WHERE published_at IS NULL
+                  AND available_at <= ?
+                  AND (lease_until IS NULL OR lease_until <= ?)
+                ORDER BY id ASC
+                LIMIT ?
+                """,
+                (now.isoformat(), now.isoformat(), limit),
+            ).fetchall()
+            records: list[OutboxRecord] = []
+            for row in rows:
+                fencing_token = int(row["fencing_token"]) + 1
+                attempts = int(row["attempts"]) + 1
+                self._connection.execute(
+                    """
+                    UPDATE outbox
+                    SET lease_owner = ?, lease_until = ?, fencing_token = ?, attempts = ?
+                    WHERE id = ? AND published_at IS NULL
+                    """,
+                    (
+                        worker_id,
+                        lease_until.isoformat(),
+                        fencing_token,
+                        attempts,
+                        row["id"],
+                    ),
+                )
+                records.append(
+                    OutboxRecord(
+                        id=str(row["id"]),
+                        event=Event.from_dict(json.loads(row["event_json"])),
+                        topic=str(row["topic"]),
+                        attempts=attempts,
+                        fencing_token=fencing_token,
+                    )
+                )
+            self._connection.commit()
+            return records
+        except BaseException:
+            self._connection.rollback()
+            raise
+
+    async def complete_outbox(self, record_id: str, fencing_token: int) -> bool:
+        self._ensure_open()
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._complete_outbox_sync,
+                record_id,
+                fencing_token,
+            )
+
+    def _complete_outbox_sync(self, record_id: str, fencing_token: int) -> bool:
+        cursor = self._connection.execute(
+            """
+            UPDATE outbox
+            SET published_at = ?, lease_owner = NULL, lease_until = NULL
+            WHERE id = ? AND fencing_token = ? AND published_at IS NULL
+            """,
+            (utc_now().isoformat(), int(record_id), fencing_token),
+        )
+        self._connection.commit()
+        return cursor.rowcount == 1
+
+    async def retry_outbox(
+        self,
+        record_id: str,
+        fencing_token: int,
+        *,
+        error: str,
+        available_at: datetime,
+    ) -> bool:
+        self._ensure_open()
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._retry_outbox_sync,
+                record_id,
+                fencing_token,
+                error,
+                available_at,
+            )
+
+    def _retry_outbox_sync(
+        self,
+        record_id: str,
+        fencing_token: int,
+        error: str,
+        available_at: datetime,
+    ) -> bool:
+        cursor = self._connection.execute(
+            """
+            UPDATE outbox
+            SET available_at = ?, last_error = ?, lease_owner = NULL, lease_until = NULL
+            WHERE id = ? AND fencing_token = ? AND published_at IS NULL
+            """,
+            (available_at.isoformat(), error, int(record_id), fencing_token),
+        )
+        self._connection.commit()
+        return cursor.rowcount == 1
+
+    async def claim_inbox(
+        self,
+        message_id: str,
+        consumer_id: str,
+        *,
+        lease_seconds: float,
+    ) -> InboxClaim:
+        self._ensure_open()
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._claim_inbox_sync,
+                message_id,
+                consumer_id,
+                lease_seconds,
+            )
+
+    def _claim_inbox_sync(
+        self,
+        message_id: str,
+        consumer_id: str,
+        lease_seconds: float,
+    ) -> InboxClaim:
+        now = utc_now()
+        lease_until = now + timedelta(seconds=lease_seconds)
+        self._connection.execute("BEGIN IMMEDIATE")
+        try:
+            row = self._connection.execute(
+                "SELECT * FROM inbox WHERE message_id = ? AND consumer_id = ?",
+                (message_id, consumer_id),
+            ).fetchone()
+            if row is not None and row["status"] == "completed":
+                self._connection.commit()
+                return InboxClaim(InboxDisposition.COMPLETED)
+            if row is not None:
+                available_at = datetime.fromisoformat(row["available_at"])
+                current_lease = (
+                    datetime.fromisoformat(row["lease_until"])
+                    if row["lease_until"] is not None
+                    else None
+                )
+                if available_at > now or (current_lease is not None and current_lease > now):
+                    self._connection.commit()
+                    return InboxClaim(InboxDisposition.BUSY)
+                fencing_token = int(row["fencing_token"]) + 1
+                self._connection.execute(
+                    """
+                    UPDATE inbox
+                    SET status = 'processing', attempts = attempts + 1,
+                        lease_until = ?, fencing_token = ?
+                    WHERE message_id = ? AND consumer_id = ?
+                    """,
+                    (
+                        lease_until.isoformat(),
+                        fencing_token,
+                        message_id,
+                        consumer_id,
+                    ),
+                )
+            else:
+                fencing_token = 1
+                self._connection.execute(
+                    """
+                    INSERT INTO inbox (
+                        message_id, consumer_id, status, attempts, available_at,
+                        lease_until, fencing_token, received_at
+                    ) VALUES (?, ?, 'processing', 1, ?, ?, 1, ?)
+                    """,
+                    (
+                        message_id,
+                        consumer_id,
+                        now.isoformat(),
+                        lease_until.isoformat(),
+                        now.isoformat(),
+                    ),
+                )
+            self._connection.commit()
+            return InboxClaim(InboxDisposition.ACQUIRED, fencing_token)
+        except BaseException:
+            self._connection.rollback()
+            raise
+
+    async def complete_inbox(
+        self,
+        message_id: str,
+        consumer_id: str,
+        fencing_token: int,
+    ) -> bool:
+        self._ensure_open()
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._complete_inbox_sync,
+                message_id,
+                consumer_id,
+                fencing_token,
+            )
+
+    def _complete_inbox_sync(
+        self,
+        message_id: str,
+        consumer_id: str,
+        fencing_token: int,
+    ) -> bool:
+        cursor = self._connection.execute(
+            """
+            UPDATE inbox
+            SET status = 'completed', completed_at = ?, lease_until = NULL
+            WHERE message_id = ? AND consumer_id = ?
+              AND fencing_token = ? AND status = 'processing'
+            """,
+            (utc_now().isoformat(), message_id, consumer_id, fencing_token),
+        )
+        self._connection.commit()
+        return cursor.rowcount == 1
+
+    async def retry_inbox(
+        self,
+        message_id: str,
+        consumer_id: str,
+        fencing_token: int,
+        *,
+        error: str,
+        available_at: datetime,
+    ) -> bool:
+        self._ensure_open()
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._retry_inbox_sync,
+                message_id,
+                consumer_id,
+                fencing_token,
+                error,
+                available_at,
+            )
+
+    def _retry_inbox_sync(
+        self,
+        message_id: str,
+        consumer_id: str,
+        fencing_token: int,
+        error: str,
+        available_at: datetime,
+    ) -> bool:
+        cursor = self._connection.execute(
+            """
+            UPDATE inbox
+            SET status = 'pending', available_at = ?, last_error = ?, lease_until = NULL
+            WHERE message_id = ? AND consumer_id = ?
+              AND fencing_token = ? AND status = 'processing'
+            """,
+            (
+                available_at.isoformat(),
+                error,
+                message_id,
+                consumer_id,
+                fencing_token,
+            ),
+        )
+        self._connection.commit()
+        return cursor.rowcount == 1
+
+    async def pending_outbox_count(self) -> int:
+        self._ensure_open()
+        async with self._lock:
+            return await asyncio.to_thread(self._pending_outbox_count_sync)
+
+    def _pending_outbox_count_sync(self) -> int:
+        row = self._connection.execute(
+            "SELECT COUNT(*) AS count FROM outbox WHERE published_at IS NULL"
+        ).fetchone()
+        return int(row["count"])
+
     async def close(self) -> None:
         if self._closed:
             return
@@ -226,6 +608,7 @@ class SQLiteEventStore:
                 "sequence": row["sequence"],
                 "payload": json.loads(row["payload_json"]),
                 "metadata": json.loads(row["metadata_json"]),
+                "schema_version": row["schema_version"],
             }
         )
 

@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
+from typing import Protocol
 
 from .agent import AutonomousAgent
 from .detectors import DetectorEngine
 from .events import Event
 from .kernel import NoemaKernel
 from .scheduler import AsyncScheduler
+
+
+class RuntimeService(Protocol):
+    async def start(self) -> None: ...
+
+    async def stop(self) -> None: ...
 
 
 class NoemaSystem:
@@ -21,11 +28,13 @@ class NoemaSystem:
         kernel: NoemaKernel | None = None,
         agents: Sequence[AutonomousAgent] = (),
         detector_engines: Sequence[DetectorEngine] = (),
+        services: Sequence[RuntimeService] = (),
     ) -> None:
         self.kernel = kernel or NoemaKernel()
         self.scheduler = AsyncScheduler(self.kernel)
         self._agents: list[AutonomousAgent] = list(agents)
         self._detector_engines: list[DetectorEngine] = list(detector_engines)
+        self._services: list[RuntimeService] = list(services)
         self._started = False
         self._stop_event = asyncio.Event()
 
@@ -47,10 +56,40 @@ class NoemaSystem:
         if self._started:
             return
         await self.kernel.start()
-        for engine in self._detector_engines:
-            await engine.start()
-        for agent in self._agents:
-            await agent.start()
+        started_services: list[RuntimeService] = []
+        started_engines: list[DetectorEngine] = []
+        started_agents: list[AutonomousAgent] = []
+        try:
+            for service in self._services:
+                started_services.append(service)
+                await service.start()
+            for engine in self._detector_engines:
+                started_engines.append(engine)
+                await engine.start()
+            for agent in self._agents:
+                started_agents.append(agent)
+                await agent.start()
+        except BaseException:
+            for agent in reversed(started_agents):
+                try:
+                    await agent.stop(graceful=False)
+                except BaseException:
+                    pass
+            for engine in reversed(started_engines):
+                try:
+                    await engine.stop()
+                except BaseException:
+                    pass
+            for service in reversed(started_services):
+                try:
+                    await service.stop()
+                except BaseException:
+                    pass
+            try:
+                await self.kernel.stop()
+            except BaseException:
+                pass
+            raise
         self._started = True
         self._stop_event.clear()
 
@@ -85,10 +124,12 @@ class NoemaSystem:
             await agent.stop()
         for engine in reversed(self._detector_engines):
             await engine.stop()
+        for service in reversed(self._services):
+            await service.stop()
         await self.kernel.stop()
         self._started = False
 
-    async def __aenter__(self) -> "NoemaSystem":
+    async def __aenter__(self) -> NoemaSystem:
         await self.start()
         return self
 

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import fnmatch
+import random
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -14,9 +15,9 @@ from .authority import ActionIntent, PolicyEngine
 from .capabilities import CapabilityContext, CapabilityRegistry, CapabilityResult
 from .events import Event
 from .kernel import NoemaKernel
-from .reasoning import ActionOutcome, CognitiveController, DeliberationRequest, DecisionTrace
+from .reasoning import ActionOutcome, CognitiveController, DecisionTrace, DeliberationRequest
 from .telemetry import InMemoryTelemetry, Metric, TelemetrySink
-from .types import JSONValue, utc_now
+from .types import utc_now
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +48,7 @@ class AutonomousAgentConfig:
     queue_size: int = 1000
     heartbeat_seconds: float | None = None
     retry_backoff_seconds: float = 0.25
+    retry_jitter_fraction: float = 0.2
     processed_event_cache: int = 10_000
 
     def __post_init__(self) -> None:
@@ -60,6 +62,8 @@ class AutonomousAgentConfig:
             raise ValueError("max_actions_per_cycle must be positive")
         if self.attention_capacity <= 0 or self.attention_budget_per_cycle <= 0:
             raise ValueError("attention budgets must be positive")
+        if not 0.0 <= self.retry_jitter_fraction <= 1.0:
+            raise ValueError("retry_jitter_fraction must be between 0 and 1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,8 +105,8 @@ class AutonomousAgent:
         self.telemetry = telemetry or InMemoryTelemetry()
         self.attention = AttentionAccount(config.attention_capacity)
 
-        self._queue: asyncio.PriorityQueue[tuple[int, int, Event | None]] = (
-            asyncio.PriorityQueue(maxsize=config.queue_size)
+        self._queue: asyncio.PriorityQueue[tuple[int, int, Event | None]] = asyncio.PriorityQueue(
+            maxsize=config.queue_size
         )
         self._queue_counter = 0
         self._workers: list[asyncio.Task[None]] = []
@@ -154,7 +158,7 @@ class AutonomousAgent:
                 name=f"noema-agent:{self.agent_id}:heartbeat",
             )
         self._running = True
-        await self.kernel.emit(
+        started_event = await self.kernel.emit(
             Event(
                 type="agent.started",
                 source=self.agent_id,
@@ -162,6 +166,7 @@ class AutonomousAgent:
                 payload={"workers": self.config.workers},
             )
         )
+        await self._restore_execution_state(started_event)
 
     async def stop(self, *, graceful: bool = True) -> None:
         if not self._running or self._stopping:
@@ -221,11 +226,12 @@ class AutonomousAgent:
         await self._queue.put((-event.priority, counter, event))
 
     def _material(self, event: Event) -> bool:
-        if any(fnmatch.fnmatchcase(event.type, pattern) for pattern in self.config.ignored_patterns):
+        if any(
+            fnmatch.fnmatchcase(event.type, pattern) for pattern in self.config.ignored_patterns
+        ):
             return False
         return any(
-            fnmatch.fnmatchcase(event.type, pattern)
-            for pattern in self.config.trigger_patterns
+            fnmatch.fnmatchcase(event.type, pattern) for pattern in self.config.trigger_patterns
         )
 
     async def _worker(self, index: int) -> None:
@@ -258,90 +264,112 @@ class AutonomousAgent:
                 self._queue.task_done()
 
     async def _handle_trigger(self, trigger: Event) -> None:
-        snapshot = await self.kernel.snapshot()
-        request = DeliberationRequest(
-            agent_id=self.agent_id,
-            trigger=trigger,
-            situation=snapshot,
-            capabilities=self.capabilities.specs(),
-            attention_available=min(
-                self.attention.available,
-                self.config.attention_budget_per_cycle,
-            ),
-        )
-        trace = await self.controller.deliberate(request)
-        await self._emit_decision_trace(trace)
-
-        accepted = trace.accepted_intents
-        if not accepted:
-            return
-        work_items = [self._intent_to_work_item(intent) for intent in accepted]
-        selected = self.attention_allocator.select(
-            work_items,
-            min(self.attention.available, self.config.attention_budget_per_cycle),
-        )[: self.config.max_actions_per_cycle]
-        selected_intents = [item.payload for item in selected if isinstance(item.payload, ActionIntent)]
-
-        tasks: list[asyncio.Task[ActionOutcome | None]] = []
-        for intent in selected_intents:
-            capability = self.capabilities.get(intent.capability)
-            authorization = self.policy.authorize(intent, capability.spec, snapshot)
-            event_type = "decision.authorized" if authorization.allowed else "decision.denied"
-            authorization_event = await self.kernel.emit(
-                Event(
-                    type=event_type,
-                    source=self.agent_id,
-                    subject=intent.intent_id,
-                    correlation_id=trigger.correlation_id or trigger.id,
-                    causation_id=trigger.id,
-                    payload={
-                        "intent": intent.to_payload(),
-                        "reason": authorization.reason,
-                        "effective_authority": int(authorization.effective_authority),
-                        "effective_risk": int(authorization.effective_risk),
-                    },
-                )
+        async with self.kernel.tracer.span(
+            "noema.agent.cycle",
+            {
+                "noema.agent_id": self.agent_id,
+                "noema.trigger_id": trigger.id,
+                "noema.trigger_type": trigger.type,
+                "noema.correlation_id": trigger.correlation_id or trigger.id,
+            },
+        ):
+            snapshot = await self.kernel.snapshot()
+            request = DeliberationRequest(
+                agent_id=self.agent_id,
+                trigger=trigger,
+                situation=snapshot,
+                capabilities=self.capabilities.specs(),
+                attention_available=min(
+                    self.attention.available,
+                    self.config.attention_budget_per_cycle,
+                ),
             )
-            if not authorization.allowed:
-                await self.telemetry.record(
-                    Metric("decision.denied", 1.0, {"agent": self.agent_id})
-                )
-                continue
-            lease = await self.attention.acquire(intent.attention_cost)
-            if lease is None:
-                await self.kernel.emit(
+            trace = await self.controller.deliberate(request)
+            await self._emit_decision_trace(trace)
+
+            accepted = trace.accepted_intents
+            if not accepted:
+                return
+            work_items = [self._intent_to_work_item(intent) for intent in accepted]
+            selected = self.attention_allocator.select(
+                work_items,
+                min(self.attention.available, self.config.attention_budget_per_cycle),
+            )[: self.config.max_actions_per_cycle]
+            selected_intents = [
+                item.payload for item in selected if isinstance(item.payload, ActionIntent)
+            ]
+
+            tasks: list[asyncio.Task[ActionOutcome | None]] = []
+            for intent in selected_intents:
+                capability = self.capabilities.get(intent.capability)
+                async with self.kernel.tracer.span(
+                    "noema.action.authorize",
+                    {
+                        "noema.agent_id": self.agent_id,
+                        "noema.intent_id": intent.intent_id,
+                        "noema.capability": intent.capability,
+                    },
+                ) as span:
+                    authorization = self.policy.authorize(intent, capability.spec, snapshot)
+                    span.set_attribute("noema.authorization.allowed", authorization.allowed)
+                event_type = "decision.authorized" if authorization.allowed else "decision.denied"
+                authorization_event = await self.kernel.emit(
                     Event(
-                        type="decision.deferred",
+                        type=event_type,
                         source=self.agent_id,
                         subject=intent.intent_id,
-                        correlation_id=authorization_event.correlation_id,
-                        causation_id=authorization_event.id,
+                        correlation_id=trigger.correlation_id or trigger.id,
+                        causation_id=trigger.id,
                         payload={
-                            "reason": "insufficient concurrent attention capacity",
                             "intent": intent.to_payload(),
+                            "reason": authorization.reason,
+                            "effective_authority": int(authorization.effective_authority),
+                            "effective_risk": int(authorization.effective_risk),
                         },
                     )
                 )
-                continue
-            tasks.append(
-                asyncio.create_task(
-                    self._execute_with_lease(intent, request, authorization_event, lease),
-                    name=f"noema-action:{self.agent_id}:{intent.capability}:{intent.intent_id}",
-                )
-            )
-
-        if tasks:
-            outcomes = await asyncio.gather(*tasks, return_exceptions=False)
-            for outcome in outcomes:
-                if outcome is None:
-                    continue
-                reflection_events = await self.controller.reflect(outcome, request)
-                for event in reflection_events:
-                    linked = event.caused_by(
-                        trigger,
-                        source=event.source or self.agent_id,
+                if not authorization.allowed:
+                    await self.telemetry.record(
+                        Metric("decision.denied", 1.0, {"agent": self.agent_id})
                     )
-                    await self.kernel.emit(linked)
+                    continue
+                lease = await self.attention.acquire(intent.attention_cost)
+                if lease is None:
+                    await self.kernel.emit(
+                        Event(
+                            type="decision.deferred",
+                            source=self.agent_id,
+                            subject=intent.intent_id,
+                            correlation_id=authorization_event.correlation_id,
+                            causation_id=authorization_event.id,
+                            payload={
+                                "reason": "insufficient concurrent attention capacity",
+                                "intent": intent.to_payload(),
+                            },
+                        )
+                    )
+                    continue
+                tasks.append(
+                    asyncio.create_task(
+                        self._execute_with_lease(intent, request, authorization_event, lease),
+                        name=(
+                            f"noema-action:{self.agent_id}:{intent.capability}:{intent.intent_id}"
+                        ),
+                    )
+                )
+
+            if tasks:
+                outcomes = await asyncio.gather(*tasks, return_exceptions=False)
+                for outcome in outcomes:
+                    if outcome is None:
+                        continue
+                    reflection_events = await self.controller.reflect(outcome, request)
+                    for event in reflection_events:
+                        linked = event.caused_by(
+                            trigger,
+                            source=event.source or self.agent_id,
+                        )
+                        await self.kernel.emit(linked)
 
     async def _execute_with_lease(
         self,
@@ -383,6 +411,19 @@ class AutonomousAgent:
                 )
                 return None
 
+        dispatched_event = await self.kernel.emit(
+            Event(
+                type="action.dispatched",
+                source=self.agent_id,
+                subject=intent.intent_id,
+                correlation_id=authorization_event.correlation_id,
+                causation_id=authorization_event.id,
+                payload={
+                    "intent": intent.to_payload(),
+                    "idempotency_key": intent.idempotency_key,
+                },
+            )
+        )
         started_at = utc_now()
         started_event = await self.kernel.emit(
             Event(
@@ -390,15 +431,19 @@ class AutonomousAgent:
                 source=self.agent_id,
                 subject=intent.intent_id,
                 correlation_id=authorization_event.correlation_id,
-                causation_id=authorization_event.id,
-                payload={"intent": intent.to_payload()},
+                causation_id=dispatched_event.id,
+                payload={
+                    "intent": intent.to_payload(),
+                    "idempotency_key": intent.idempotency_key,
+                },
             )
         )
         await self.telemetry.record(Metric("action.started", 1.0, {"agent": self.agent_id}))
 
         attempts = 0
         result = CapabilityResult.fail("capability was not invoked")
-        while attempts <= capability.spec.max_retries:
+        max_retries = capability.spec.max_retries if capability.spec.idempotent else 0
+        while attempts <= max_retries:
             attempts += 1
             context = CapabilityContext(
                 agent_id=self.agent_id,
@@ -406,10 +451,25 @@ class AutonomousAgent:
                 situation=request.situation,
                 emit=self.kernel.emit,
                 attempt=attempts,
+                idempotency_key=intent.idempotency_key,
             )
             try:
-                async with asyncio.timeout(capability.spec.timeout_seconds):
-                    result = await capability.invoke(intent.arguments, context)
+                async with self.kernel.tracer.span(
+                    "noema.capability.invoke",
+                    {
+                        "noema.agent_id": self.agent_id,
+                        "noema.intent_id": intent.intent_id,
+                        "noema.capability": intent.capability,
+                        "noema.action_attempt": attempts,
+                        "noema.correlation_id": started_event.correlation_id or started_event.id,
+                    },
+                ) as span:
+                    try:
+                        async with asyncio.timeout(capability.spec.timeout_seconds):
+                            result = await capability.invoke(intent.arguments, context)
+                    except BaseException as exc:
+                        span.record_exception(exc)
+                        raise
             except TimeoutError:
                 result = CapabilityResult.fail(
                     f"capability timed out after {capability.spec.timeout_seconds}s",
@@ -420,15 +480,17 @@ class AutonomousAgent:
             except BaseException as exc:
                 result = CapabilityResult.fail(repr(exc), retryable=False)
 
-            if result.success or not result.retryable or attempts > capability.spec.max_retries:
+            if result.success or not result.retryable or attempts > max_retries:
                 break
-            await asyncio.sleep(self.config.retry_backoff_seconds * (2 ** (attempts - 1)))
+            backoff = self.config.retry_backoff_seconds * (2 ** (attempts - 1))
+            jitter = random.uniform(
+                -self.config.retry_jitter_fraction,
+                self.config.retry_jitter_fraction,
+            )
+            await asyncio.sleep(max(0.0, backoff * (1.0 + jitter)))
 
         finished_at = utc_now()
         outcome = ActionOutcome(intent, result, attempts, started_at, finished_at)
-        if intent.idempotency_key is not None:
-            self._idempotency_ledger[intent.idempotency_key] = result
-
         if result.success:
             completed_event = await self.kernel.emit(
                 Event(
@@ -441,10 +503,13 @@ class AutonomousAgent:
                         "capability": intent.capability,
                         "attempts": attempts,
                         "output": dict(result.output),
+                        "idempotency_key": intent.idempotency_key,
                         "duration_seconds": (finished_at - started_at).total_seconds(),
                     },
                 )
             )
+            if intent.idempotency_key is not None:
+                self._idempotency_ledger[intent.idempotency_key] = result
             for key, value in result.facts.items():
                 await self.kernel.emit(
                     Event(
@@ -479,6 +544,7 @@ class AutonomousAgent:
                     "attempts": attempts,
                     "error": result.error,
                     "retryable": result.retryable,
+                    "idempotency_key": intent.idempotency_key,
                     "duration_seconds": (finished_at - started_at).total_seconds(),
                 },
             )
@@ -497,12 +563,15 @@ class AutonomousAgent:
                 situation=request.situation,
                 emit=self.kernel.emit,
                 attempt=attempts,
+                idempotency_key=intent.idempotency_key,
             )
             compensation = await capability.compensate(intent.arguments, result, context)
             await self.kernel.emit(
                 Event(
                     type=(
-                        "action.compensated" if compensation.success else "action.compensation_failed"
+                        "action.compensated"
+                        if compensation.success
+                        else "action.compensation_failed"
                     ),
                     source=self.agent_id,
                     subject=intent.intent_id,
@@ -517,6 +586,148 @@ class AutonomousAgent:
             )
         return outcome
 
+    async def _restore_execution_state(self, started_event: Event) -> None:
+        """Recover durable idempotency state and unfinished authorized actions."""
+
+        lifecycle_types = (
+            "decision.authorized",
+            "action.succeeded",
+            "action.failed",
+            "action.skipped",
+            "action.compensated",
+            "action.compensation_failed",
+            "action.abandoned",
+        )
+        history = await self.kernel.history(types=lifecycle_types)
+        authorized: dict[str, tuple[Event, ActionIntent]] = {}
+        terminal: set[str] = set()
+        for event in history:
+            if event.source != self.agent_id or event.subject is None:
+                continue
+            if event.type == "decision.authorized":
+                raw_intent = event.payload.get("intent")
+                if isinstance(raw_intent, dict):
+                    authorized[event.subject] = (
+                        event,
+                        ActionIntent.from_payload(raw_intent),
+                    )
+                continue
+            if event.type == "action.succeeded":
+                key = event.payload.get("idempotency_key")
+                output = event.payload.get("output")
+                if isinstance(key, str):
+                    self._idempotency_ledger[key] = CapabilityResult.ok(
+                        output if isinstance(output, dict) else {}
+                    )
+            terminal.add(event.subject)
+
+        pending = [pair for intent_id, pair in authorized.items() if intent_id not in terminal]
+        pending.sort(key=lambda pair: pair[0].sequence or 0)
+        for authorization_event, intent in pending:
+            if intent.capability not in self.capabilities:
+                await self.kernel.emit(
+                    Event(
+                        type="action.abandoned",
+                        source=self.agent_id,
+                        subject=intent.intent_id,
+                        correlation_id=authorization_event.correlation_id,
+                        causation_id=started_event.id,
+                        payload={
+                            "reason": "capability unavailable during crash recovery",
+                            "capability": intent.capability,
+                        },
+                    )
+                )
+                continue
+            snapshot = await self.kernel.snapshot()
+            capability = self.capabilities.get(intent.capability)
+            if not capability.spec.idempotent:
+                await self.kernel.emit(
+                    Event(
+                        type="action.abandoned",
+                        source=self.agent_id,
+                        subject=intent.intent_id,
+                        correlation_id=authorization_event.correlation_id,
+                        causation_id=started_event.id,
+                        payload={
+                            "reason": (
+                                "non-idempotent capability requires explicit "
+                                "operator reconciliation after crash"
+                            ),
+                            "capability": intent.capability,
+                            "idempotency_key": intent.idempotency_key,
+                        },
+                    )
+                )
+                continue
+            authorization = self.policy.authorize(intent, capability.spec, snapshot)
+            if not authorization.allowed:
+                await self.kernel.emit(
+                    Event(
+                        type="action.abandoned",
+                        source=self.agent_id,
+                        subject=intent.intent_id,
+                        correlation_id=authorization_event.correlation_id,
+                        causation_id=started_event.id,
+                        payload={
+                            "reason": f"recovery reauthorization failed: {authorization.reason}",
+                            "capability": intent.capability,
+                        },
+                    )
+                )
+                continue
+            reauthorization_event = await self.kernel.emit(
+                Event(
+                    type="decision.reauthorized",
+                    source=self.agent_id,
+                    subject=intent.intent_id,
+                    correlation_id=authorization_event.correlation_id,
+                    causation_id=started_event.id,
+                    payload={
+                        "original_authorization_event_id": authorization_event.id,
+                        "reason": authorization.reason,
+                        "effective_authority": int(authorization.effective_authority),
+                        "effective_risk": int(authorization.effective_risk),
+                    },
+                )
+            )
+            recovery_event = await self.kernel.emit(
+                Event(
+                    type="action.recovery_requested",
+                    source=self.agent_id,
+                    subject=intent.intent_id,
+                    correlation_id=authorization_event.correlation_id,
+                    causation_id=reauthorization_event.id,
+                    payload={
+                        "authorization_event_id": authorization_event.id,
+                        "intent": intent.to_payload(),
+                    },
+                )
+            )
+            request = DeliberationRequest(
+                agent_id=self.agent_id,
+                trigger=recovery_event,
+                situation=snapshot,
+                capabilities=self.capabilities.specs(),
+                attention_available=min(
+                    self.attention.available,
+                    self.config.attention_budget_per_cycle,
+                ),
+                metadata={"recovery": True},
+            )
+            lease = await self.attention.acquire(intent.attention_cost)
+            if lease is None:
+                continue
+            outcome = await self._execute_with_lease(
+                intent,
+                request,
+                recovery_event,
+                lease,
+            )
+            if outcome is not None:
+                for reflection_event in await self.controller.reflect(outcome, request):
+                    await self.kernel.emit(reflection_event.caused_by(recovery_event))
+
     async def _emit_decision_trace(self, trace: DecisionTrace) -> None:
         trigger = trace.request.trigger
         await self.kernel.emit(
@@ -530,6 +741,7 @@ class AutonomousAgent:
                     "trigger_type": trigger.type,
                     "modes": [mode.value for mode in trace.result.modes],
                     "proposed": len(trace.result.intents),
+                    "intents": [intent.to_payload() for intent in trace.result.intents],
                     "accepted_after_critique": len(trace.accepted_intents),
                     "hypotheses": [
                         {
@@ -558,8 +770,12 @@ class AutonomousAgent:
 
     @staticmethod
     def _intent_to_work_item(intent: ActionIntent) -> WorkItem:
-        urgency = float(intent.metadata.get("urgency", 0.0))
-        maintenance_value = float(intent.metadata.get("maintenance_value", 0.0))
+        urgency_value = intent.metadata.get("urgency", 0.0)
+        maintenance_value_raw = intent.metadata.get("maintenance_value", 0.0)
+        urgency = float(urgency_value) if isinstance(urgency_value, (int, float)) else 0.0
+        maintenance_value = (
+            float(maintenance_value_raw) if isinstance(maintenance_value_raw, (int, float)) else 0.0
+        )
         deadline_value = intent.metadata.get("deadline")
         deadline: datetime | None = None
         if isinstance(deadline_value, str):

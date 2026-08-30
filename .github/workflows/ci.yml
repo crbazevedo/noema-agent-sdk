@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -11,10 +14,46 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
-      - run: PYTHONPATH=src python -m unittest discover -s tests -v
+      - run: python -m pip install -e '.[dev]'
+      - run: make test
       - run: PYTHONPATH=src python -m compileall -q src examples
+
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[dev]'
+      - run: make lint typecheck build
+
+  distributed-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e '.[distributed]'
+      - run: docker compose up -d --wait
+      - name: Exercise PostgreSQL concurrency contracts
+        env:
+          NOEMA_TEST_POSTGRES_DSN: postgresql://noema:noema-dev@127.0.0.1:55432/noema
+        run: python -m unittest tests.test_postgres -v
+      - name: Run unchanged incident application in distributed mode
+        env:
+          MODE: distributed
+          NOEMA_POSTGRES_DSN: postgresql://noema:noema-dev@127.0.0.1:55432/noema
+          NOEMA_NATS_SERVERS: nats://127.0.0.1:4222
+          NOEMA_RUNTIME_ID: ci-runtime
+        run: python examples/autonomous_incident_agent.py
+      - if: always()
+        run: docker compose down

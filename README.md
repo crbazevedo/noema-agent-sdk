@@ -1,6 +1,6 @@
 # Noema Agent SDK
 
-**Async, event-sourced, situation-aware infrastructure for fully autonomous agent systems.**
+**Local-first, event-sourced infrastructure for portable durable agents.**
 
 Noema is not a persona framework and does not encode one preferred cognitive style. It provides general primitives from which sophisticated agent instances can be composed:
 
@@ -13,7 +13,8 @@ Noema is not a persona framework and does not encode one preferred cognitive sty
 - event-driven scheduling, sensing, action, recovery, and reflection;
 - multi-agent operation over a shared world model.
 
-The core package has **no runtime dependencies outside Python 3.11+**.
+The embedded core has **no runtime dependencies outside Python 3.11+**.
+PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
 
 ## What is implemented
 
@@ -21,7 +22,7 @@ The core package has **no runtime dependencies outside Python 3.11+**.
 environment / agents / timers
              │
              ▼
-       append-only events
+       versioned append-only events
              │
       ┌──────┴──────┐
       ▼             ▼
@@ -52,7 +53,10 @@ environment / agents / timers
 - **Event-driven:** agents respond to material events and may emit new events that trigger other agents or later phases of their own policy.
 - **Autonomous:** after startup, agents can sense, deliberate, prioritize, authorize, act, retry, compensate, reflect, and self-trigger without another human prompt.
 - **Durable:** SQLite can reconstruct the exact situation and causal trace after restart.
-- **Provider-agnostic:** `Reasoner` can be deterministic, LLM-backed, search-based, learned, symbolic, or an ensemble.
+- **Portable:** the same agent application runs embedded with SQLite or distributed with PostgreSQL, a transactional outbox/inbox, and NATS JetStream.
+- **Provider-agnostic:** `Reasoner` can be deterministic, LLM-backed, search-based, learned, symbolic, or an ensemble; model SDKs remain adapters.
+- **Recoverable:** durable action lifecycle events restore completed idempotency keys and unfinished authorized work after a crash.
+- **Observable:** causal events remain canonical while provider-neutral spans can be exported through OpenTelemetry.
 - **Governed:** autonomy is explicit and configurable; “fully autonomous” means no mandatory human interaction, not invisible or unlimited authority.
 
 ## Install locally
@@ -69,10 +73,16 @@ The core runs without optional dependencies. Development tools are available thr
 pip install -e '.[dev]'
 ```
 
+Install all runtime adapters with:
+
+```bash
+pip install -e '.[all]'
+```
+
 ## Run the autonomous example
 
 ```bash
-make demo
+MODE=embedded NOEMA_SQLITE_PATH=:memory: make demo
 ```
 
 The example receives one external service metric. From there the agent autonomously:
@@ -85,6 +95,19 @@ The example receives one external service metric. From there the agent autonomou
 6. treats that fact as a new situation event;
 7. decides to restart the service;
 8. verifies the resulting healthy state.
+
+The identical application can run through the distributed adapters:
+
+```bash
+cp .env.example .env
+docker compose up -d --wait
+set -a; source .env; set +a
+python examples/autonomous_incident_agent.py
+docker compose down
+```
+
+PostgreSQL is exposed on host port `55432` to avoid colliding with a common
+local PostgreSQL installation. NATS uses `4222` and its monitor uses `8222`.
 
 ## Minimal API
 
@@ -156,9 +179,15 @@ asyncio.run(main())
 
 Immutable causal record with type, source, payload, subject, timestamp, sequence, correlation ID, and causation ID.
 
+Events also carry a schema version. Registered deterministic upcasters evolve
+payloads without rewriting history.
+
 ### `NoemaKernel`
 
 Atomically coordinates the event store, situation projection, and event bus.
+
+In distributed mode, event append and outbox enqueue are one PostgreSQL
+transaction; durable inbox claims and fencing tokens govern broker delivery.
 
 ### `SituationSnapshot`
 
@@ -168,13 +197,19 @@ Read-only current world model containing facts, graph entities/relations, goals,
 
 `Reasoner` proposes actions. `CognitiveController` makes the path inspectable and applies independent critics before policy authorization.
 
+`StructuredModelReasoner` adds a provider-neutral context and structured-output
+boundary. OpenAI Responses and OpenAI-compatible local endpoints are supplied
+as optional adapters, with deterministic recording/replay fixtures for tests.
+
 ### `ActionIntent`
 
 A proposal containing expected value, information value, risk reduction, attention cost, risk, reversibility, confidence, alternatives, falsifiers, and idempotency.
 
 ### `CapabilityRegistry`
 
-Typed boundary between cognition and effects. Capabilities declare risk, reversibility, authority, timeout, retries, and idempotency.
+Typed boundary between cognition and effects. Capabilities declare risk,
+reversibility, authority, timeout, retries, and idempotency. Idempotency is
+opt-in; unfinished non-idempotent work is never replayed after a crash.
 
 ### `PolicyEngine`
 
@@ -222,7 +257,7 @@ This still leaves every action visible, typed, causally linked, and subject to c
 ## Tests
 
 ```bash
-make test
+make check
 ```
 
 The test suite covers:
@@ -230,6 +265,10 @@ The test suite covers:
 - ordered wildcard event delivery;
 - subscriber failure isolation;
 - in-memory and SQLite event persistence;
+- schema versioning and deterministic upcasting;
+- transactional outbox retry, inbox deduplication, lease expiry, and fencing;
+- structured model output validation and exact JSONL replay;
+- action idempotency restoration and crash recovery;
 - situation graph projection;
 - attention portfolio selection;
 - dynamic trust/authority;
@@ -237,19 +276,17 @@ The test suite covers:
 - deadline signal detection;
 - multi-step autonomous incident recovery.
 
-## Next engineering layers
+The CI acceptance suite also runs the incident application against real
+PostgreSQL and NATS containers.
 
-The current version is a functioning substrate. The next layers should be built on top rather than folded into the core prematurely:
+## Release sequence
 
-1. durable distributed bus adapters;
-2. model-provider adapters and structured-output reasoners;
-3. distributed leases and exactly-once action execution;
-4. long-term semantic/episodic memory;
-5. learned metacontrol and adaptive attention;
-6. capability discovery and agent-to-agent contracting;
-7. sandboxed execution and secret isolation;
-8. distributed situation projections;
-9. experiment and replay harnesses;
-10. production observability adapters.
+v0.2 is the Portable Durable Agent milestone. The roadmap deliberately layers
+persistent cognitive memory (v0.3), agent society (v0.4), reflective
+metacontrol (v0.5), and Situated Continuity (v0.6) above it instead of building
+all planes into one release.
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), [`docs/AUTONOMY.md`](docs/AUTONOMY.md), [`docs/EVENTS.md`](docs/EVENTS.md), and [`docs/ROADMAP.md`](docs/ROADMAP.md).
+See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITECTURE_PRINCIPLES.md),
+[ADR 0001](docs/adr/0001-portable-durable-agent.md), [autonomy](docs/AUTONOMY.md),
+[event semantics](docs/EVENTS.md), [roadmap](docs/ROADMAP.md), and
+[Situated Continuity](docs/SITUATED_CONTINUITY.md).

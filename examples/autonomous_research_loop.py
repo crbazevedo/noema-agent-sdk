@@ -114,11 +114,7 @@ async def main() -> None:
 
     async def synthesize(arguments, context):
         evidence = dict(arguments["evidence"])
-        conclusion = (
-            "Provisionally supported"
-            if evidence["supported"]
-            else "Not supported"
-        )
+        conclusion = "Provisionally supported" if evidence["supported"] else "Not supported"
         conclusions.append(conclusion)
         return CapabilityResult.ok({"conclusion": conclusion})
 

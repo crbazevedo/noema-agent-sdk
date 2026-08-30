@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 from types import MappingProxyType
+from typing import Any, cast
 
 from .events import Event
 from .types import JSONValue, parse_datetime, utc_now
@@ -173,16 +174,14 @@ class SituationSnapshot:
         return tuple(
             relation
             for relation in self.relations.values()
-            if relation.source_id == entity_id
-            and (kind is None or relation.kind == kind)
+            if relation.source_id == entity_id and (kind is None or relation.kind == kind)
         )
 
     def relations_to(self, entity_id: str, *, kind: str | None = None) -> tuple[Relation, ...]:
         return tuple(
             relation
             for relation in self.relations.values()
-            if relation.target_id == entity_id
-            and (kind is None or relation.kind == kind)
+            if relation.target_id == entity_id and (kind is None or relation.kind == kind)
         )
 
 
@@ -266,7 +265,7 @@ class SituationModel:
         self._observed_at = utc_now()
 
     def _apply_builtin(self, event: Event) -> bool:
-        payload = event.payload
+        payload = cast(Mapping[str, Any], event.payload)
         now = event.timestamp
 
         if event.type == "fact.observed":
@@ -296,12 +295,14 @@ class SituationModel:
             entity_id = str(payload.get("id") or event.subject)
             if not entity_id:
                 raise ValueError("entity.upserted requires id or subject")
-            current = self._entities.get(entity_id)
-            attributes = dict(current.attributes) if current else {}
+            current_entity = self._entities.get(entity_id)
+            attributes = dict(current_entity.attributes) if current_entity else {}
             attributes.update(dict(payload.get("attributes", {})))
             self._entities[entity_id] = Entity(
                 id=entity_id,
-                kind=str(payload.get("kind") or (current.kind if current else "entity")),
+                kind=str(
+                    payload.get("kind") or (current_entity.kind if current_entity else "entity")
+                ),
                 attributes=attributes,
                 updated_at=now,
             )
@@ -319,8 +320,8 @@ class SituationModel:
             relation_id = str(payload.get("id") or event.subject)
             if not relation_id:
                 raise ValueError("relation.upserted requires id or subject")
-            current = self._relations.get(relation_id)
-            attributes = dict(current.attributes) if current else {}
+            current_relation = self._relations.get(relation_id)
+            attributes = dict(current_relation.attributes) if current_relation else {}
             attributes.update(dict(payload.get("attributes", {})))
             self._relations[relation_id] = Relation(
                 id=relation_id,
@@ -355,17 +356,19 @@ class SituationModel:
 
         if event.type == "goal.updated":
             goal_id = str(payload.get("id") or event.subject)
-            current = self._goals.get(goal_id)
-            if current is None:
+            current_goal = self._goals.get(goal_id)
+            if current_goal is None:
                 return False
             self._goals[goal_id] = replace(
-                current,
-                description=str(payload.get("description", current.description)),
-                priority=float(payload.get("priority", current.priority)),
-                utility=float(payload.get("utility", current.utility)),
-                status=GoalStatus(str(payload.get("status", current.status))),
-                deadline=parse_datetime(payload.get("deadline", current.deadline)),
-                owner=str(payload.get("owner", current.owner)) if payload.get("owner", current.owner) else None,
+                current_goal,
+                description=str(payload.get("description", current_goal.description)),
+                priority=float(payload.get("priority", current_goal.priority)),
+                utility=float(payload.get("utility", current_goal.utility)),
+                status=GoalStatus(str(payload.get("status", current_goal.status))),
+                deadline=parse_datetime(payload.get("deadline", current_goal.deadline)),
+                owner=str(payload.get("owner", current_goal.owner))
+                if payload.get("owner", current_goal.owner)
+                else None,
                 updated_at=now,
             )
             return True
@@ -389,20 +392,25 @@ class SituationModel:
 
         if event.type == "commitment.updated":
             commitment_id = str(payload.get("id") or event.subject)
-            current = self._commitments.get(commitment_id)
-            if current is None:
+            current_commitment = self._commitments.get(commitment_id)
+            if current_commitment is None:
                 return False
             self._commitments[commitment_id] = replace(
-                current,
-                description=str(payload.get("description", current.description)),
-                owner=str(payload.get("owner", current.owner)),
-                priority=float(payload.get("priority", current.priority)),
-                status=CommitmentStatus(str(payload.get("status", current.status))),
-                deadline=parse_datetime(payload.get("deadline", current.deadline)),
-                terminal=bool(payload.get("terminal", current.terminal)),
-                attention_cost=float(payload.get("attention_cost", current.attention_cost)),
+                current_commitment,
+                description=str(payload.get("description", current_commitment.description)),
+                owner=str(payload.get("owner", current_commitment.owner)),
+                priority=float(payload.get("priority", current_commitment.priority)),
+                status=CommitmentStatus(str(payload.get("status", current_commitment.status))),
+                deadline=parse_datetime(payload.get("deadline", current_commitment.deadline)),
+                terminal=bool(payload.get("terminal", current_commitment.terminal)),
+                attention_cost=float(
+                    payload.get("attention_cost", current_commitment.attention_cost)
+                ),
                 social_cost_of_failure=float(
-                    payload.get("social_cost_of_failure", current.social_cost_of_failure)
+                    payload.get(
+                        "social_cost_of_failure",
+                        current_commitment.social_cost_of_failure,
+                    )
                 ),
                 updated_at=now,
             )
@@ -414,11 +422,15 @@ class SituationModel:
             "cancelled",
         }:
             commitment_id = str(payload.get("id") or event.subject)
-            current = self._commitments.get(commitment_id)
-            if current is None:
+            terminal_commitment = self._commitments.get(commitment_id)
+            if terminal_commitment is None:
                 return False
             status = CommitmentStatus(event.type.split(".", 1)[1])
-            self._commitments[commitment_id] = replace(current, status=status, updated_at=now)
+            self._commitments[commitment_id] = replace(
+                terminal_commitment,
+                status=status,
+                updated_at=now,
+            )
             return True
 
         if event.type == "risk.detected":
@@ -439,10 +451,14 @@ class SituationModel:
 
         if event.type == "risk.resolved":
             risk_id = str(payload.get("id") or event.subject)
-            current = self._risks.get(risk_id)
-            if current is None:
+            current_risk = self._risks.get(risk_id)
+            if current_risk is None:
                 return False
-            self._risks[risk_id] = replace(current, active=False, updated_at=now)
+            self._risks[risk_id] = replace(
+                current_risk,
+                active=False,
+                updated_at=now,
+            )
             return True
 
         if event.type == "opportunity.detected":
@@ -463,10 +479,14 @@ class SituationModel:
 
         if event.type == "opportunity.closed":
             opportunity_id = str(payload.get("id") or event.subject)
-            current = self._opportunities.get(opportunity_id)
-            if current is None:
+            current_opportunity = self._opportunities.get(opportunity_id)
+            if current_opportunity is None:
                 return False
-            self._opportunities[opportunity_id] = replace(current, active=False, updated_at=now)
+            self._opportunities[opportunity_id] = replace(
+                current_opportunity,
+                active=False,
+                updated_at=now,
+            )
             return True
 
         if event.type == "resource.updated":

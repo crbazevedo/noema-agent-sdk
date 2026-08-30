@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections import Counter
+from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,7 +30,7 @@ class TelemetrySink(Protocol):
 class InMemoryTelemetry:
     def __init__(self) -> None:
         self.metrics: list[Metric] = []
-        self.counters: Counter[str] = Counter()
+        self.counters: dict[str, float] = defaultdict(float)
         self._lock = asyncio.Lock()
 
     async def record(self, metric: Metric) -> None:

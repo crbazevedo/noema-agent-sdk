@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0 — 2026-08-30
+
+Portable durable agent milestone:
+
+- PostgreSQL event store with transactional outbox and durable inbox;
+- NATS JetStream transport behind a provider-neutral broker protocol;
+- at-least-once delivery, expiring leases, fencing tokens, and crash recovery;
+- versioned events with deterministic projection-time upcasting;
+- structured model-provider contracts and `ActionIntent` validation;
+- OpenAI Responses and OpenAI-compatible local model adapters;
+- record/replay model fixtures and provider routing;
+- provider-neutral tracing with an OpenTelemetry/OTLP adapter;
+- embedded and distributed deployment profiles plus Docker Compose topology;
+- architecture fitness functions and real distributed acceptance coverage.
+
 ## 0.1.0 — 2026-08-30
 
 Initial working substrate:

@@ -9,6 +9,8 @@ dist/
 build/
 .coverage
 htmlcov/
+.env
+.noema/
 *.db
 *.sqlite
 *.sqlite3

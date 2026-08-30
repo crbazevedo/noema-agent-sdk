@@ -88,7 +88,9 @@ class DeadlineRiskDetector:
             existing = situation.risks.get(risk_id)
             if existing is not None and existing.active:
                 continue
-            severity = min(1.0, max(0.1, 1.0 - remaining.total_seconds() / self.horizon.total_seconds()))
+            severity = min(
+                1.0, max(0.1, 1.0 - remaining.total_seconds() / self.horizon.total_seconds())
+            )
             events.append(
                 Event(
                     type="risk.detected",

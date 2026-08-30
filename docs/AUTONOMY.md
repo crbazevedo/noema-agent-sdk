@@ -45,6 +45,23 @@ The built-in policy checks:
 - falsifier requirement for consequential actions;
 - deployment-specific deny rules.
 
+`ActionIntent` is a typed, schema-validated proposal. A model response does not
+grant authority: every model-produced intent passes through the same critics,
+portfolio selection, policy, and capability registry as a deterministic
+reasoner. Provider adapters do not receive capability credentials.
+
+## Recovery and effect safety
+
+Authorization, dispatch, execution, and result are separate durable events. On
+restart, an agent restores completed idempotency keys and identifies authorized
+actions without a terminal result. It automatically resumes only capabilities
+that explicitly declare idempotent behavior; all other incomplete actions are
+durably abandoned for reconciliation and must be proposed and authorized again.
+
+Leases and fencing protect coordination records from stale workers. They do not
+make a third-party side effect exactly once, so idempotency must cross the final
+effect boundary.
+
 ## Dynamic delegation
 
 `TrustLedger` uses a beta-distribution estimate rather than a permanent scalar reputation. Authority recommendations use a conservative uncertainty-adjusted bound.

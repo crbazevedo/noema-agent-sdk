@@ -21,7 +21,7 @@ class CapabilitySpec:
     output_schema: Mapping[str, JSONValue] = field(default_factory=dict)
     risk_level: RiskLevel = RiskLevel.LOW
     reversible: bool = True
-    idempotent: bool = True
+    idempotent: bool = False
     required_authority: AuthorityLevel = AuthorityLevel.ACT_REVERSIBLE
     timeout_seconds: float = 30.0
     max_retries: int = 0
@@ -52,7 +52,7 @@ class CapabilityResult:
         *,
         facts: Mapping[str, JSONValue] | None = None,
         events: Sequence[Event] = (),
-    ) -> "CapabilityResult":
+    ) -> CapabilityResult:
         return cls(
             True,
             dict(output or {}),
@@ -61,7 +61,7 @@ class CapabilityResult:
         )
 
     @classmethod
-    def fail(cls, error: str, *, retryable: bool = False) -> "CapabilityResult":
+    def fail(cls, error: str, *, retryable: bool = False) -> CapabilityResult:
         return cls(False, error=error, retryable=retryable)
 
 
@@ -75,6 +75,7 @@ class CapabilityContext:
     situation: SituationSnapshot
     emit: EmitFunction
     attempt: int = 1
+    idempotency_key: str | None = None
 
 
 class Capability(Protocol):
