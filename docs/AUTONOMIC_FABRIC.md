@@ -1,9 +1,11 @@
 # Autonomic Fabric
 
-The Noema Autonomic Fabric is a planned control plane beneath deliberative
-agency. It turns repeated, well-evidenced cognition into cheap, persistent,
-governed micro-policies while promoting novelty, uncertainty, contradiction,
-conflict, and opportunity into the deliberative workspace.
+The Noema Autonomic Fabric is a control plane beneath deliberative agency. Its
+first effect-free shadow kernel is implemented; activation, Forge, and active
+wake control remain staged work. The fabric turns repeated, well-evidenced
+cognition into cheap, persistent, governed micro-policies while promoting
+novelty, uncertainty, contradiction, conflict, and opportunity into the
+deliberative workspace.
 
 It is not a classical business-rules engine and not a second path around
 Noema's authority model.
@@ -112,6 +114,16 @@ The rule registry, temporal state, active ruleset, signal workspace, metrics,
 and Forge training views are projections. Cell checkpoints are disposable
 accelerators and must be rebuildable from the log.
 
+The durable causal chain is:
+
+```text
+Observation → Evidence → RuleEvaluationTrace → hypothetical Signal
+```
+
+Signals and salience decisions are disposable projections. Their evidence and
+complete shadow evaluation traces are durable when monitoring or replay policy
+requires it. Rule cells never become a second situation store.
+
 A fabric `EvaluationEpoch` pins a `RulesetSnapshot`, including while the
 deliberative agent sleeps. An `AwakeEpoch` references the current evaluation
 epoch and ruleset. A rule registered or activated during an evaluation epoch
@@ -168,6 +180,21 @@ or shadow experiment requests full detail. This is the feedback substrate for
 calibration and rule fitness without turning every indexed lookup into a hot-log
 write.
 
+The implemented shadow form is `RuleEvaluationTrace`: it records candidates,
+activation score and threshold, matched and failed conditions, evidence event
+references, the signal that would have been emitted, suppression metadata, and
+measured runtime cost. Wall-clock runtime cost is deliberately excluded from
+byte-equivalent replay semantics.
+
+### `SalienceResolver`
+
+The resolver is the effect-free bridge between the event fabric and aware
+cognition. It deduplicates and aggregates active signals by subject, applies
+pattern-based inhibitory signals, enforces an optional wake budget, and returns
+one of `WAKE`, `REMEMBER`, `REFLEX_PROPOSAL`, `SUPPRESS`, or `DEFER`. Every
+result is a shadow decision with a compact evidence packet. The resolver does
+not publish, wake a model, or invoke a capability.
+
 ### `GlobalModulator`
 
 Values such as probable deep work, availability, privacy pressure, deadline
@@ -199,13 +226,16 @@ mandatory.
 Learned policies compile into a versioned, typed intermediate representation,
 never generated Python or arbitrary executable code.
 
-The first supported encodings should be:
+The shadow kernel supports exactly these first three encodings:
 
-1. **Predicate:** safe operations over declared situation dependencies.
-2. **Scoring:** bounded weighted features with explicit normalization.
-3. **Temporal pattern:** occurrence, sequence, absence, count, and window.
-4. **State machine:** declared states, events, guards, and transitions.
-5. **Graph pattern:** bounded typed relations over the situation graph.
+1. **Predicate:** safe comparisons over declared event and situation values.
+2. **Scoring:** bounded weighted Boolean features with explicit normalization.
+3. **Temporal:** an anchor, elapsed duration, absence/reset events, and current
+   predicates.
+
+State-machine and graph-pattern encodings remain future candidates and are not
+accepted by the registry. The first slice also limits rule literals to immutable
+JSON scalars so a frozen rule cannot conceal mutable policy state.
 
 Rules reference capability IDs and signal kinds, not functions. The evaluator
 validates operands, operations, dependency names, output types, and complexity
@@ -386,39 +416,43 @@ matcher contracts. No heavyweight engine is required for the first slice.
 The fabric is a cross-cutting track, not one monolithic release:
 
 - **v0.3:** introduce `Signal`, immutable rule versions, `RulesetSnapshot`,
-  deterministic predicate/scoring evaluation, a firing ledger, and shadow-only
-  cells. Persistent memory provides the evidence substrate.
+  `EvaluationEpoch`, deterministic predicate/temporal/scoring evaluation,
+  complete firing telemetry/replay, salience resolution, and shadow-only cells.
+  The Autonomic Shadow Kernel foundation is implemented; persistent memory
+  provides the broader evidence substrate.
 - **v0.4:** add coordination cells for delegations, leases, and agent ecology;
   rules remain protocol-neutral.
 - **v0.5:** add counterfactual replay, compile-down candidate mining, fitness,
   meta-rule proposals, and governed lifecycle transitions.
-- **v0.6:** add temporal/opportunity cells, sensing-request signals,
-  evaluation/awake-epoch linkage, wake control, and salience-based situated
-  continuity.
+- **v0.6:** add durable timer workers, richer opportunity patterns,
+  sensing-request signals, evaluation/awake-epoch linkage, active wake control,
+  and salience-based situated continuity.
 
 Automatic canary reflexes should wait until these foundations provide durable
 evidence, replay, temporal semantics, and metacontrol.
 
-## First implementation slice
+## Autonomic Shadow Kernel
 
-The first vertical slice should be deliberately effect-free:
+The implemented first vertical slice is deliberately effect-free:
 
-1. canonical signal, rule-version, ruleset, and firing event schemas;
-2. registry and signal projections for SQLite and PostgreSQL;
-3. predicate and scoring encodings with a small safe evaluator;
-4. trigger/scope/dependency indexes and one in-process `RuleCell` port;
-5. deterministic agenda with inhibition, precedence, cooldown, and expiry;
-6. `SHADOW` evaluation only;
-7. a manually seeded `IntentFrame` preserved alongside its candidate;
-8. replay fixtures and an always-on personal-workflow scenario.
+1. immutable `AutonomicRule` versions and event-rebuildable `RuleRegistry`;
+2. digest-verified `RulesetSnapshot` with exactly one version per rule identity,
+   and a pinned `EvaluationEpoch`;
+3. predicate, temporal, and bounded scoring encodings with a safe evaluator;
+4. stateless `RuleCell` evaluation over caller-supplied situation and history;
+5. complete `RuleEvaluationTrace` telemetry with hypothetical `Signal` output;
+6. deterministic `SalienceResolver` aggregation, inhibition, and wake budgets;
+7. `SHADOW` outputs only, with an architecture gate against effect-plane imports;
+8. replay fixtures for deep work, opportunity windows, and stale delegation.
 
 Acceptance requires:
 
 - identical inputs and pinned ruleset produce byte-equivalent firing semantics;
-- shadow rules produce no signal visible to the deliberator and no action;
+- shadow rules produce no active signal, deliberative wake, or action;
 - a late rule version cannot enter the current evaluation epoch;
 - inhibition and hard precedence are independent of evaluation order;
-- restart rebuilds registry, temporal state, and unresolved signals from events;
+- restart replay rebuilds registry, temporal state, and unresolved shadow signals
+  from canonical events;
 - no online model call is required for evaluation;
 - no learned rule contains or invokes arbitrary code;
 - the same cell runs embedded and distributed without application branching;

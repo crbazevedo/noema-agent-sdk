@@ -3,10 +3,16 @@
 ## Unreleased
 
 - accepted the signal-first Autonomic Fabric architecture;
-- staged immutable rules, signals, shadow cells, the governed Forge, and
-  situated wake control across v0.3–v0.6;
+- implemented the effect-free Autonomic Shadow Kernel with immutable rules,
+  pinned rulesets and evaluation epochs, predicate/temporal/scoring cells,
+  complete evaluation traces, and deterministic salience resolution;
+- demonstrated deep-work suppression, opportunity escalation, stale-delegation
+  escalation, cheap resolution, and byte-equivalent replay;
+- moved temporal evaluation plus rule telemetry/replay into the mandatory v0.3
+  substrate, before Forge or active reflexes;
+- staged the governed Forge and situated wake control across v0.5–v0.6;
 - added architecture gates for retired terminology, dynamic rule execution,
-  and adapter leakage.
+  adapter leakage, and imports from the effect plane.
 
 ## 0.2.0 — 2026-08-30
 

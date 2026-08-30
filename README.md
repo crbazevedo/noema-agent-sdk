@@ -13,11 +13,14 @@ Noema is not a persona framework and does not encode one preferred cognitive sty
 - event-driven scheduling, sensing, action, recovery, and reflection;
 - multi-agent operation over a shared world model.
 
-The planned [Autonomic Fabric](docs/AUTONOMIC_FABRIC.md) adds a signal-first
-control plane beneath deliberation: accumulated experience can become cheap,
-typed, replayable micro-policies, while novelty and uncertainty are promoted to
-the aware workspace. It remains governed by the same event, policy, authority,
-and capability boundaries.
+The [Autonomic Fabric](docs/AUTONOMIC_FABRIC.md) adds a signal-first control
+plane beneath deliberation: accumulated experience can become cheap, typed,
+replayable micro-policies, while novelty and uncertainty are promoted to the
+aware workspace. Its first effect-free shadow kernel is implemented with
+predicate, temporal, and scoring rules, pinned evaluation epochs, complete
+evaluation traces, and deterministic salience resolution. It cannot publish,
+wake cognition, or invoke capabilities; active behavior remains governed by the
+same event, policy, authority, and capability boundaries.
 
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
@@ -64,6 +67,7 @@ environment / agents / timers
 - **Recoverable:** durable action lifecycle events restore completed idempotency keys and unfinished authorized work after a crash.
 - **Observable:** causal events remain canonical while provider-neutral spans can be exported through OpenTelemetry.
 - **Governed:** autonomy is explicit and configurable; “fully autonomous” means no mandatory human interaction, not invisible or unlimited authority.
+- **Cognitively sparse:** shadow rules cheaply test which observations should be suppressed, retained, or promoted before expensive deliberation is involved.
 
 ## Install locally
 
@@ -232,6 +236,23 @@ Maintains evidence-weighted reliability estimates for dynamic delegation. Source
 ### `DetectorEngine`
 
 Turns low-level observations and situation state into higher-level signals. The included deadline detector promotes weak temporal signals into explicit risk events.
+
+### Autonomic Shadow Kernel
+
+`AutonomicRule`, `RuleRegistry`, `RulesetSnapshot`, and `EvaluationEpoch` define
+immutable, event-rebuildable policy snapshots. `RuleCell` evaluates only three
+typed rule families—predicate, temporal, and scoring—and returns
+`RuleEvaluationTrace` records containing hypothetical `Signal` values.
+`SalienceResolver` deterministically aggregates and inhibits those signals into
+shadow `WAKE`, `REMEMBER`, `REFLEX_PROPOSAL`, `SUPPRESS`, or `DEFER` decisions.
+It performs no effect itself.
+
+The acceptance scenarios cover deep-work suppression, expiring code-review
+opportunities, stale delegation, and byte-equivalent replay:
+
+```bash
+PYTHONPATH=src python -m unittest tests.test_autonomic -v
+```
 
 ### `NoemaSystem`
 

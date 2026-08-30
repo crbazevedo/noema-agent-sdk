@@ -43,6 +43,16 @@ systems, Noema can no longer reconstruct or govern its behavior.
 10. Implement the fabric incrementally across v0.3–v0.6. Begin with effect-free
     shadow rules; defer automatic canary reflexes and RETE optimization until
     evidence and profiling justify them.
+11. Keep `RuleCell` state rebuildable from canonical evidence. Signals and
+    salience decisions are disposable projections; durable evaluation traces
+    retain the evidence and hypothetical output needed for replay and learning.
+12. Permit immediate modulation only when it preserves or reduces authority.
+    Any increase in authority requires an explicit governed lifecycle transition.
+13. Keep the Rule Forge outside the autonomic execution boundary. It may
+    propose immutable candidates, but it cannot mutate a pinned ruleset.
+14. Make rule telemetry, deterministic replay, temporal evaluation, and
+    salience resolution part of v0.3, before Forge learns from the resulting
+    evidence in v0.5.
 
 ## Consequences
 
@@ -80,10 +90,12 @@ systems, Noema can no longer reconstruct or govern its behavior.
 
 - Architecture tests reject dynamic execution and adapter imports in future
   autonomic/Forge core modules.
-- Rule-schema tests will reject unknown operations, undeclared dependencies,
-  authority escalation, and mutable versions.
-- Replay tests will compare firing semantics under a pinned ruleset.
-- Shadow-mode tests will prove the absence of deliberative signals and effects.
+- Rule-schema tests reject unknown families, mismatched typed encodings,
+  mutable rule versions, and mutable literal containers.
+- Replay tests compare semantic trace content and hypothetical signals under a
+  pinned ruleset byte-for-byte; measured wall-clock cost is excluded.
+- Shadow-mode tests prove suppression and escalation decisions remain
+  hypothetical and the autonomic package cannot import the effect plane.
 - Agenda tests will permute evaluation order and require identical conflict
   resolution.
 - Embedded/distributed acceptance will run the same personal-workflow cell.

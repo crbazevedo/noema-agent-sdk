@@ -11,13 +11,15 @@ cross-cutting release gates rather than a final wave.
 The [Autonomic Fabric](AUTONOMIC_FABRIC.md) spans the cognitive roadmap. It is
 not a monolithic rules release:
 
-- v0.3 adds signals, immutable rule versions, pinned rulesets, deterministic
-  predicate/scoring evaluation, firing telemetry, and shadow-only cells;
+- v0.3 adds signals, immutable rule versions, pinned rulesets and evaluation
+  epochs, deterministic predicate/temporal/scoring evaluation, firing
+  telemetry/replay, shadow-only cells, and salience resolution;
 - v0.4 adds protocol-neutral coordination cells over delegations and leases;
 - v0.5 adds candidate mining, counterfactual replay, fitness, meta-rule
   proposals, and governed lifecycle transitions;
-- v0.6 adds temporal/opportunity cells, sensing-request signals,
-  evaluation/awake-epoch linkage, wake control, and salience-based continuity.
+- v0.6 adds durable timer workers, richer opportunity patterns,
+  sensing-request signals, evaluation/awake-epoch linkage, active wake control,
+  and salience-based continuity.
 
 Rules emit signals by default. Learned policies never execute arbitrary code or
 bypass the existing policy/capability boundary. Automatic reflex canaries wait
@@ -44,8 +46,11 @@ policy branch and runs with both `MODE=embedded` and `MODE=distributed`.
 
 ## v0.3 — Persistent Cognitive Agent
 
-- typed `Signal`, immutable `AutonomicRule` versions, and `RulesetSnapshot`;
-- effect-free shadow evaluation with predicate/scoring encodings and a firing ledger;
+- typed `Signal`, immutable `AutonomicRule` versions, `RulesetSnapshot`, and
+  `EvaluationEpoch` (implemented shadow-kernel foundation);
+- effect-free shadow evaluation with predicate/temporal/scoring encodings,
+  complete rule traces, deterministic replay, and a `SalienceResolver`
+  (implemented shadow-kernel foundation);
 - episodic indexes over event history;
 - semantic assertions linked to evidence;
 - hypotheses, contradictions, and validity intervals;
@@ -84,7 +89,8 @@ evaluation, and identical captured inputs reproduce the same semantic trace.
 
 ## v0.6 — Situated Continuity
 
-- temporal/opportunity rule cells and salience-driven wake control;
+- durable timer workers, advanced opportunity patterns, and active
+  salience-driven wake control;
 - sensing-request signals governed by perception policy;
 - temporal semantics, source cursors, freshness, and awake epochs;
 - wake reconciliation and an orientation barrier;

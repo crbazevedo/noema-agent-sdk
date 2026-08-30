@@ -70,9 +70,24 @@ class ArchitectureFitnessTests(unittest.TestCase):
         self.assertNotIn("DeploymentMode", source)
         self.assertNotIn("MODE ==", source)
 
-    def test_future_autonomic_core_cannot_use_dynamic_execution_or_adapters(self) -> None:
+    def test_autonomic_core_cannot_execute_dynamic_code_or_import_effect_plane(self) -> None:
         source_root = Path(__file__).parents[1] / "src" / "noema"
         roots = (source_root / "autonomic", source_root / "forge")
+        forbidden_effect_modules = {
+            "adapters",
+            "agent",
+            "authority",
+            "capabilities",
+            "delivery",
+            "kernel",
+            "models",
+            "reasoning",
+            "scheduler",
+            "store",
+            "system",
+            "telemetry",
+            "tracing",
+        }
         violations: list[str] = []
         for root in roots:
             if not root.exists():
@@ -91,14 +106,54 @@ class ArchitectureFitnessTests(unittest.TestCase):
                         )
                         violations.append(f"{path.relative_to(source_root)} calls {function_name}")
                     if isinstance(node, ast.ImportFrom) and node.module:
+                        if (
+                            node.level >= 2
+                            and node.module == "events"
+                            and any(alias.name == "AsyncEventBus" for alias in node.names)
+                        ):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports the event bus"
+                            )
                         if "adapters" in node.module.split("."):
                             violations.append(
                                 f"{path.relative_to(source_root)} imports {node.module}"
                             )
+                        if (
+                            node.level >= 2
+                            and node.module.split(".")[0] in forbidden_effect_modules
+                        ):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports effect plane "
+                                f"{node.module}"
+                            )
+                        if node.module == "noema":
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports the root effect surface"
+                            )
+                    if isinstance(node, ast.ImportFrom) and node.module is None:
+                        if node.level >= 2:
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports the root effect surface"
+                            )
                     if isinstance(node, ast.Import):
                         for alias in node.names:
+                            if alias.name == "noema":
+                                violations.append(
+                                    f"{path.relative_to(source_root)} imports the root "
+                                    "effect surface"
+                                )
                             if "adapters" in alias.name.split("."):
                                 violations.append(
                                     f"{path.relative_to(source_root)} imports {alias.name}"
+                                )
+                            parts = alias.name.split(".")
+                            if (
+                                len(parts) >= 2
+                                and parts[0] == "noema"
+                                and parts[1] in forbidden_effect_modules
+                            ):
+                                violations.append(
+                                    f"{path.relative_to(source_root)} imports effect plane "
+                                    f"{alias.name}"
                                 )
         self.assertEqual(violations, [])
