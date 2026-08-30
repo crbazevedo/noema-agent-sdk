@@ -51,7 +51,10 @@ epoch pin, and it may only reduce capability.
 ## Planned sequence
 
 1. Temporal semantics: `occurred_at`, `observed_at`, `recorded_at`, source
-   cursors, `AwakeEpoch`, and freshness models.
+   cursors, `AwakeEpoch`, and freshness models. `processed_at` remains runtime
+   telemetry rather than event truth. Historical counterfactual salience at
+   occurrence time and present salience at observation/processing time are
+   separate evaluations; a delayed observation must not collapse them.
 2. `WakeReconciler`, `AwarenessCoverage`, and an orientation barrier.
 3. `SubstrateProvider`, `Sensor`, `SensorRegistry`, and a deterministic fake substrate.
 4. `SituationCapsule`, `ArtifactStore`, bitemporal assertions, and retention policy.

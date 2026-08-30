@@ -10,14 +10,16 @@
 - added a continuous observational worker over the canonical event substrate
   that persists evaluations and would-have-signaled/woken/suppressed outcomes
   without invoking models, authority, agents, or capabilities;
+- added generic event-sourced consumer checkpoints, crash-window replay,
+  deterministic partial-output idempotency, and processing-lag/phase telemetry;
 - distinguished precedence-based hard inhibition from confidence-weighted
   graded modulation and removed collection-membership predicates from the
   deliberately small rule language;
 - demonstrated deep-work suppression, opportunity escalation, stale-delegation
   escalation, cheap resolution, and byte-equivalent replay;
 - moved temporal evaluation plus rule telemetry/replay into the mandatory v0.3
-  substrate, before Forge or active reflexes;
-- staged the governed Forge and situated wake control across v0.5–v0.6;
+  substrate, before HabitForge or active reflexes;
+- staged governed HabitForge learning and situated wake control across v0.5–v0.6;
 - accepted the Endogenous Drive Ecology as a staged mid-term architecture for
   bounded inquiry, calibration, consolidation, and intrinsic agenda formation;
 - added architecture gates for retired terminology, dynamic rule execution,

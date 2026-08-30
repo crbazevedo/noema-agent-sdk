@@ -33,8 +33,8 @@ internal questions, maintenance, simulation, preparedness, and peer calibration
 as a second source of cognitive demand. It does not create terminal values or a
 new effect path:
 
-- v0.3 collects real shadow evaluations and hypothetical decisions; no Forge or
-  intrinsic scheduler is implemented;
+- v0.3 collects real shadow evaluations and hypothetical decisions; no
+  HabitForge, SkillForge, or intrinsic scheduler is implemented;
 - v0.4 introduces first-class inquiry and peer-calibration event contracts;
 - v0.5 introduces budgeted value-of-cognition experiments and a shadow
   `IntrinsicAgenda`, then evaluates HabitForge candidates from the accumulated
@@ -47,6 +47,15 @@ new effect path:
 Intrinsic activities remain subordinate to constitutional, user, mission, and
 commitment goals. Background cognition is explicitly budgeted and produces
 questions and candidates more readily than actions.
+
+With shadow reliability hardened, the dependency order is:
+
+```text
+persistent memory → situated continuity → agent ecology → HabitForge learning
+```
+
+Autonomic feature expansion pauses while v0.3 builds episodic and semantic
+memory with provenance, contradiction handling, and bitemporal validity.
 
 ## v0.2 — Portable Durable Agent
 
@@ -76,6 +85,8 @@ policy branch and runs with both `MODE=embedded` and `MODE=distributed`.
   (implemented shadow-kernel foundation);
 - sequence-correct content-addressed rulesets, hard/graded inhibition, and the
   continuously running observational `AutonomicShadowWorker` (implemented);
+- generic durable `ConsumerCheckpoint` recovery, crash-window idempotency, and
+  shadow processing-lag/phase telemetry (implemented);
 - episodic indexes over event history;
 - semantic assertions linked to evidence;
 - hypotheses, contradictions, and validity intervals;
@@ -103,7 +114,7 @@ MCP server without exposing Noema's internal memory or runtime protocol.
 
 ## v0.5 — Reflective Autonomous System
 
-- governed Rule Forge candidate mining from corrections and repeated trajectories;
+- governed HabitForge candidate mining from corrections and repeated trajectories;
 - rule fitness, collision analysis, meta-rule proposals, and lifecycle gates;
 - explicit value-of-computation policies;
 - wall-clock, call, cost, branch, action, and recursion ceilings;

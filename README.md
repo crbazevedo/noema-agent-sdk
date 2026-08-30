@@ -21,14 +21,16 @@ canonical event stream with predicate, temporal, and scoring rules. Rulesets
 are content-addressed, evaluation epochs are pinned to event-log sequence, and
 hard inhibition is distinct from graded modulation. The worker durably records
 what would have signaled, woken, or been suppressed, but cannot wake cognition
-or invoke capabilities. Active behavior remains governed by the same event,
-policy, authority, and capability boundaries.
+or invoke capabilities. A generic, event-sourced `ConsumerCheckpoint` makes
+partially completed triggers replayable after a crash without duplicating their
+deterministic shadow outputs. Active behavior remains governed by the same
+event, policy, authority, and capability boundaries.
 
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture for bounded inquiry, calibration, consolidation,
 and intrinsic agenda formation. It is deliberately staged behind observational
-evidence from the shadow worker; its schedulers and learning forges are not part
-of the current runtime.
+evidence from the shadow worker; its schedulers, HabitForge, and SkillForge are
+not part of the current runtime.
 
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
@@ -259,8 +261,17 @@ modulation, into shadow `WAKE`, `REMEMBER`, `REFLEX_PROPOSAL`, `SUPPRESS`, or
 
 `AutonomicShadowWorker` runs that path continuously over the real event
 substrate and persists its evaluations and decisions for retrospective analysis.
-It performs no external effect and has no dependency on models, authority,
-agents, or capabilities.
+It advances its durable checkpoint only after required shadow observations are
+stored, then replays from the prior checkpoint after interruption. It performs
+no external effect and has no dependency on models, authority, agents, or
+capabilities.
+
+### `ConsumerCheckpoint`
+
+A generic canonical processing watermark for durable event consumers. Its
+projection exposes last completed sequence, observed event-log head, processing
+lag, and optional epoch identity. Memory projections, telemetry reducers,
+maintenance loops, and future learning workers can reuse the same contract.
 
 The acceptance scenarios cover deep-work suppression, expiring code-review
 opportunities, stale delegation, and byte-equivalent replay:

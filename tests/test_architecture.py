@@ -64,6 +64,21 @@ class ArchitectureFitnessTests(unittest.TestCase):
                         violations.append(f"{path.relative_to(source_root)} imports {name}")
         self.assertEqual(violations, [])
 
+    def test_habit_compiler_uses_current_architecture_vocabulary(self) -> None:
+        repository = Path(__file__).parents[1]
+        excluded = {".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "build", "dist"}
+        retired = (("rule" + "forge").encode(), ("rule" + " forge").encode())
+        violations: list[str] = []
+        for path in repository.rglob("*"):
+            if not path.is_file() or any(part in excluded for part in path.parts):
+                continue
+            if path.suffix not in _TEXT_SUFFIXES and path.name not in {"LICENSE", "Makefile"}:
+                continue
+            data = path.read_bytes().lower()
+            if any(term in data for term in retired):
+                violations.append(str(path.relative_to(repository)))
+        self.assertEqual(violations, [])
+
     def test_incident_demo_has_no_mode_specific_application_branch(self) -> None:
         example = Path(__file__).parents[1] / "examples" / "autonomous_incident_agent.py"
         source = example.read_text(encoding="utf-8")
@@ -72,7 +87,7 @@ class ArchitectureFitnessTests(unittest.TestCase):
 
     def test_autonomic_core_cannot_execute_dynamic_code_or_import_effect_plane(self) -> None:
         source_root = Path(__file__).parents[1] / "src" / "noema"
-        roots = (source_root / "autonomic", source_root / "forge")
+        roots = (source_root / "autonomic", source_root / "habit_forge")
         forbidden_effect_modules = {
             "adapters",
             "agent",

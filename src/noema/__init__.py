@@ -48,6 +48,11 @@ from .capabilities import (
     CapabilitySpec,
     FunctionCapability,
 )
+from .checkpoints import (
+    CONSUMER_CHECKPOINT_EVENT,
+    ConsumerCheckpoint,
+    ConsumerCheckpointProjection,
+)
 from .delivery import (
     EventBroker,
     InboxClaim,
@@ -151,6 +156,9 @@ __all__ = [
     "CommitmentStatus",
     "ComparisonOperator",
     "CompositeReasoner",
+    "CONSUMER_CHECKPOINT_EVENT",
+    "ConsumerCheckpoint",
+    "ConsumerCheckpointProjection",
     "Critic",
     "Critique",
     "DeadlineRiskDetector",

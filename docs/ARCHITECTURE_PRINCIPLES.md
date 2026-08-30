@@ -8,6 +8,7 @@ principle they change.
 | Core is provider-neutral | Model, broker, database, and cloud SDK imports stay in adapters. |
 | Local is first-class | Embedded operation requires no network or external service. |
 | Events are canonical | Situation state, recovery state, and transport messages derive from the event log. |
+| Consumer progress is canonical | Durable workers checkpoint only after required outputs; restart replays later triggers idempotently. |
 | The broker is transport | Broker retention is never treated as system history. |
 | Effects are explicit | Cognition proposes `ActionIntent`; policy authorizes a typed capability. |
 | At-least-once is assumed | External effects receive idempotency keys and must tolerate retry. |
@@ -29,7 +30,7 @@ principle they change.
 | Policy time is sequence-based | Rule eligibility is pinned by canonical event cursor; a later registration cannot leak into historical evaluation. |
 | Ruleset identity is content identity | Time and event cursor belong to evaluation epochs, not the content-addressed ruleset artifact. |
 | Inhibition strength is typed | Hard equal-or-higher-precedence vetoes and probabilistic graded modulation are distinct encodings. |
-| Observation precedes learning | Continuous shadow telemetry must ground Forge fitness before learned policy can advance. |
+| Observation precedes learning | Continuous shadow telemetry must ground HabitForge fitness before learned policy can advance. |
 | Intrinsic goals are subordinate | Future endogenous processes may propose instrumental, epistemic, maintenance, and exploratory goals, never terminal values. |
 | Background cognition is leased | Future dream/maintenance work consumes explicit preemptible budgets and cannot silently act externally. |
 | Competence does not grant authority | A future SkillForge may propose a capability; capability registration and authority remain independent gates. |

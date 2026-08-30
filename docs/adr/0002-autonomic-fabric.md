@@ -22,7 +22,7 @@ systems, Noema can no longer reconstruct or govern its behavior.
 1. Add a signal-first Autonomic Fabric beneath deliberation. Rules emit typed
    signals by default; a bounded reflex may only propose an `ActionIntent`.
 2. Keep the event store canonical. Registry, rulesets, cell state, signals,
-   firings, fitness, and Forge datasets are rebuildable projections.
+   firings, fitness, and HabitForge datasets are rebuildable projections.
 3. Store immutable, provenance-bearing rule versions from sequenced canonical
    registration events. A ruleset is a content-addressed policy artifact. An
    evaluation epoch pins that artifact with a start time and event-log cursor;
@@ -52,14 +52,17 @@ systems, Noema can no longer reconstruct or govern its behavior.
     and learning.
 12. Permit immediate modulation only when it preserves or reduces authority.
     Any increase in authority requires an explicit governed lifecycle transition.
-13. Keep the Rule Forge outside the autonomic execution boundary. It may
+13. Keep HabitForge outside the autonomic execution boundary. It may
     propose immutable candidates, but it cannot mutate a pinned ruleset.
 14. Make rule telemetry, deterministic replay, temporal evaluation, and
-    salience resolution part of v0.3, before Forge learns from the resulting
+    salience resolution part of v0.3, before HabitForge learns from the resulting
     evidence in v0.5.
 15. Run the fabric continuously through an outer observational worker. It may
     persist content artifacts, epochs, evaluation traces, and hypothetical
     decisions, but cannot import or call the effect plane.
+16. Bind continuous processing to the general event-sourced
+    `ConsumerCheckpoint`. Required shadow observations are written before the
+    checkpoint advances; restart replays later triggers with deterministic IDs.
 
 ## Consequences
 
@@ -99,7 +102,7 @@ systems, Noema can no longer reconstruct or govern its behavior.
 ## Fitness functions
 
 - Architecture tests reject dynamic execution and adapter imports in future
-  autonomic/Forge core modules.
+  autonomic/HabitForge core modules.
 - Rule-schema tests reject unknown families, mismatched typed encodings,
   mutable rule versions, mutable literal containers, and the removed ambiguous
   string-membership operator.
@@ -108,7 +111,9 @@ systems, Noema can no longer reconstruct or govern its behavior.
 - Shadow-mode tests prove suppression and escalation decisions remain
   hypothetical and the autonomic package cannot import the effect plane.
 - Continuous-worker tests prove later registrations wait for explicit epoch
-  rotation and that only shadow observation events are produced.
+  rotation, only shadow observation events are produced, and failures before a
+  trace, before a decision, or before checkpoint advancement recover without
+  duplicate logical outputs.
 - Agenda tests will permute evaluation order and require identical conflict
   resolution.
 - Embedded/distributed acceptance will run the same personal-workflow cell.
@@ -116,4 +121,5 @@ systems, Noema can no longer reconstruct or govern its behavior.
 This ADR extends [ADR 0001](0001-portable-durable-agent.md); it does not change
 the canonical event, adapter, or capability-boundary decisions. Governed
 internally generated cognition is specified separately by
-[ADR 0003](0003-endogenous-drive-ecology.md).
+[ADR 0003](0003-endogenous-drive-ecology.md). Durable worker recovery is
+specified by [ADR 0004](0004-durable-consumer-checkpoints.md).

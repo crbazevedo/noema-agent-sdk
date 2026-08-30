@@ -222,6 +222,19 @@ priority.
 
 ## Learning directions
 
+A durable agent develops along four distinct axes:
+
+```text
+what to believe
+what to notice
+what to think about
+what not to think about
+```
+
+The last axis is governed deliberative compression: repeatedly safe,
+understood, low-value patterns can remain below awareness only while
+missed-opportunity, regret, and override evidence stay acceptable.
+
 Three different mechanisms must remain separate:
 
 - **HabitForge — think less:** compile repeated successful deliberation into a
@@ -233,8 +246,8 @@ Three different mechanisms must remain separate:
   reversible hypotheses about users, channels, handoffs, or inter-agent
   protocols.
 
-The Forge systems are metacognitive consumers of evidence, outside both the
-autonomic execution boundary and the capability boundary. None is the next
+HabitForge and SkillForge are metacognitive consumers of evidence, outside both
+the autonomic execution boundary and the capability boundary. Neither is the next
 runtime milestone. The required progression is:
 
 ```text

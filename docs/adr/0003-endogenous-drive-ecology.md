@@ -41,8 +41,8 @@ building systems that learn habits or skills from it.
    assumptions, goals, and protocol versions. Disagreement is evidence, not a
    vote to suppress.
 9. Continue the evidence progression `observe → evaluate → measure → learn →
-   compile`. Do not build a Forge before continuous shadow telemetry supplies a
-   representative corpus.
+   compile`. Do not build HabitForge or SkillForge before continuous shadow
+   telemetry supplies a representative corpus.
 
 ## Consequences
 

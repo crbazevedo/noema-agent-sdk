@@ -1,7 +1,7 @@
 # Autonomic Fabric
 
 The Noema Autonomic Fabric is a control plane beneath deliberative agency. Its
-first effect-free shadow kernel is implemented; activation, Forge, and active
+first effect-free shadow kernel is implemented; activation, HabitForge, and active
 wake control remain staged work. The fabric turns repeated, well-evidenced
 cognition into cheap, persistent, governed micro-policies while promoting
 novelty, uncertainty, contradiction, conflict, and opportunity into the
@@ -38,7 +38,7 @@ situation/memory   immutable rule registry
           policy + capability boundary
                    │ outcomes/corrections
                    ▼
-                Rule Forge
+                HabitForge
 ```
 
 The biological analogy is limited but useful: regulation can be local and
@@ -109,19 +109,36 @@ rule.firing_recorded
 rule.evaluation_summarized
 rule.outcome_linked
 rule.feedback_recorded
-rule.candidate_forged
+habit.candidate_forged
 rule.collision_detected
 ```
 
+The outer runtime also records generic consumer progress as:
+
+```text
+runtime.consumer_checkpoint_advanced
+```
+
 The rule registry, temporal state, active ruleset, signal workspace, metrics,
-and Forge training views are projections. Cell checkpoints are disposable
-accelerators and must be rebuildable from the log.
+and HabitForge training views are projections. Rule-cell computation checkpoints
+are disposable accelerators and must be rebuildable from the log. Durable
+consumer progress is different: it is itself a canonical event projection.
 
 The durable causal chain is:
 
 ```text
 Observation → Evidence → RuleEvaluationTrace → hypothetical Signal
 ```
+
+When later outcomes are linked, this becomes counterfactual operational
+learning:
+
+```text
+real trigger → shadow policy → would-have outcome → actual outcome → comparison
+```
+
+HabitForge can therefore reject or refine a candidate before it receives live
+authority.
 
 The live signal workspace is a disposable projection. Complete shadow
 evaluation traces and would-have-signaled/woken/suppressed decisions are durable
@@ -139,6 +156,19 @@ by wall-clock timestamp. An `AwakeEpoch` references the current evaluation epoch
 and ruleset. A later registration becomes eligible only after explicit epoch
 rotation. Given identical events, cursor, situation state, model fixtures,
 ruleset, and configuration, the fabric must produce identical activations.
+
+### `ConsumerCheckpoint`
+
+The continuous worker never treats the current event-store head as proof of
+completed processing. It records the last canonical trigger whose required
+traces and shadow decisions were durable, the head observed when processing
+began, processing lag, and the active evaluation epoch. Restart restores that
+epoch and replays every later trigger.
+
+Outputs precede checkpoint advancement. If a crash leaves only a trace, or both
+trace and decision without a checkpoint, deterministic event IDs reuse the
+durable prefix and complete the missing suffix. The contract is general runtime
+infrastructure rather than an autonomic-only offset.
 
 ## Core contracts
 
@@ -325,10 +355,10 @@ The deliberative layer can issue governed inhibition/modulation events: suppress
 a family temporarily, lower an opportunity threshold, make a capability
 prepare-only, or reduce exploration. These controls are scoped and expiring.
 
-## Rule Forge
+## HabitForge
 
 Natural-language preferences and observed behavior seed hypotheses, not active
-rules. The Forge preserves the original intent and produces a structured
+rules. HabitForge preserves the original intent and produces a structured
 `IntentFrame` containing goals, contexts, preferences, exceptions,
 non-goals, ambiguities, and required clarification.
 
@@ -405,6 +435,35 @@ The first research metrics should be deliberative episodes avoided per active
 rule, utility retained, false-escalation rate, regret, latency, model cost,
 privacy cost, and user intervention.
 
+One aggregate developmental measure is the deliberative compression ratio:
+
+```text
+1 - (events requiring awareness / events encountered)
+```
+
+It is meaningful only alongside missed-opportunity, regret, calibration, and
+user-override constraints. The desired result is not less thought in isolation;
+it is safely moving understood, low-value repetition below awareness.
+
+The autonomy gradient is:
+
+```text
+observe → shadow → evaluate → learn → compile → canary → autonomous
+```
+
+HabitForge enters at learning and compilation. A reflex is one possible
+compiled habit, not a separate forge.
+
+## Time semantics boundary
+
+The current shadow path deliberately evaluates historical counterfactuals at
+the triggering event's timestamp. Situated continuity will separately model
+`occurred_at`, `observed_at`, `recorded_at`, and `processed_at`. An event that
+occurred Friday but was first observed Monday poses two different questions:
+what the fabric would have considered Friday, and what deserves attention now.
+The event model is unchanged in this milestone; the distinction is a recorded
+requirement for memory and continuity work.
+
 ## Technology and deployment mapping
 
 The fabric extends existing Noema ports rather than introducing a separate rule
@@ -425,6 +484,13 @@ Selector, scope, and dependency indexes are the initial performance mechanism.
 PostgreSQL indexes or local dictionaries are deployment details behind the same
 matcher contracts. No heavyweight engine is required for the first slice.
 
+The correctness-first worker currently reconstructs situation state from
+canonical history through each trigger. Before replacing that approximately
+quadratic path with incremental snapshots plus delta replay, it records events
+replayed per trigger, situation reconstruction time, rule evaluation time,
+salience resolution time, shadow-event write time, and consumer lag. Cached
+state will remain an accelerator, never another truth source.
+
 ## Relationship to the release sequence
 
 The fabric is a cross-cutting track, not one monolithic release:
@@ -432,9 +498,10 @@ The fabric is a cross-cutting track, not one monolithic release:
 - **v0.3:** introduce `Signal`, immutable rule versions, `RulesetSnapshot`,
   `EvaluationEpoch`, deterministic predicate/temporal/scoring evaluation,
   complete firing telemetry/replay, hard and graded inhibition, salience
-  resolution, shadow-only cells, and a continuous observational worker. The
-  Autonomic Shadow Kernel and continuous worker foundations are implemented;
-  persistent memory provides the broader evidence substrate.
+  resolution, shadow-only cells, a continuous observational worker, durable
+  consumer checkpoints, crash-window replay, and processing telemetry. These
+  foundations are implemented; persistent memory provides the broader evidence
+  substrate.
 - **v0.4:** add coordination cells for delegations, leases, and agent ecology;
   rules remain protocol-neutral.
 - **v0.5:** add counterfactual replay, compile-down candidate mining, fitness,
@@ -462,7 +529,9 @@ The implemented first vertical slice is deliberately effect-free:
 7. `SHADOW` outputs only, with an architecture gate against effect-plane imports;
 8. continuous `AutonomicShadowWorker` evaluation over the actual event substrate
    with durable would-have-signaled/woken/suppressed observations;
-9. replay fixtures for deep work, opportunity windows, and stale delegation.
+9. a generic durable `ConsumerCheckpoint`, exact epoch restoration, and
+   idempotent recovery across partial-output crash windows;
+10. replay fixtures for deep work, opportunity windows, and stale delegation.
 
 Acceptance requires:
 
@@ -473,6 +542,8 @@ Acceptance requires:
 - inhibition and hard precedence are independent of evaluation order;
 - restart replay rebuilds registry, temporal state, and unresolved shadow signals
   from canonical events;
+- the worker replays a trigger lost before its trace, completes a trigger lost
+  between trace and decision, and deduplicates outputs lost before checkpoint;
 - no online model call is required for evaluation;
 - no learned rule contains or invokes arbitrary code;
 - the same cell runs embedded and distributed without application branching;
@@ -483,10 +554,10 @@ Acceptance requires:
 
 | Attribute | Scenario and response |
 |---|---|
-| Safety | A forged rule proposes an external effect; the fabric can only emit an `ActionIntent`, and existing policy/capability gates still decide. |
+| Safety | A HabitForge candidate proposes an external effect; the fabric can only emit an `ActionIntent`, and existing policy/capability gates still decide. |
 | Auditability | Given a user-visible interruption, correlation links its action to signal, firing, pinned rule version, evidence, intent, and activation decision. |
 | Determinism | Replaying an awake epoch with captured model outputs and its ruleset snapshot reproduces activation and conflict outcomes. |
-| Reliability | A cell crashes after firing; event identity and the durable firing ledger prevent a second logical signal while at-least-once delivery continues. |
+| Reliability | The worker crashes after a trigger or partial output; its checkpoint remains behind, restart restores the pinned epoch, and deterministic IDs complete the output set once. |
 | Privacy | A rule requests richer sensing; a signal enters the perception policy, which applies permission, freshness, retention, and authority gates before capture. |
 | Performance | Ten thousand rules observe a sparse event; selectors and dependency indexes evaluate only candidates, with RETE deferred until profiling. |
 | Modifiability | A new rule encoding implements a stable evaluator port and schema without changing cells, the registry, lifecycle, or authority. |
@@ -502,7 +573,7 @@ Acceptance requires:
   not be weakened by confidence arithmetic.
 - **Cell partitioning** trades locality against duplicated state and cross-cell
   coordination pressure.
-- **Forge correlation errors** can encode coincidental behavior as preference;
+- **HabitForge correlation errors** can encode coincidental behavior as preference;
   counterexamples, support thresholds, drift monitoring, and reversibility are
   mandatory.
 - **Inferred private context** can be more sensitive than raw inputs; privacy
@@ -514,6 +585,7 @@ Acceptance requires:
   into a framework inside a framework. Add only measured capabilities.
 
 See [ADR 0002](adr/0002-autonomic-fabric.md),
+[ADR 0004](adr/0004-durable-consumer-checkpoints.md),
 [architecture principles](ARCHITECTURE_PRINCIPLES.md), and
 [Situated Continuity](SITUATED_CONTINUITY.md). Endogenous questions and
 background cognition are staged separately in the

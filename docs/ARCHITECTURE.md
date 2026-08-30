@@ -12,6 +12,28 @@ Noema provides a general substrate for long-running autonomous systems. It inten
 - **autonomy** from opacity;
 - **agent identity** from the cognitive policies it instantiates.
 
+## Six planes
+
+Noema's major responsibilities form six governed planes:
+
+```text
+PERCEPTION / SUBSTRATE       What is happening and what can be sensed?
+            ↓
+SITUATION / MEMORY           What is currently believed about reality?
+            ↓
+AUTONOMIC                   What can be regulated cheaply?
+            ↓
+AWARE / DELIBERATIVE        What actually deserves thought?
+            ↓
+GOVERNED EFFECT             What may be done?
+            ↓
+DEVELOPMENT / METACOGNITIVE How should competence improve over time?
+```
+
+These are responsibility and authority boundaries, not required deployment
+processes. The Endogenous Drive Ecology crosses the autonomic, aware, and
+development planes; it is not a seventh peer plane.
+
 ## Event-sourced kernel
 
 The event log is canonical. Every event is persisted before it is projected or delivered.
@@ -28,6 +50,12 @@ This order gives deterministic replay and lets agents deliberate over a situatio
 
 Every envelope carries a schema version. Deterministic upcasters adapt old
 payloads at read/projection time without rewriting canonical history.
+
+Durable consumers record progress through generic `ConsumerCheckpoint` events.
+The checkpoint is written only after required derived observations. A restart
+replays later canonical triggers, while deterministic output IDs make partial
+prior attempts idempotent. Checkpoint projections expose event-stream lag; they
+do not replace the event log with a second offset store.
 
 ## Portable durability
 
@@ -162,6 +190,7 @@ Coordination occurs through events, not direct hidden calls.
 | Telemetry | `TelemetrySink` |
 | Tracing | `Tracer` |
 | Projection | custom `SituationModel` projector |
+| Durable consumer progress | `ConsumerCheckpoint` / `ConsumerCheckpointProjection` |
 | Observational autonomic runtime | `AutonomicShadowWorker` |
 | Endogenous cognition (planned) | durable `Inquiry` / `IntrinsicActivity` contracts |
 
@@ -182,5 +211,6 @@ Those choices belong in adapters and deployments.
 See [Architecture principles](ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](adr/0001-portable-durable-agent.md),
 [ADR 0002](adr/0002-autonomic-fabric.md),
-[ADR 0003](adr/0003-endogenous-drive-ecology.md), and the
+[ADR 0003](adr/0003-endogenous-drive-ecology.md),
+[ADR 0004](adr/0004-durable-consumer-checkpoints.md), and the
 [engineering roadmap](ROADMAP.md).
