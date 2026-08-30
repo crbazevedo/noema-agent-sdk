@@ -52,19 +52,29 @@ kernel rebuilds its situation projection from canonical database order before
 notifying local subscribers about the late event. Broker history already
 present at runtime startup is not treated as a new stimulus.
 
-## Autonomic and deliberative regimes
+## Autonomic, endogenous, and deliberative regimes
 
-Noema plans a signal-first [Autonomic Fabric](AUTONOMIC_FABRIC.md) beneath its
-deliberative agents. Cheap semi-independent rule cells observe narrow event and
-situation slices, record deterministic activations, and usually emit expiring
-signals. The deliberative workspace receives the strongest unresolved signals
-rather than every raw event.
+Noema has implemented the effect-free foundation of a signal-first
+[Autonomic Fabric](AUTONOMIC_FABRIC.md) beneath its deliberative agents. Cheap
+semi-independent rule cells observe narrow event and situation slices, record
+deterministic activations, and produce hypothetical expiring signals. A
+continuous observational worker now runs those cells through the canonical
+event substrate and persists would-have-signaled/woken/suppressed telemetry
+without enacting the decision.
 
 The fabric does not create a second effect path. A bounded reflex can propose an
 `ActionIntent`, but critics, policy, authorization, idempotency, and typed
 capabilities remain mandatory. Rules, rulesets, firings, signals, and fitness
 are projections of canonical events. Learned policies are immutable typed data,
 never arbitrary executable code.
+
+The mid-term [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) adds a
+second, governed source of cognitive demand: questions, belief/goal maintenance,
+calibration, preparedness, and bounded simulation generated when no external
+event currently warrants thought. Exogenous signals and endogenous activities
+compete for one finite aware workspace. Internal initiative remains subordinate
+to constitutional, user, mission, and commitment goals and creates proposals
+more readily than actions.
 
 ## Situation graph
 
@@ -152,6 +162,8 @@ Coordination occurs through events, not direct hidden calls.
 | Telemetry | `TelemetrySink` |
 | Tracing | `Tracer` |
 | Projection | custom `SituationModel` projector |
+| Observational autonomic runtime | `AutonomicShadowWorker` |
+| Endogenous cognition (planned) | durable `Inquiry` / `IntrinsicActivity` contracts |
 
 ## Non-goals of the core
 
@@ -169,5 +181,6 @@ Those choices belong in adapters and deployments.
 
 See [Architecture principles](ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](adr/0001-portable-durable-agent.md),
-[ADR 0002](adr/0002-autonomic-fabric.md), and the
+[ADR 0002](adr/0002-autonomic-fabric.md),
+[ADR 0003](adr/0003-endogenous-drive-ecology.md), and the
 [engineering roadmap](ROADMAP.md).

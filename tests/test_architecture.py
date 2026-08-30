@@ -157,3 +157,25 @@ class ArchitectureFitnessTests(unittest.TestCase):
                                     f"{alias.name}"
                                 )
         self.assertEqual(violations, [])
+
+    def test_shadow_worker_cannot_import_or_call_the_effect_plane(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        path = source_root / "shadow.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        forbidden_modules = {"agent", "authority", "capabilities", "models", "reasoning"}
+        forbidden_calls = {"authorize", "deliberate", "dispatch", "execute"}
+        violations: list[str] = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module
+                and node.module.split(".")[0] in forbidden_modules
+            ):
+                violations.append(f"imports {node.module}")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in forbidden_calls
+            ):
+                violations.append(f"calls {node.func.attr}")
+        self.assertEqual(violations, [])

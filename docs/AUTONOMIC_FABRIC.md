@@ -101,7 +101,10 @@ Canonical rule events include:
 rule.intent_recorded
 rule.version_registered
 rule.lifecycle_changed
-rule.ruleset_pinned
+rule.ruleset_materialized
+rule.evaluation_epoch_started
+rule.evaluation_traced
+rule.salience_decision_shadowed
 rule.firing_recorded
 rule.evaluation_summarized
 rule.outcome_linked
@@ -120,16 +123,22 @@ The durable causal chain is:
 Observation → Evidence → RuleEvaluationTrace → hypothetical Signal
 ```
 
-Signals and salience decisions are disposable projections. Their evidence and
-complete shadow evaluation traces are durable when monitoring or replay policy
-requires it. Rule cells never become a second situation store.
+The live signal workspace is a disposable projection. Complete shadow
+evaluation traces and would-have-signaled/woken/suppressed decisions are durable
+observations for replay and learning. Each decision cites the canonical event
+that triggered resolution, so repeated outcomes remain observable while replay
+of one trigger stays idempotent. Rule cells never become a second situation
+store.
 
-A fabric `EvaluationEpoch` pins a `RulesetSnapshot`, including while the
-deliberative agent sleeps. An `AwakeEpoch` references the current evaluation
-epoch and ruleset. A rule registered or activated during an evaluation epoch
-becomes eligible only at the next boundary. Given identical events, situation
-state, model fixtures, ruleset snapshot, and configuration, the fabric must
-produce identical activations.
+`RulesetSnapshot` is a content-addressed policy artifact: identical rule content
+has the same digest and identity regardless of when it is used. A fabric
+`EvaluationEpoch` supplies the temporal instantiation by recording `started_at`
+and the canonical event-log cursor through which rule registrations were
+eligible. Registry snapshots select versions by sequence, never retrospectively
+by wall-clock timestamp. An `AwakeEpoch` references the current evaluation epoch
+and ruleset. A later registration becomes eligible only after explicit epoch
+rotation. Given identical events, cursor, situation state, model fixtures,
+ruleset, and configuration, the fabric must produce identical activations.
 
 ## Core contracts
 
@@ -190,10 +199,14 @@ byte-equivalent replay semantics.
 
 The resolver is the effect-free bridge between the event fabric and aware
 cognition. It deduplicates and aggregates active signals by subject, applies
-pattern-based inhibitory signals, enforces an optional wake budget, and returns
-one of `WAKE`, `REMEMBER`, `REFLEX_PROPOSAL`, `SUPPRESS`, or `DEFER`. Every
-result is a shadow decision with a compact evidence packet. The resolver does
-not publish, wake a model, or invoke a capability.
+pattern-based hard inhibition or graded modulation, enforces an optional wake
+budget, and returns one of `WAKE`, `REMEMBER`, `REFLEX_PROPOSAL`, `SUPPRESS`, or
+`DEFER`. Hard inhibition is an equal-or-higher-precedence veto intended for
+invariants and explicit prohibitions. Graded modulation multiplies activation by
+`1 - strength × confidence × salience` and is appropriate for uncertain context
+such as probable deep work. Every result is a shadow decision with a compact
+evidence packet. The resolver does not publish, wake a model, or invoke a
+capability.
 
 ### `GlobalModulator`
 
@@ -291,8 +304,9 @@ process.
 ## Agenda, inhibition, and hard precedence
 
 Execution order never resolves conflicts. The agenda first applies hard
-precedence, then explicit inhibition, then utility arbitration and deduplication.
-Excitatory and inhibitory contributions are preserved in the firing record.
+precedence and hard inhibition, then graded modulation, utility arbitration,
+and deduplication. Excitatory, veto, and modulation contributions are preserved
+in the decision record.
 
 The policy hierarchy is:
 
@@ -405,7 +419,7 @@ server:
 | Temporal wakeups | `AsyncScheduler` and event time | Partitioned timer/cell workers | Time decisions become events |
 | Candidate generation | `ModelProvider` or deterministic miner | Routed provider adapters | Models stay outside hot-path evaluation |
 | Replay | Captured events and model fixtures | Same artifacts | Pinned epoch and ruleset |
-| Operations | Event trace and local metrics | OpenTelemetry plus firing projections | Audit derives from canonical causality |
+| Operations | Continuous `AutonomicShadowWorker`, event trace, and local metrics | Worker replicas plus OpenTelemetry/firing projections | Audit derives from canonical causality; no effect dependency |
 
 Selector, scope, and dependency indexes are the initial performance mechanism.
 PostgreSQL indexes or local dictionaries are deployment details behind the same
@@ -417,9 +431,10 @@ The fabric is a cross-cutting track, not one monolithic release:
 
 - **v0.3:** introduce `Signal`, immutable rule versions, `RulesetSnapshot`,
   `EvaluationEpoch`, deterministic predicate/temporal/scoring evaluation,
-  complete firing telemetry/replay, salience resolution, and shadow-only cells.
-  The Autonomic Shadow Kernel foundation is implemented; persistent memory
-  provides the broader evidence substrate.
+  complete firing telemetry/replay, hard and graded inhibition, salience
+  resolution, shadow-only cells, and a continuous observational worker. The
+  Autonomic Shadow Kernel and continuous worker foundations are implemented;
+  persistent memory provides the broader evidence substrate.
 - **v0.4:** add coordination cells for delegations, leases, and agent ecology;
   rules remain protocol-neutral.
 - **v0.5:** add counterfactual replay, compile-down candidate mining, fitness,
@@ -436,20 +451,25 @@ evidence, replay, temporal semantics, and metacontrol.
 The implemented first vertical slice is deliberately effect-free:
 
 1. immutable `AutonomicRule` versions and event-rebuildable `RuleRegistry`;
-2. digest-verified `RulesetSnapshot` with exactly one version per rule identity,
-   and a pinned `EvaluationEpoch`;
+2. sequence-correct registry projection, a content-addressed
+   `RulesetSnapshot` with exactly one version per rule identity, and an
+   event-cursor-pinned `EvaluationEpoch`;
 3. predicate, temporal, and bounded scoring encodings with a safe evaluator;
 4. stateless `RuleCell` evaluation over caller-supplied situation and history;
 5. complete `RuleEvaluationTrace` telemetry with hypothetical `Signal` output;
-6. deterministic `SalienceResolver` aggregation, inhibition, and wake budgets;
+6. deterministic `SalienceResolver` aggregation, hard inhibition, graded
+   modulation, and wake budgets;
 7. `SHADOW` outputs only, with an architecture gate against effect-plane imports;
-8. replay fixtures for deep work, opportunity windows, and stale delegation.
+8. continuous `AutonomicShadowWorker` evaluation over the actual event substrate
+   with durable would-have-signaled/woken/suppressed observations;
+9. replay fixtures for deep work, opportunity windows, and stale delegation.
 
 Acceptance requires:
 
 - identical inputs and pinned ruleset produce byte-equivalent firing semantics;
 - shadow rules produce no active signal, deliberative wake, or action;
-- a late rule version cannot enter the current evaluation epoch;
+- retrospective snapshots and late rule versions cannot enter an earlier or
+  current evaluation epoch;
 - inhibition and hard precedence are independent of evaluation order;
 - restart replay rebuilds registry, temporal state, and unresolved shadow signals
   from canonical events;
@@ -477,6 +497,9 @@ Acceptance requires:
 - **Threshold calibration** controls both missed opportunities and signal storms.
 - **Ruleset pin duration** trades reproducibility against responsiveness to a
   newly quarantined rule; L0 emergency inhibition must take effect immediately.
+- **Hard-versus-graded classification** is safety-sensitive: uncertain context
+  should not become an absolute veto, while privacy/security prohibitions must
+  not be weakened by confidence arithmetic.
 - **Cell partitioning** trades locality against duplicated state and cross-cell
   coordination pressure.
 - **Forge correlation errors** can encode coincidental behavior as preference;
@@ -492,4 +515,6 @@ Acceptance requires:
 
 See [ADR 0002](adr/0002-autonomic-fabric.md),
 [architecture principles](ARCHITECTURE_PRINCIPLES.md), and
-[Situated Continuity](SITUATED_CONTINUITY.md).
+[Situated Continuity](SITUATED_CONTINUITY.md). Endogenous questions and
+background cognition are staged separately in the
+[Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md).

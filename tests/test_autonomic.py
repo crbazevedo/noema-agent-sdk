@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime, timedelta
 
 from noema import (
@@ -9,6 +9,7 @@ from noema import (
     ComparisonOperator,
     EvaluationEpoch,
     Event,
+    InhibitionMode,
     InMemoryEventStore,
     PredicateClause,
     PredicateSpec,
@@ -54,10 +55,11 @@ def pin_rules(*rules: AutonomicRule) -> EvaluationEpoch:
             source="test",
             timestamp=START,
             event_id=f"rule-registration-{index}",
-        )
+        ).with_sequence(index + 1)
         registry.apply(registration)
-    ruleset = registry.snapshot(pinned_at=START)
-    return EvaluationEpoch.open(ruleset, started_at=START)
+    cursor = len(rules)
+    ruleset = registry.snapshot(through_sequence=cursor)
+    return EvaluationEpoch.open(ruleset, started_at=START, event_log_cursor=cursor)
 
 
 class AutonomicRuleContractTests(unittest.TestCase):
@@ -72,9 +74,9 @@ class AutonomicRuleContractTests(unittest.TestCase):
             output=SignalTemplate("communication.notification", salience=0.5),
         )
         registry = RuleRegistry()
-        registry.apply(first.to_event(source="test", timestamp=START))
-        pinned = registry.snapshot(pinned_at=START)
-        epoch = EvaluationEpoch.open(pinned, started_at=START)
+        registry.apply(first.to_event(source="test", timestamp=START).with_sequence(1))
+        pinned = registry.snapshot(through_sequence=1)
+        epoch = EvaluationEpoch.open(pinned, started_at=START, event_log_cursor=1)
 
         second = AutonomicRule(
             rule_id=first.rule_id,
@@ -85,22 +87,39 @@ class AutonomicRuleContractTests(unittest.TestCase):
             spec=first.spec,
             output=first.output,
         )
-        registry.apply(second.to_event(source="test", timestamp=START + timedelta(seconds=1)))
+        registry.apply(
+            second.to_event(source="test", timestamp=START + timedelta(hours=1)).with_sequence(2)
+        )
+
+        historical = registry.snapshot(through_sequence=1)
 
         self.assertEqual(epoch.ruleset.rule_refs, ("attention.nonurgent@1",))
+        self.assertEqual(historical.snapshot_id, pinned.snapshot_id)
+        self.assertEqual(historical.digest, pinned.digest)
+        self.assertFalse(hasattr(pinned, "pinned_at"))
+        with self.assertRaisesRegex(ValueError, "derived from its content"):
+            replace(pinned, snapshot_id="caller-chosen")
         self.assertEqual(
-            registry.snapshot(pinned_at=START + timedelta(seconds=1)).rule_refs,
+            registry.snapshot(through_sequence=2).rule_refs,
             ("attention.nonurgent@2",),
+        )
+        self.assertEqual(
+            registry.snapshot(through_sequence=1).rule_refs,
+            ("attention.nonurgent@1",),
         )
         with self.assertRaisesRegex(ValueError, "multiple versions"):
             registry.snapshot(
-                pinned_at=START + timedelta(seconds=1),
+                through_sequence=2,
                 refs=("attention.nonurgent@1", "attention.nonurgent@2"),
             )
         with self.assertRaises(FrozenInstanceError):
             first.version = 3  # type: ignore[misc]
         with self.assertRaises(ValueError):
-            PredicateClause(event_ref("payload.tags"), ComparisonOperator.IN, ["urgent"])
+            PredicateClause(event_ref("payload.tags"), ComparisonOperator.EQUALS, ["urgent"])
+        with self.assertRaises(ValueError):
+            ComparisonOperator("in")
+        with self.assertRaisesRegex(ValueError, "canonical sequence"):
+            RuleRegistry().apply(first.to_event(source="test", timestamp=START))
 
     def test_rule_family_must_match_its_typed_spec(self) -> None:
         with self.assertRaisesRegex(ValueError, "wrong typed specification"):
@@ -147,6 +166,7 @@ class AutonomicRuleContractTests(unittest.TestCase):
             precedence=9,
             role=SignalRole.INHIBITORY,
             inhibits=("attention.*",),
+            inhibition_mode=InhibitionMode.HARD,
         )
         resolver = SalienceResolver()
         forward = resolver.resolve((attention, weak_inhibitor), at=START)
@@ -156,12 +176,36 @@ class AutonomicRuleContractTests(unittest.TestCase):
         self.assertEqual(forward[0].to_dict(), reverse[0].to_dict())
         self.assertEqual(forward[0].to_dict(), deduplicated[0].to_dict())
 
-        strong_inhibitor = Signal(
-            signal_id="strong-inhibitor",
+        graded_inhibitor = Signal(
+            signal_id="graded-inhibitor",
             kind=weak_inhibitor.kind,
             subject="*",
             confidence=1.0,
             salience=1.0,
+            urgency=0.0,
+            expected_value=0.0,
+            valid_from=START,
+            valid_until=START + timedelta(hours=1),
+            evidence_event_ids=("quiet-event",),
+            rule_ref="quiet@graded",
+            evaluation_epoch_id="epoch",
+            precedence=10,
+            role=SignalRole.INHIBITORY,
+            inhibits=("attention.*",),
+            inhibition_mode=InhibitionMode.MODULATE,
+            modulation_strength=0.5,
+        )
+        graded = resolver.resolve((attention, graded_inhibitor), at=START)
+        self.assertEqual(graded[0].disposition, SalienceDisposition.REMEMBER)
+        self.assertLess(graded[0].score, forward[0].score)
+        self.assertEqual(graded[0].modulated_by, ("graded-inhibitor",))
+
+        strong_inhibitor = Signal(
+            signal_id="strong-inhibitor",
+            kind=weak_inhibitor.kind,
+            subject="*",
+            confidence=0.01,
+            salience=0.01,
             urgency=0.0,
             expected_value=0.0,
             valid_from=START,
@@ -172,6 +216,7 @@ class AutonomicRuleContractTests(unittest.TestCase):
             precedence=10,
             role=SignalRole.INHIBITORY,
             inhibits=("attention.*",),
+            inhibition_mode=InhibitionMode.HARD,
         )
         suppressed = resolver.resolve((attention, strong_inhibitor), at=START)
         self.assertEqual(suppressed[0].disposition, SalienceDisposition.SUPPRESS)
@@ -192,8 +237,12 @@ class AutonomicProjectionTests(unittest.IsolatedAsyncioTestCase):
         await store.append(rule.to_event(source="test", timestamp=START))
         registry = RuleRegistry()
         registry.rebuild(await store.read())
-        epoch = EvaluationEpoch.open(registry.snapshot(pinned_at=START), started_at=START)
-        await store.append(epoch.ruleset.to_event(source="autonomic:projection"))
+        epoch = EvaluationEpoch.open(
+            registry.snapshot(through_sequence=1),
+            started_at=START,
+            event_log_cursor=1,
+        )
+        await store.append(epoch.ruleset.to_event(source="autonomic:projection", timestamp=START))
         await store.append(epoch.to_event(source="autonomic:projection"))
         trigger = Event(
             "work.ready",
@@ -211,12 +260,12 @@ class AutonomicProjectionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stored_trace.payload["trace_id"], trace.trace_id)
         self.assertEqual(
             [event.type for event in await store.read()][1:3],
-            ["rule.ruleset_pinned", "rule.evaluation_epoch_started"],
+            ["rule.ruleset_materialized", "rule.evaluation_epoch_started"],
         )
 
 
 class AutonomicShadowScenarioTests(unittest.IsolatedAsyncioTestCase):
-    async def test_deep_work_suppresses_nonurgent_notification_without_wake(self) -> None:
+    async def test_deep_work_modulates_nonurgent_notification_without_wake(self) -> None:
         email = AutonomicRule(
             rule_id="email.nonurgent",
             version=1,
@@ -261,6 +310,8 @@ class AutonomicShadowScenarioTests(unittest.IsolatedAsyncioTestCase):
                 salience=0.95,
                 role=SignalRole.INHIBITORY,
                 inhibits=("communication.notification",),
+                inhibition_mode=InhibitionMode.MODULATE,
+                modulation_strength=0.95,
                 subject="*",
             ),
             threshold=0.9,
@@ -306,9 +357,10 @@ class AutonomicShadowScenarioTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(signals), 2)
         self.assertEqual(len(decisions), 1)
-        self.assertEqual(decisions[0].disposition, SalienceDisposition.SUPPRESS)
+        self.assertEqual(decisions[0].disposition, SalienceDisposition.DEFER)
         self.assertNotIn(SalienceDisposition.WAKE, {item.disposition for item in decisions})
-        self.assertTrue(decisions[0].inhibited_by)
+        self.assertFalse(decisions[0].inhibited_by)
+        self.assertTrue(decisions[0].modulated_by)
 
     async def test_opportunity_signals_aggregate_into_compact_wake_packet(self) -> None:
         event_types = (

@@ -23,17 +23,20 @@ systems, Noema can no longer reconstruct or govern its behavior.
    signals by default; a bounded reflex may only propose an `ActionIntent`.
 2. Keep the event store canonical. Registry, rulesets, cell state, signals,
    firings, fitness, and Forge datasets are rebuildable projections.
-3. Store immutable, provenance-bearing rule versions. Pin a ruleset per fabric
-   evaluation epoch; awake epochs reference it so activation is reproducible
-   both while cognition sleeps and after it wakes.
+3. Store immutable, provenance-bearing rule versions from sequenced canonical
+   registration events. A ruleset is a content-addressed policy artifact. An
+   evaluation epoch pins that artifact with a start time and event-log cursor;
+   awake epochs reference it so activation is reproducible both while cognition
+   sleeps and after it wakes.
 4. Represent learned rules in sanctioned typed encodings. Generated or stored
    arbitrary executable code is forbidden.
 5. Keep probabilistic evidence and scoring, but make evaluation and conflict
    resolution deterministic for identical pinned inputs.
 6. Use semi-decentralized `RuleCell` workers for locality. Cells communicate
    only through events, cannot invoke capabilities, and share a governed agenda.
-7. Resolve conflict through invariant levels, explicit precedence, inhibition,
-   and utility—not execution order.
+7. Resolve conflict through invariant levels, explicit precedence, hard
+   inhibition, graded modulation, and utility—not execution order. Hard
+   inhibition ignores probabilistic strength; modulation attenuates activation.
 8. Preserve natural-language user intent as evidence and compile it first into
    an `IntentFrame`. A model proposes typed candidates; deterministic evidence,
    replay, impact, collision, and lifecycle gates decide advancement.
@@ -43,9 +46,10 @@ systems, Noema can no longer reconstruct or govern its behavior.
 10. Implement the fabric incrementally across v0.3–v0.6. Begin with effect-free
     shadow rules; defer automatic canary reflexes and RETE optimization until
     evidence and profiling justify them.
-11. Keep `RuleCell` state rebuildable from canonical evidence. Signals and
-    salience decisions are disposable projections; durable evaluation traces
-    retain the evidence and hypothetical output needed for replay and learning.
+11. Keep `RuleCell` state rebuildable from canonical evidence. The live signal
+    workspace is a disposable projection; durable evaluation traces and shadow
+    decisions retain the evidence and hypothetical outcomes needed for replay
+    and learning.
 12. Permit immediate modulation only when it preserves or reduces authority.
     Any increase in authority requires an explicit governed lifecycle transition.
 13. Keep the Rule Forge outside the autonomic execution boundary. It may
@@ -53,6 +57,9 @@ systems, Noema can no longer reconstruct or govern its behavior.
 14. Make rule telemetry, deterministic replay, temporal evaluation, and
     salience resolution part of v0.3, before Forge learns from the resulting
     evidence in v0.5.
+15. Run the fabric continuously through an outer observational worker. It may
+    persist content artifacts, epochs, evaluation traces, and hypothetical
+    decisions, but cannot import or call the effect plane.
 
 ## Consequences
 
@@ -66,6 +73,9 @@ systems, Noema can no longer reconstruct or govern its behavior.
   prevent auditability from becoming unbounded hot-path storage.
 - Pinning rulesets improves replay but delays ordinary rule changes until the
   next epoch. L0 emergency inhibition is the explicit exception.
+- Sequence-based eligibility prevents a registry rebuilt in the future from
+  leaking later rule versions into a historical epoch. Content identity remains
+  separate from temporal instantiation.
 - Semi-decentralized cells improve locality and failure isolation while making
   event partitioning and duplicate suppression sensitivity points.
 - A small typed rule IR limits expressiveness initially. This is deliberate;
@@ -91,14 +101,19 @@ systems, Noema can no longer reconstruct or govern its behavior.
 - Architecture tests reject dynamic execution and adapter imports in future
   autonomic/Forge core modules.
 - Rule-schema tests reject unknown families, mismatched typed encodings,
-  mutable rule versions, and mutable literal containers.
+  mutable rule versions, mutable literal containers, and the removed ambiguous
+  string-membership operator.
 - Replay tests compare semantic trace content and hypothetical signals under a
   pinned ruleset byte-for-byte; measured wall-clock cost is excluded.
 - Shadow-mode tests prove suppression and escalation decisions remain
   hypothetical and the autonomic package cannot import the effect plane.
+- Continuous-worker tests prove later registrations wait for explicit epoch
+  rotation and that only shadow observation events are produced.
 - Agenda tests will permute evaluation order and require identical conflict
   resolution.
 - Embedded/distributed acceptance will run the same personal-workflow cell.
 
 This ADR extends [ADR 0001](0001-portable-durable-agent.md); it does not change
-the canonical event, adapter, or capability-boundary decisions.
+the canonical event, adapter, or capability-boundary decisions. Governed
+internally generated cognition is specified separately by
+[ADR 0003](0003-endogenous-drive-ecology.md).

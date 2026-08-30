@@ -16,11 +16,19 @@ Noema is not a persona framework and does not encode one preferred cognitive sty
 The [Autonomic Fabric](docs/AUTONOMIC_FABRIC.md) adds a signal-first control
 plane beneath deliberation: accumulated experience can become cheap, typed,
 replayable micro-policies, while novelty and uncertainty are promoted to the
-aware workspace. Its first effect-free shadow kernel is implemented with
-predicate, temporal, and scoring rules, pinned evaluation epochs, complete
-evaluation traces, and deterministic salience resolution. It cannot publish,
-wake cognition, or invoke capabilities; active behavior remains governed by the
-same event, policy, authority, and capability boundaries.
+aware workspace. Its first observational worker continuously evaluates the
+canonical event stream with predicate, temporal, and scoring rules. Rulesets
+are content-addressed, evaluation epochs are pinned to event-log sequence, and
+hard inhibition is distinct from graded modulation. The worker durably records
+what would have signaled, woken, or been suppressed, but cannot wake cognition
+or invoke capabilities. Active behavior remains governed by the same event,
+policy, authority, and capability boundaries.
+
+The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
+accepted mid-term architecture for bounded inquiry, calibration, consolidation,
+and intrinsic agenda formation. It is deliberately staged behind observational
+evidence from the shadow worker; its schedulers and learning forges are not part
+of the current runtime.
 
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
@@ -240,18 +248,25 @@ Turns low-level observations and situation state into higher-level signals. The 
 ### Autonomic Shadow Kernel
 
 `AutonomicRule`, `RuleRegistry`, `RulesetSnapshot`, and `EvaluationEpoch` define
-immutable, event-rebuildable policy snapshots. `RuleCell` evaluates only three
-typed rule families—predicate, temporal, and scoring—and returns
-`RuleEvaluationTrace` records containing hypothetical `Signal` values.
-`SalienceResolver` deterministically aggregates and inhibits those signals into
-shadow `WAKE`, `REMEMBER`, `REFLEX_PROPOSAL`, `SUPPRESS`, or `DEFER` decisions.
-It performs no effect itself.
+immutable, event-rebuildable policy snapshots. Ruleset identity is derived from
+content; each epoch records the event-log cursor that bounds the rule versions
+it may use. `RuleCell` evaluates only three typed rule families—predicate,
+temporal, and scoring—and returns `RuleEvaluationTrace` records containing
+hypothetical `Signal` values. `SalienceResolver` deterministically aggregates
+those signals, applying explicit hard vetoes or confidence-weighted graded
+modulation, into shadow `WAKE`, `REMEMBER`, `REFLEX_PROPOSAL`, `SUPPRESS`, or
+`DEFER` decisions.
+
+`AutonomicShadowWorker` runs that path continuously over the real event
+substrate and persists its evaluations and decisions for retrospective analysis.
+It performs no external effect and has no dependency on models, authority,
+agents, or capabilities.
 
 The acceptance scenarios cover deep-work suppression, expiring code-review
 opportunities, stale delegation, and byte-equivalent replay:
 
 ```bash
-PYTHONPATH=src python -m unittest tests.test_autonomic -v
+PYTHONPATH=src python -m unittest tests.test_autonomic tests.test_shadow -v
 ```
 
 ### `NoemaSystem`

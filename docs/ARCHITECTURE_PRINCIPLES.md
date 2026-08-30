@@ -26,6 +26,13 @@ principle they change.
 | Uncertainty is replayable | Evidence may be probabilistic, but pinned activation and conflict resolution are deterministic. |
 | Modulation is explicit | Global context that changes rule thresholds is provenance-bearing situation state, not a hidden mutable global. |
 | Invariants are not learnable | L0 security, privacy, sandbox, and authority constraints cannot be weakened by rules or meta-rules. |
+| Policy time is sequence-based | Rule eligibility is pinned by canonical event cursor; a later registration cannot leak into historical evaluation. |
+| Ruleset identity is content identity | Time and event cursor belong to evaluation epochs, not the content-addressed ruleset artifact. |
+| Inhibition strength is typed | Hard equal-or-higher-precedence vetoes and probabilistic graded modulation are distinct encodings. |
+| Observation precedes learning | Continuous shadow telemetry must ground Forge fitness before learned policy can advance. |
+| Intrinsic goals are subordinate | Future endogenous processes may propose instrumental, epistemic, maintenance, and exploratory goals, never terminal values. |
+| Background cognition is leased | Future dream/maintenance work consumes explicit preemptible budgets and cannot silently act externally. |
+| Competence does not grant authority | A future SkillForge may propose a capability; capability registration and authority remain independent gates. |
 
 Structural enforcement lives in `tests/test_architecture.py`, schema/replay
 tests, and distributed fault tests. Documentation alone is not considered an

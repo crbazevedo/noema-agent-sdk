@@ -52,12 +52,16 @@ class ComparisonOperator(StrEnum):
     LESS_THAN = "less_than"
     LESS_OR_EQUAL = "less_or_equal"
     CONTAINS = "contains"
-    IN = "in"
 
 
 class SignalRole(StrEnum):
     EXCITATORY = "excitatory"
     INHIBITORY = "inhibitory"
+
+
+class InhibitionMode(StrEnum):
+    HARD = "hard"
+    MODULATE = "modulate"
 
 
 class SalienceDisposition(StrEnum):
@@ -244,6 +248,8 @@ class SignalTemplate:
     ttl_seconds: float = 3600.0
     role: SignalRole = SignalRole.EXCITATORY
     inhibits: tuple[str, ...] = ()
+    inhibition_mode: InhibitionMode | None = None
+    modulation_strength: float | None = None
     suggested_disposition: SalienceDisposition = SalienceDisposition.REMEMBER
     subject: str | None = None
 
@@ -261,8 +267,26 @@ class SignalTemplate:
             raise ValueError("expected value cannot be negative")
         if not math.isfinite(self.ttl_seconds) or self.ttl_seconds <= 0.0:
             raise ValueError("signal ttl must be positive")
-        if self.role is SignalRole.INHIBITORY and not self.inhibits:
-            raise ValueError("inhibitory signals must declare inhibited signal patterns")
+        self._validate_inhibition()
+
+    def _validate_inhibition(self) -> None:
+        if self.role is SignalRole.EXCITATORY:
+            if (
+                self.inhibits
+                or self.inhibition_mode is not None
+                or self.modulation_strength is not None
+            ):
+                raise ValueError("excitatory signals cannot carry inhibition configuration")
+            return
+        if not self.inhibits or self.inhibition_mode is None:
+            raise ValueError("inhibitory signals require targets and an explicit mode")
+        if self.inhibition_mode is InhibitionMode.HARD:
+            if self.modulation_strength is not None:
+                raise ValueError("hard inhibition does not accept a modulation strength")
+            return
+        strength = self.modulation_strength
+        if strength is None or not math.isfinite(strength) or strength <= 0.0 or strength > 1.0:
+            raise ValueError("graded modulation strength must be within (0, 1]")
 
     def to_dict(self) -> JSONObject:
         return {
@@ -274,6 +298,10 @@ class SignalTemplate:
             "ttl_seconds": self.ttl_seconds,
             "role": self.role.value,
             "inhibits": list(self.inhibits),
+            "inhibition_mode": (
+                self.inhibition_mode.value if self.inhibition_mode is not None else None
+            ),
+            "modulation_strength": self.modulation_strength,
             "suggested_disposition": self.suggested_disposition.value,
             "subject": self.subject,
         }
@@ -289,6 +317,16 @@ class SignalTemplate:
             ttl_seconds=float(cast(float, data.get("ttl_seconds", 3600.0))),
             role=SignalRole(str(data.get("role", SignalRole.EXCITATORY.value))),
             inhibits=tuple(str(value) for value in cast(list[JSONValue], data.get("inhibits", []))),
+            inhibition_mode=(
+                InhibitionMode(str(data["inhibition_mode"]))
+                if data.get("inhibition_mode") is not None
+                else None
+            ),
+            modulation_strength=(
+                float(cast(float, data["modulation_strength"]))
+                if data.get("modulation_strength") is not None
+                else None
+            ),
             suggested_disposition=SalienceDisposition(
                 str(data.get("suggested_disposition", SalienceDisposition.REMEMBER.value))
             ),
@@ -388,12 +426,9 @@ class AutonomicRule:
 class RulesetSnapshot:
     snapshot_id: str
     digest: str
-    pinned_at: datetime
     rules: tuple[AutonomicRule, ...]
 
     def __post_init__(self) -> None:
-        if self.pinned_at.tzinfo is None:
-            raise ValueError("ruleset pinned_at must be timezone-aware")
         refs = [rule.ref for rule in self.rules]
         if refs != sorted(refs) or len(refs) != len(set(refs)):
             raise ValueError("ruleset rules must have unique refs in canonical order")
@@ -405,6 +440,8 @@ class RulesetSnapshot:
         ).hexdigest()
         if self.digest != expected:
             raise ValueError("ruleset digest does not match its immutable rule versions")
+        if self.snapshot_id != f"ruleset:{expected[:32]}":
+            raise ValueError("ruleset identity must be derived from its content digest")
 
     @property
     def rule_refs(self) -> tuple[str, ...]:
@@ -414,21 +451,26 @@ class RulesetSnapshot:
         data: JSONObject = {
             "snapshot_id": self.snapshot_id,
             "digest": self.digest,
-            "pinned_at": self.pinned_at.isoformat(),
             "rule_refs": list(self.rule_refs),
         }
         if include_rules:
             data["rules"] = [rule.to_dict() for rule in self.rules]
         return data
 
-    def to_event(self, *, source: str, event_id: str | None = None) -> Event:
+    def to_event(
+        self,
+        *,
+        source: str,
+        timestamp: datetime,
+        event_id: str | None = None,
+    ) -> Event:
         payload = self.to_dict()
         return Event(
-            type="rule.ruleset_pinned",
+            type="rule.ruleset_materialized",
             source=source,
             subject=self.snapshot_id,
             payload=payload,
-            timestamp=self.pinned_at,
+            timestamp=timestamp,
             id=event_id or stable_id("event", payload),
         )
 
@@ -438,12 +480,12 @@ class EvaluationEpoch:
     epoch_id: str
     ruleset: RulesetSnapshot
     started_at: datetime
-    after_sequence: int = 0
+    event_log_cursor: int
 
     def __post_init__(self) -> None:
         if self.started_at.tzinfo is None:
             raise ValueError("evaluation epoch started_at must be timezone-aware")
-        if self.after_sequence < 0:
+        if self.event_log_cursor < 0:
             raise ValueError("evaluation cursor cannot be negative")
 
     @classmethod
@@ -452,19 +494,19 @@ class EvaluationEpoch:
         ruleset: RulesetSnapshot,
         *,
         started_at: datetime,
-        after_sequence: int = 0,
+        event_log_cursor: int,
         epoch_id: str | None = None,
     ) -> EvaluationEpoch:
         identity: JSONObject = {
             "ruleset_digest": ruleset.digest,
             "started_at": started_at.isoformat(),
-            "after_sequence": after_sequence,
+            "event_log_cursor": event_log_cursor,
         }
         return cls(
             epoch_id=epoch_id or stable_id("evaluation-epoch", identity),
             ruleset=ruleset,
             started_at=started_at,
-            after_sequence=after_sequence,
+            event_log_cursor=event_log_cursor,
         )
 
     def to_dict(self) -> JSONObject:
@@ -473,7 +515,7 @@ class EvaluationEpoch:
             "ruleset_id": self.ruleset.snapshot_id,
             "ruleset_digest": self.ruleset.digest,
             "started_at": self.started_at.isoformat(),
-            "after_sequence": self.after_sequence,
+            "event_log_cursor": self.event_log_cursor,
         }
 
     def to_event(self, *, source: str) -> Event:
@@ -505,6 +547,8 @@ class Signal:
     precedence: int = 0
     role: SignalRole = SignalRole.EXCITATORY
     inhibits: tuple[str, ...] = ()
+    inhibition_mode: InhibitionMode | None = None
+    modulation_strength: float | None = None
     suggested_disposition: SalienceDisposition = SalienceDisposition.REMEMBER
     shadow: bool = True
 
@@ -522,8 +566,28 @@ class Signal:
                 raise ValueError(f"signal {name} must be between zero and one")
         if not math.isfinite(self.expected_value) or self.expected_value < 0.0:
             raise ValueError("signal expected value cannot be negative")
-        if self.role is SignalRole.INHIBITORY and not self.inhibits:
-            raise ValueError("inhibitory signals must declare inhibited signal patterns")
+        if self.role is SignalRole.EXCITATORY:
+            if (
+                self.inhibits
+                or self.inhibition_mode is not None
+                or self.modulation_strength is not None
+            ):
+                raise ValueError("excitatory signals cannot carry inhibition configuration")
+        else:
+            if not self.inhibits or self.inhibition_mode is None:
+                raise ValueError("inhibitory signals require targets and an explicit mode")
+            if self.inhibition_mode is InhibitionMode.HARD:
+                if self.modulation_strength is not None:
+                    raise ValueError("hard inhibition does not accept a modulation strength")
+            else:
+                strength = self.modulation_strength
+                if (
+                    strength is None
+                    or not math.isfinite(strength)
+                    or strength <= 0.0
+                    or strength > 1.0
+                ):
+                    raise ValueError("graded modulation strength must be within (0, 1]")
         if not self.shadow:
             raise ValueError("the shadow kernel cannot create active signals")
 
@@ -547,6 +611,10 @@ class Signal:
             "precedence": self.precedence,
             "role": self.role.value,
             "inhibits": list(self.inhibits),
+            "inhibition_mode": (
+                self.inhibition_mode.value if self.inhibition_mode is not None else None
+            ),
+            "modulation_strength": self.modulation_strength,
             "suggested_disposition": self.suggested_disposition.value,
             "shadow": self.shadow,
         }
@@ -575,6 +643,16 @@ class Signal:
             precedence=int(cast(int, data.get("precedence", 0))),
             role=SignalRole(str(data["role"])),
             inhibits=tuple(str(value) for value in cast(list[JSONValue], data["inhibits"])),
+            inhibition_mode=(
+                InhibitionMode(str(data["inhibition_mode"]))
+                if data.get("inhibition_mode") is not None
+                else None
+            ),
+            modulation_strength=(
+                float(cast(float, data["modulation_strength"]))
+                if data.get("modulation_strength") is not None
+                else None
+            ),
             suggested_disposition=SalienceDisposition(str(data["suggested_disposition"])),
             shadow=bool(data.get("shadow", True)),
         )
@@ -645,6 +723,7 @@ class SalienceDecision:
     signal_ids: tuple[str, ...]
     evidence_event_ids: tuple[str, ...]
     inhibited_by: tuple[str, ...] = ()
+    modulated_by: tuple[str, ...] = ()
     reasons: tuple[str, ...] = ()
     shadow: bool = True
 
@@ -661,9 +740,35 @@ class SalienceDecision:
             "signal_ids": list(self.signal_ids),
             "evidence_event_ids": list(self.evidence_event_ids),
             "inhibited_by": list(self.inhibited_by),
+            "modulated_by": list(self.modulated_by),
             "reasons": list(self.reasons),
             "shadow": self.shadow,
         }
+
+    def to_event(
+        self,
+        *,
+        source: str,
+        resolved_at: datetime,
+        trigger_event_id: str,
+    ) -> Event:
+        payload = self.to_dict()
+        payload["trigger_event_id"] = trigger_event_id
+        return Event(
+            type="rule.salience_decision_shadowed",
+            source=source,
+            subject=self.subject,
+            payload=payload,
+            timestamp=resolved_at,
+            causation_id=trigger_event_id,
+            id=stable_id(
+                "event",
+                {
+                    "decision_id": self.decision_id,
+                    "trigger_event_id": trigger_event_id,
+                },
+            ),
+        )
 
 
 def build_signal(
@@ -700,5 +805,7 @@ def build_signal(
         precedence=rule.precedence,
         role=template.role,
         inhibits=template.inhibits,
+        inhibition_mode=template.inhibition_mode,
+        modulation_strength=template.modulation_strength,
         suggested_disposition=template.suggested_disposition,
     )

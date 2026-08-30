@@ -20,6 +20,7 @@ from .autonomic import (
     AutonomicRule,
     ComparisonOperator,
     EvaluationEpoch,
+    InhibitionMode,
     PredicateClause,
     PredicateSpec,
     RuleCell,
@@ -102,6 +103,7 @@ from .reasoning import (
     RuleBasedReasoner,
 )
 from .scheduler import AsyncScheduler, ScheduleHandle
+from .shadow import AutonomicShadowWorker
 from .situation import (
     Commitment,
     CommitmentStatus,
@@ -136,6 +138,7 @@ __all__ = [
     "AutonomousAgentConfig",
     "AutonomyProfile",
     "AutonomicRule",
+    "AutonomicShadowWorker",
     "Capability",
     "CapabilityContext",
     "CapabilityExistenceCritic",
@@ -164,6 +167,7 @@ __all__ = [
     "EventSchemaRegistry",
     "EventStore",
     "EvaluationEpoch",
+    "InhibitionMode",
     "Fact",
     "FalsificationCritic",
     "FunctionCapability",

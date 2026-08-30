@@ -4,13 +4,22 @@
 
 - accepted the signal-first Autonomic Fabric architecture;
 - implemented the effect-free Autonomic Shadow Kernel with immutable rules,
-  pinned rulesets and evaluation epochs, predicate/temporal/scoring cells,
-  complete evaluation traces, and deterministic salience resolution;
+  content-addressed rulesets and sequence-pinned evaluation epochs,
+  predicate/temporal/scoring cells, complete evaluation traces, and
+  deterministic salience resolution;
+- added a continuous observational worker over the canonical event substrate
+  that persists evaluations and would-have-signaled/woken/suppressed outcomes
+  without invoking models, authority, agents, or capabilities;
+- distinguished precedence-based hard inhibition from confidence-weighted
+  graded modulation and removed collection-membership predicates from the
+  deliberately small rule language;
 - demonstrated deep-work suppression, opportunity escalation, stale-delegation
   escalation, cheap resolution, and byte-equivalent replay;
 - moved temporal evaluation plus rule telemetry/replay into the mandatory v0.3
   substrate, before Forge or active reflexes;
 - staged the governed Forge and situated wake control across v0.5–v0.6;
+- accepted the Endogenous Drive Ecology as a staged mid-term architecture for
+  bounded inquiry, calibration, consolidation, and intrinsic agenda formation;
 - added architecture gates for retired terminology, dynamic rule execution,
   adapter leakage, and imports from the effect plane.
 

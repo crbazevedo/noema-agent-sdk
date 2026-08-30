@@ -10,6 +10,7 @@ from datetime import datetime
 
 from ..types import JSONObject
 from .models import (
+    InhibitionMode,
     SalienceDecision,
     SalienceDisposition,
     Signal,
@@ -82,8 +83,9 @@ class SalienceResolver:
         signals: tuple[Signal, ...],
         inhibitors: tuple[Signal, ...],
     ) -> SalienceDecision:
-        blocked_ids: set[str] = set()
-        blocking_by_id: dict[str, Signal] = {}
+        hard_blocked_ids: set[str] = set()
+        hard_by_id: dict[str, Signal] = {}
+        modulation_by_signal: dict[str, list[Signal]] = defaultdict(list)
         for signal in signals:
             for inhibitor in inhibitors:
                 if inhibitor.subject not in {"*", subject}:
@@ -91,33 +93,59 @@ class SalienceResolver:
                 if inhibitor.precedence < signal.precedence:
                     continue
                 if any(fnmatch.fnmatchcase(signal.kind, pattern) for pattern in inhibitor.inhibits):
-                    blocked_ids.add(signal.signal_id)
-                    blocking_by_id[inhibitor.signal_id] = inhibitor
-        blocking = tuple(blocking_by_id[key] for key in sorted(blocking_by_id))
-        effective = tuple(signal for signal in signals if signal.signal_id not in blocked_ids)
+                    if inhibitor.inhibition_mode is InhibitionMode.HARD:
+                        hard_blocked_ids.add(signal.signal_id)
+                        hard_by_id[inhibitor.signal_id] = inhibitor
+                    else:
+                        modulation_by_signal[signal.signal_id].append(inhibitor)
+        blocking = tuple(hard_by_id[key] for key in sorted(hard_by_id))
+        modulating_by_id = {
+            inhibitor.signal_id: inhibitor
+            for modulators in modulation_by_signal.values()
+            for inhibitor in modulators
+        }
+        modulating = tuple(modulating_by_id[key] for key in sorted(modulating_by_id))
+        effective = tuple(signal for signal in signals if signal.signal_id not in hard_blocked_ids)
         scored = effective or signals
         score = round(
-            1.0 - math.prod(1.0 - self._contribution(signal) for signal in scored),
+            1.0
+            - math.prod(
+                1.0
+                - self._modulated_contribution(
+                    signal,
+                    modulation_by_signal.get(signal.signal_id, ()),
+                )
+                for signal in scored
+            ),
             12,
         )
         requested = {signal.suggested_disposition for signal in effective}
-        max_urgency = max((signal.urgency for signal in effective), default=0.0)
+        max_urgency = max(
+            (
+                signal.urgency * self._attenuation(modulation_by_signal.get(signal.signal_id, ()))
+                for signal in effective
+            ),
+            default=0.0,
+        )
         reasons: list[str] = [f"aggregated {len(signals)} signal(s)"]
         if blocking and not effective:
             disposition = SalienceDisposition.SUPPRESS
             reasons.append("all signals inhibited by equal-or-higher precedence")
         else:
             if blocking:
-                reasons.append(f"inhibited {len(blocked_ids)} lower-precedence signal(s)")
+                reasons.append(f"hard-inhibited {len(hard_blocked_ids)} lower-precedence signal(s)")
+            if modulating:
+                reasons.append(f"graded by {len(modulating)} modulation signal(s)")
             disposition = self._unopposed_disposition(requested, score, max_urgency, reasons)
 
         signal_ids = tuple(signal.signal_id for signal in signals)
         inhibited_by = tuple(inhibitor.signal_id for inhibitor in blocking)
+        modulated_by = tuple(inhibitor.signal_id for inhibitor in modulating)
         evidence_event_ids = tuple(
             sorted(
                 {
                     event_id
-                    for signal in (*signals, *blocking)
+                    for signal in (*signals, *blocking, *modulating)
                     for event_id in signal.evidence_event_ids
                 }
             )
@@ -127,6 +155,7 @@ class SalienceResolver:
             "disposition": disposition.value,
             "signal_ids": list(signal_ids),
             "inhibited_by": list(inhibited_by),
+            "modulated_by": list(modulated_by),
         }
         return SalienceDecision(
             decision_id=stable_id("salience-decision", identity),
@@ -136,6 +165,7 @@ class SalienceResolver:
             signal_ids=signal_ids,
             evidence_event_ids=evidence_event_ids,
             inhibited_by=inhibited_by,
+            modulated_by=modulated_by,
             reasons=tuple(reasons),
         )
 
@@ -166,6 +196,21 @@ class SalienceResolver:
         )
         weighted = 0.7 * signal.salience + 0.2 * signal.urgency + 0.1 * normalized_value
         return min(1.0, signal.confidence * weighted)
+
+    def _modulated_contribution(
+        self,
+        signal: Signal,
+        modulators: Sequence[Signal],
+    ) -> float:
+        return self._contribution(signal) * self._attenuation(modulators)
+
+    @staticmethod
+    def _attenuation(modulators: Sequence[Signal]) -> float:
+        return math.prod(
+            1.0
+            - ((modulator.modulation_strength or 0.0) * modulator.confidence * modulator.salience)
+            for modulator in modulators
+        )
 
     def _apply_wake_budget(
         self,
@@ -202,6 +247,7 @@ class SalienceResolver:
                     signal_ids=decision.signal_ids,
                     evidence_event_ids=decision.evidence_event_ids,
                     inhibited_by=decision.inhibited_by,
+                    modulated_by=decision.modulated_by,
                     reasons=decision.reasons + ("wake budget exhausted",),
                 )
             budgeted.append(decision)

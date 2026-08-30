@@ -13,7 +13,8 @@ not a monolithic rules release:
 
 - v0.3 adds signals, immutable rule versions, pinned rulesets and evaluation
   epochs, deterministic predicate/temporal/scoring evaluation, firing
-  telemetry/replay, shadow-only cells, and salience resolution;
+  telemetry/replay, hard and graded inhibition, shadow-only cells, salience
+  resolution, and a continuous observational worker;
 - v0.4 adds protocol-neutral coordination cells over delegations and leases;
 - v0.5 adds candidate mining, counterfactual replay, fitness, meta-rule
   proposals, and governed lifecycle transitions;
@@ -24,6 +25,28 @@ not a monolithic rules release:
 Rules emit signals by default. Learned policies never execute arbitrary code or
 bypass the existing policy/capability boundary. Automatic reflex canaries wait
 until durable evidence, replay, temporal semantics, and metacontrol exist.
+
+## Cross-cutting track — Endogenous Drive Ecology
+
+The [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) adds governed
+internal questions, maintenance, simulation, preparedness, and peer calibration
+as a second source of cognitive demand. It does not create terminal values or a
+new effect path:
+
+- v0.3 collects real shadow evaluations and hypothetical decisions; no Forge or
+  intrinsic scheduler is implemented;
+- v0.4 introduces first-class inquiry and peer-calibration event contracts;
+- v0.5 introduces budgeted value-of-cognition experiments and a shadow
+  `IntrinsicAgenda`, then evaluates HabitForge candidates from the accumulated
+  corpus;
+- v0.6 links SLEEP/DREAM/AWAKE epochs, cognitive slack, foreground preemption,
+  and situated continuity;
+- SkillForge remains later work requiring independent sandbox, supply-chain,
+  capability-registration, and authority governance.
+
+Intrinsic activities remain subordinate to constitutional, user, mission, and
+commitment goals. Background cognition is explicitly budgeted and produces
+questions and candidates more readily than actions.
 
 ## v0.2 — Portable Durable Agent
 
@@ -51,6 +74,8 @@ policy branch and runs with both `MODE=embedded` and `MODE=distributed`.
 - effect-free shadow evaluation with predicate/temporal/scoring encodings,
   complete rule traces, deterministic replay, and a `SalienceResolver`
   (implemented shadow-kernel foundation);
+- sequence-correct content-addressed rulesets, hard/graded inhibition, and the
+  continuously running observational `AutonomicShadowWorker` (implemented);
 - episodic indexes over event history;
 - semantic assertions linked to evidence;
 - hypotheses, contradictions, and validity intervals;
@@ -69,7 +94,9 @@ shadow rules replay deterministically without producing an effect.
 - capability manifests and discovery;
 - typed task offers, bids, awards, progress, result, failure, cancellation;
 - domain-specific trust, authority, rehabilitation, and exploration;
-- durable multi-agent cancellation and contracting.
+- durable multi-agent cancellation and contracting;
+- first-class `Inquiry`, `CalibrationRequest`, and `CalibrationResponse` event
+  contracts with evidence-preserving disagreement.
 
 Acceptance: a Noema agent delegates to a non-Noema A2A agent and consumes an
 MCP server without exposing Noema's internal memory or runtime protocol.
@@ -82,7 +109,9 @@ MCP server without exposing Noema's internal memory or runtime protocol.
 - wall-clock, call, cost, branch, action, and recursion ceilings;
 - adaptive reasoning depth and strategy selection;
 - shadow-mode bandit/learned controllers;
-- counterfactual policy replay and experiment comparison.
+- counterfactual policy replay and experiment comparison;
+- explicit background cognitive budgets, NetVOC experiments, and a shadow
+  `IntrinsicAgenda` over maintenance, inquiry, and simulation candidates.
 
 Acceptance: learned control cannot execute before deterministic shadow
 evaluation, and identical captured inputs reproduce the same semantic trace.
@@ -98,7 +127,9 @@ evaluation, and identical captured inputs reproduce the same semantic trace.
 - provenance-bearing situation capsules and artifact retention;
 - user, workflow, and agent ecology models;
 - durable delegations, work leases, and opportunity windows;
-- macOS reference sidecar and simulated sleep/wake flagship demo.
+- macOS reference sidecar and simulated sleep/wake flagship demo;
+- governed SLEEP/DREAM/AWAKE linkage with foreground preemption and cognitive
+  slack; dream outputs remain observational or proposals by default.
 
 See [`SITUATED_CONTINUITY.md`](SITUATED_CONTINUITY.md) for its invariants and
 dependency sequence.

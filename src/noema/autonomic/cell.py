@@ -63,10 +63,8 @@ class RuleCell:
         *,
         history: Sequence[Event],
     ) -> tuple[RuleEvaluationTrace, ...]:
-        if (
-            not self.accepts(event)
-            or event.timestamp < epoch.started_at
-            or (event.sequence is not None and event.sequence <= epoch.after_sequence)
+        if not self.accepts(event) or (
+            event.sequence is not None and event.sequence <= epoch.event_log_cursor
         ):
             return ()
         traces: list[RuleEvaluationTrace] = []
@@ -128,8 +126,8 @@ class RuleCell:
         for index, event in enumerate(events, start=1):
             await situation.apply(event)
             history.append(event)
-            logical_sequence = event.sequence or index
-            if event.timestamp < epoch.started_at or logical_sequence <= epoch.after_sequence:
+            logical_sequence = event.sequence or epoch.event_log_cursor + index
+            if logical_sequence <= epoch.event_log_cursor:
                 continue
             snapshot = await situation.snapshot()
             traces.extend(self.evaluate(epoch, event, snapshot, history=history))
@@ -312,8 +310,6 @@ class RuleCell:
             if isinstance(actual, dict):
                 return isinstance(expected, str) and expected in actual
             return False
-        if operator is ComparisonOperator.IN:
-            return isinstance(actual, str) and isinstance(expected, str) and actual in expected
         if (
             isinstance(actual, bool)
             or isinstance(expected, bool)
