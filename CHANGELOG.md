@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- accepted the signal-first Autonomic Fabric architecture;
+- staged immutable rules, signals, shadow cells, the governed Forge, and
+  situated wake control across v0.3–v0.6;
+- added architecture gates for retired terminology, dynamic rule execution,
+  and adapter leakage.
+
 ## 0.2.0 — 2026-08-30
 
 Portable durable agent milestone:

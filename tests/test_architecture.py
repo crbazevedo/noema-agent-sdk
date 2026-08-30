@@ -1,11 +1,49 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import unittest
 from pathlib import Path
 
+_PROHIBITED_BRAND_DIGEST = "790d99fa7bbad8fce9479676d4283da79d1b0528774f79714455b59c7e928d11"
+_PROHIBITED_BRAND_LENGTH = 10
+_TEXT_SUFFIXES = {
+    ".env",
+    ".example",
+    ".json",
+    ".md",
+    ".py",
+    ".toml",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+
 
 class ArchitectureFitnessTests(unittest.TestCase):
+    def test_retired_brand_token_is_absent_from_repository_text(self) -> None:
+        repository = Path(__file__).parents[1]
+        excluded = {".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "build", "dist"}
+        violations: list[str] = []
+        for path in repository.rglob("*"):
+            if not path.is_file() or any(part in excluded for part in path.parts):
+                continue
+            if path.suffix not in _TEXT_SUFFIXES and path.name not in {"LICENSE", "Makefile"}:
+                continue
+            data = path.read_bytes().lower()
+            path_data = str(path.relative_to(repository)).lower().encode()
+            if self._contains_prohibited_brand(data) or self._contains_prohibited_brand(path_data):
+                violations.append(str(path.relative_to(repository)))
+        self.assertEqual(violations, [])
+
+    @staticmethod
+    def _contains_prohibited_brand(data: bytes) -> bool:
+        return any(
+            hashlib.sha256(data[index : index + _PROHIBITED_BRAND_LENGTH]).hexdigest()
+            == _PROHIBITED_BRAND_DIGEST
+            for index in range(len(data) - _PROHIBITED_BRAND_LENGTH + 1)
+        )
+
     def test_provider_sdks_are_confined_to_adapters(self) -> None:
         source_root = Path(__file__).parents[1] / "src" / "noema"
         forbidden = {"openai", "nats", "psycopg", "boto3", "azure", "google.cloud"}
@@ -31,3 +69,36 @@ class ArchitectureFitnessTests(unittest.TestCase):
         source = example.read_text(encoding="utf-8")
         self.assertNotIn("DeploymentMode", source)
         self.assertNotIn("MODE ==", source)
+
+    def test_future_autonomic_core_cannot_use_dynamic_execution_or_adapters(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        roots = (source_root / "autonomic", source_root / "forge")
+        violations: list[str] = []
+        for root in roots:
+            if not root.exists():
+                continue
+            for path in root.rglob("*.py"):
+                tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Call) and (
+                        isinstance(node.func, ast.Name)
+                        and node.func.id in {"compile", "eval", "exec"}
+                        or isinstance(node.func, ast.Attribute)
+                        and node.func.attr in {"compile", "eval", "exec"}
+                    ):
+                        function_name = (
+                            node.func.id if isinstance(node.func, ast.Name) else node.func.attr
+                        )
+                        violations.append(f"{path.relative_to(source_root)} calls {function_name}")
+                    if isinstance(node, ast.ImportFrom) and node.module:
+                        if "adapters" in node.module.split("."):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports {node.module}"
+                            )
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            if "adapters" in alias.name.split("."):
+                                violations.append(
+                                    f"{path.relative_to(source_root)} imports {alias.name}"
+                                )
+        self.assertEqual(violations, [])

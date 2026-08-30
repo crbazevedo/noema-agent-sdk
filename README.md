@@ -13,6 +13,12 @@ Noema is not a persona framework and does not encode one preferred cognitive sty
 - event-driven scheduling, sensing, action, recovery, and reflection;
 - multi-agent operation over a shared world model.
 
+The planned [Autonomic Fabric](docs/AUTONOMIC_FABRIC.md) adds a signal-first
+control plane beneath deliberation: accumulated experience can become cheap,
+typed, replayable micro-policies, while novelty and uncertainty are promoted to
+the aware workspace. It remains governed by the same event, policy, authority,
+and capability boundaries.
+
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
 
@@ -289,4 +295,6 @@ all planes into one release.
 See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](docs/adr/0001-portable-durable-agent.md), [autonomy](docs/AUTONOMY.md),
 [event semantics](docs/EVENTS.md), [roadmap](docs/ROADMAP.md), and
-[Situated Continuity](docs/SITUATED_CONTINUITY.md).
+[Situated Continuity](docs/SITUATED_CONTINUITY.md), plus the
+[Autonomic Fabric](docs/AUTONOMIC_FABRIC.md) and its
+[architecture decision](docs/adr/0002-autonomic-fabric.md).

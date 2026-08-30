@@ -62,6 +62,18 @@ Leases and fencing protect coordination records from stale workers. They do not
 make a third-party side effect exactly once, so idempotency must cross the final
 effect boundary.
 
+## Autonomic policy does not grant action authority
+
+The planned Autonomic Fabric has its own evidence and lifecycle gates, but rule
+activation is not action authorization. Most rules emit internal signals. A
+reflex rule can only propose an `ActionIntent`, which still passes through
+critics, attention allocation, `PolicyEngine`, dispatch, and the typed
+capability boundary.
+
+Learned rules cannot raise their authority, weaken privacy or sandbox policy,
+activate arbitrary sensing, or modify L0 invariants. Meta-rules may propose a
+rule lifecycle change; they cannot silently activate or rewrite policy.
+
 ## Dynamic delegation
 
 `TrustLedger` uses a beta-distribution estimate rather than a permanent scalar reputation. Authority recommendations use a conservative uncertainty-adjusted bound.

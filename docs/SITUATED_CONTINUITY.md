@@ -33,6 +33,21 @@ The agent receives a goal-relevant projection, not the raw universe.
 - Every retained `SituationCapsule` has provenance, sensitivity, validity, and confidence.
 - A wake cycle with no relevant change may successfully perform no action.
 
+## Autonomic integration
+
+The [Autonomic Fabric](AUTONOMIC_FABRIC.md) is the attention membrane for
+situated continuity. Temporal and opportunity cells can maintain cheap state
+between awake epochs, but the event log remains canonical. Fabric evaluation
+epochs pin rulesets even while cognition sleeps; a new awake epoch references
+that pin, reconciles source cursors, and orients over the strongest unresolved
+signals rather than replaying every raw observation into deliberation.
+
+Sensing rules emit perception-request signals; they never capture directly.
+The perception policy still evaluates goal relevance, source freshness,
+permission, privacy, retention, latency, and expected value before authorizing
+a sensor. Emergency L0 inhibition is the only rule control that can override an
+epoch pin, and it may only reduce capability.
+
 ## Planned sequence
 
 1. Temporal semantics: `occurred_at`, `observed_at`, `recorded_at`, source

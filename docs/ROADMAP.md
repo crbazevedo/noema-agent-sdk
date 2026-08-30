@@ -6,6 +6,23 @@ tool, and interoperability choices remain adapters around the same semantics.
 Security, observability, deterministic replay, and local operation are
 cross-cutting release gates rather than a final wave.
 
+## Cross-cutting track — Autonomic Fabric
+
+The [Autonomic Fabric](AUTONOMIC_FABRIC.md) spans the cognitive roadmap. It is
+not a monolithic rules release:
+
+- v0.3 adds signals, immutable rule versions, pinned rulesets, deterministic
+  predicate/scoring evaluation, firing telemetry, and shadow-only cells;
+- v0.4 adds protocol-neutral coordination cells over delegations and leases;
+- v0.5 adds candidate mining, counterfactual replay, fitness, meta-rule
+  proposals, and governed lifecycle transitions;
+- v0.6 adds temporal/opportunity cells, sensing-request signals,
+  evaluation/awake-epoch linkage, wake control, and salience-based continuity.
+
+Rules emit signals by default. Learned policies never execute arbitrary code or
+bypass the existing policy/capability boundary. Automatic reflex canaries wait
+until durable evidence, replay, temporal semantics, and metacontrol exist.
+
 ## v0.2 — Portable Durable Agent
 
 Implemented:
@@ -27,6 +44,8 @@ policy branch and runs with both `MODE=embedded` and `MODE=distributed`.
 
 ## v0.3 — Persistent Cognitive Agent
 
+- typed `Signal`, immutable `AutonomicRule` versions, and `RulesetSnapshot`;
+- effect-free shadow evaluation with predicate/scoring encodings and a firing ledger;
 - episodic indexes over event history;
 - semantic assertions linked to evidence;
 - hypotheses, contradictions, and validity intervals;
@@ -35,10 +54,12 @@ policy branch and runs with both `MODE=embedded` and `MODE=distributed`.
 - maintenance debt and commitment recovery.
 
 Acceptance: after a multi-day restart, an agent reconstructs relevant world
-and cognitive state without replaying its full transcript into a model.
+and cognitive state without replaying its full transcript into a model; pinned
+shadow rules replay deterministically without producing an effect.
 
 ## v0.4 — Agent Society
 
+- coordination cells for delegation, lease, and presence signals;
 - MCP capability adapter and A2A agent adapter;
 - capability manifests and discovery;
 - typed task offers, bids, awards, progress, result, failure, cancellation;
@@ -50,6 +71,8 @@ MCP server without exposing Noema's internal memory or runtime protocol.
 
 ## v0.5 — Reflective Autonomous System
 
+- governed Rule Forge candidate mining from corrections and repeated trajectories;
+- rule fitness, collision analysis, meta-rule proposals, and lifecycle gates;
 - explicit value-of-computation policies;
 - wall-clock, call, cost, branch, action, and recursion ceilings;
 - adaptive reasoning depth and strategy selection;
@@ -61,6 +84,8 @@ evaluation, and identical captured inputs reproduce the same semantic trace.
 
 ## v0.6 — Situated Continuity
 
+- temporal/opportunity rule cells and salience-driven wake control;
+- sensing-request signals governed by perception policy;
 - temporal semantics, source cursors, freshness, and awake epochs;
 - wake reconciliation and an orientation barrier;
 - substrate/sensor contracts and adaptive perception;
