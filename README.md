@@ -26,6 +26,14 @@ partially completed triggers replayable after a crash without duplicating their
 deterministic shadow outputs. Active behavior remains governed by the same
 event, policy, authority, and capability boundaries.
 
+The [Persistent Cognitive Memory](docs/PERSISTENT_COGNITIVE_MEMORY.md) layer
+reconstructs episodic history, evidence links, immutable semantic assertions,
+bitemporal belief state, hypotheses, and preserved contradictions from the
+same canonical log. Retrieval combines relevance with time, goals, evidence,
+freshness, and conflict penalties. Lexical and future vector indexes remain
+disposable accelerators rather than memory authority. Its projector reuses
+`ConsumerCheckpoint` to close partial-write crash windows deterministically.
+
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture for bounded inquiry, calibration, consolidation,
 and intrinsic agenda formation. It is deliberately staged behind observational
@@ -72,6 +80,8 @@ environment / agents / timers
 - **Event-driven:** agents respond to material events and may emit new events that trigger other agents or later phases of their own policy.
 - **Autonomous:** after startup, agents can sense, deliberate, prioritize, authorize, act, retry, compensate, reflect, and self-trigger without another human prompt.
 - **Durable:** SQLite can reconstruct the exact situation and causal trace after restart.
+- **Epistemic:** memory distinguishes events, evidence, beliefs, simulation,
+  world-valid time, and knowledge time without overwriting contradictions.
 - **Portable:** the same agent application runs embedded with SQLite or distributed with PostgreSQL, a transactional outbox/inbox, and NATS JetStream.
 - **Provider-agnostic:** `Reasoner` can be deterministic, LLM-backed, search-based, learned, symbolic, or an ensemble; model SDKs remain adapters.
 - **Recoverable:** durable action lifecycle events restore completed idempotency keys and unfinished authorized work after a crash.
@@ -273,11 +283,24 @@ projection exposes last completed sequence, observed event-log head, processing
 lag, and optional epoch identity. Memory projections, telemetry reducers,
 maintenance loops, and future learning workers can reuse the same contract.
 
+### Persistent Cognitive Memory
+
+`SemanticAssertion` records an immutable, evidence-bearing proposition with
+explicit observed, inferred, reported, assumed, or simulated provenance.
+`MemoryProjection` reconstructs held beliefs and hypotheses at independent
+valid and knowledge times, preserves contradictory claims, and excludes known
+stale state by default. `MemoryRetriever` ranks canonical assertions while its
+`LexicalMemoryIndex` can be deleted without semantic-state loss.
+
+`MemoryProjector` consumes canonical history continuously. Deterministic
+supersession and contradiction events are durable before its generic checkpoint
+advances, so restart repeats incomplete work without duplicate logical memory.
+
 The acceptance scenarios cover deep-work suppression, expiring code-review
 opportunities, stale delegation, and byte-equivalent replay:
 
 ```bash
-PYTHONPATH=src python -m unittest tests.test_autonomic tests.test_shadow -v
+PYTHONPATH=src python -m unittest tests.test_autonomic tests.test_shadow tests.test_memory tests.test_memory_worker -v
 ```
 
 ### `NoemaSystem`
@@ -327,6 +350,8 @@ The test suite covers:
 - dynamic trust/authority;
 - autonomous scheduling;
 - deadline signal detection;
+- bitemporal belief queries, contradiction preservation, and memory retrieval;
+- memory-projector crash recovery without duplicate logical memories;
 - multi-step autonomous incident recovery.
 
 The CI acceptance suite also runs the incident application against real
@@ -334,14 +359,16 @@ PostgreSQL and NATS containers.
 
 ## Release sequence
 
-v0.2 is the Portable Durable Agent milestone. The roadmap deliberately layers
-persistent cognitive memory (v0.3), agent society (v0.4), reflective
-metacontrol (v0.5), and Situated Continuity (v0.6) above it instead of building
-all planes into one release.
+v0.3 is the Persistent Cognitive Agent milestone. The roadmap next layers
+situated continuity, agent society, endogenous agenda formation, HabitForge,
+and SkillForge above the durable event, governance, autonomic, and epistemic
+memory substrates.
 
 See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](docs/adr/0001-portable-durable-agent.md), [autonomy](docs/AUTONOMY.md),
 [event semantics](docs/EVENTS.md), [roadmap](docs/ROADMAP.md), and
 [Situated Continuity](docs/SITUATED_CONTINUITY.md), plus the
 [Autonomic Fabric](docs/AUTONOMIC_FABRIC.md) and its
-[architecture decision](docs/adr/0002-autonomic-fabric.md).
+[architecture decision](docs/adr/0002-autonomic-fabric.md), and
+[Persistent Cognitive Memory](docs/PERSISTENT_COGNITIVE_MEMORY.md) with
+[ADR 0005](docs/adr/0005-persistent-cognitive-memory.md).

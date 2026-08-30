@@ -14,6 +14,13 @@ principle they change.
 | At-least-once is assumed | External effects receive idempotency keys and must tolerate retry. |
 | Schemas evolve | Every event carries a positive schema version; upcasters preserve identity and ordering. |
 | Situation is not a prompt | The world model exists independently of model context. |
+| Events, evidence, and beliefs differ | An occurrence, its bearing on a proposition, and current belief state use separate contracts. |
+| Beliefs are append-only projections | Assertion changes create versions and transition events; no belief mutates in place. |
+| Memory is bitemporal | World-valid time and recorded knowledge time remain independently queryable. |
+| Epistemic provenance is durable | Observed, inferred, reported, assumed, and simulated claims remain explicitly typed through replay. |
+| Contradictions are preserved | Competing evidence produces inspectable uncertainty rather than last-write-wins replacement. |
+| Indexes are not memory | Lexical, full-text, and vector indexes may disappear without semantic-state loss. |
+| Retrieval is decision-relevant | Similarity competes with time, goals, evidence, freshness, and contradiction penalties. |
 | Authority is explicit | Capability, permission, authority, reversibility, and risk remain separate. |
 | Autonomy is observable | Trigger, proposal, authorization, dispatch, execution, and result share causal provenance. |
 | Cancellation and backpressure are real | Async boundaries have timeouts, bounded queues, and graceful shutdown. |

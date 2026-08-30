@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.3.0 — 2026-08-30
+
+- added immutable, content-addressed semantic assertions with observed,
+  inferred, reported, assumed, and simulated epistemic provenance;
+- separated canonical episodes, first-class evidence links, and projected
+  beliefs with independent valid-world and recorded-knowledge time;
+- added append-only supersession and validity closure plus preserved,
+  deterministically detected and resolved contradictions;
+- added decision-relevant retrieval over lexical similarity, time, goals,
+  evidence, freshness, and conflict/staleness penalties;
+- made the lexical index disposable and rebuildable without semantic-state
+  loss, preserving the boundary for later FTS and vector adapters;
+- added the crash-recoverable `MemoryProjector` using generic canonical
+  `ConsumerCheckpoint` records and deterministic derived event IDs;
+- validated late knowledge, conflicting evidence, partial-write replay, and
+  fresh-evidence-over-stale-similarity acceptance scenarios;
+- recorded the persistent cognitive memory architecture in ADR 0005 and added
+  structural provider/effect isolation gates for its pure core;
 - accepted the signal-first Autonomic Fabric architecture;
 - implemented the effect-free Autonomic Shadow Kernel with immutable rules,
   content-addressed rulesets and sequence-pinned evaluation epochs,

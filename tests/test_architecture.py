@@ -194,3 +194,67 @@ class ArchitectureFitnessTests(unittest.TestCase):
             ):
                 violations.append(f"calls {node.func.attr}")
         self.assertEqual(violations, [])
+
+    def test_memory_core_is_a_provider_free_projection_not_an_effect_plane(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        memory_root = source_root / "memory"
+        forbidden_modules = {
+            "adapters",
+            "agent",
+            "authority",
+            "capabilities",
+            "delivery",
+            "kernel",
+            "memory_worker",
+            "models",
+            "reasoning",
+            "scheduler",
+            "store",
+            "system",
+            "telemetry",
+            "tracing",
+        }
+        forbidden_calls = {"compile", "eval", "exec"}
+        violations: list[str] = []
+        for path in memory_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call) and (
+                    isinstance(node.func, ast.Name)
+                    and node.func.id in forbidden_calls
+                    or isinstance(node.func, ast.Attribute)
+                    and node.func.attr in forbidden_calls
+                    and not (
+                        node.func.attr == "compile"
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "re"
+                    )
+                ):
+                    name = node.func.id if isinstance(node.func, ast.Name) else node.func.attr
+                    violations.append(f"{path.relative_to(source_root)} calls {name}")
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    root = node.module.split(".")[0]
+                    if node.level >= 2 and root in forbidden_modules:
+                        violations.append(
+                            f"{path.relative_to(source_root)} imports effect plane {node.module}"
+                        )
+                    if (
+                        node.level >= 2
+                        and node.module == "events"
+                        and any(alias.name == "AsyncEventBus" for alias in node.names)
+                    ):
+                        violations.append(f"{path.relative_to(source_root)} imports the event bus")
+                    if "adapters" in node.module.split("."):
+                        violations.append(f"{path.relative_to(source_root)} imports {node.module}")
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        parts = alias.name.split(".")
+                        if "adapters" in parts or (
+                            len(parts) >= 2
+                            and parts[0] == "noema"
+                            and parts[1] in forbidden_modules
+                        ):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports {alias.name}"
+                            )
+        self.assertEqual(violations, [])

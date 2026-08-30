@@ -51,11 +51,12 @@ questions and candidates more readily than actions.
 With shadow reliability hardened, the dependency order is:
 
 ```text
-persistent memory → situated continuity → agent ecology → HabitForge learning
+✓ persistent memory → situated continuity → agent ecology → endogenous agenda
+  → HabitForge → SkillForge
 ```
 
-Autonomic feature expansion pauses while v0.3 builds episodic and semantic
-memory with provenance, contradiction handling, and bitemporal validity.
+Autonomic feature expansion remains paused. The persistent-memory substrate is
+implemented; situated continuity is the next dependency.
 
 ## v0.2 — Portable Durable Agent
 
@@ -87,16 +88,22 @@ policy branch and runs with both `MODE=embedded` and `MODE=distributed`.
   continuously running observational `AutonomicShadowWorker` (implemented);
 - generic durable `ConsumerCheckpoint` recovery, crash-window idempotency, and
   shadow processing-lag/phase telemetry (implemented);
-- episodic indexes over event history;
-- semantic assertions linked to evidence;
-- hypotheses, contradictions, and validity intervals;
-- PostgreSQL/pgvector and local SQLite/FTS projections;
-- context assembly by relevance, evidence, freshness, and confidence;
+- episodic projection over canonical event history (implemented);
+- immutable semantic assertions and first-class evidence links (implemented);
+- hypotheses, preserved contradictions, validity/freshness, and independent
+  valid/knowledge-time queries (implemented);
+- deterministic memory projection using generic durable checkpoints
+  (implemented);
+- decision-relevant lexical retrieval with a disposable rebuildable index
+  (implemented);
+- optional PostgreSQL/pgvector and local SQLite/FTS acceleration adapters;
+- integration of memory retrieval into bounded model context assembly;
 - maintenance debt and commitment recovery.
 
 Acceptance: after a multi-day restart, an agent reconstructs relevant world
-and cognitive state without replaying its full transcript into a model; pinned
-shadow rules replay deterministically without producing an effect.
+and cognitive state without replaying its full transcript into a model; late
+knowledge remains bitemporally queryable, contradictions stay visible, indexes
+are disposable, and partial projection writes replay without duplicates.
 
 ## v0.4 — Agent Society
 

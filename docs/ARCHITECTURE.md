@@ -57,6 +57,27 @@ replays later canonical triggers, while deterministic output IDs make partial
 prior attempts idempotent. Checkpoint projections expose event-stream lag; they
 do not replace the event log with a second offset store.
 
+## Persistent cognitive memory
+
+The event log records occurrences; it is not itself a belief table. Persistent
+memory derives three separate layers from it:
+
+```text
+event → evidence relation → semantic assertion → bitemporal belief query
+```
+
+`SemanticAssertion` versions are immutable. They carry explicit epistemic
+provenance, evidence/derivation references, valid-world time, recorded-knowledge
+time, freshness, confidence, and hypothesis/active status. Supersession and
+validity closure are later events, never row updates. Conflicting visible
+assertions remain present and make the projected belief uncertain.
+
+The [memory architecture](PERSISTENT_COGNITIVE_MEMORY.md) uses the same generic
+checkpoint contract as other durable consumers. Required deterministic derived
+events precede checkpoint advancement. Local lexical and future FTS/vector
+indexes are projections that can be removed and rebuilt; canonical assertions
+and their evidence remain the source of truth.
+
 ## Portable durability
 
 Noema has one semantic runtime with two deployment profiles:
@@ -192,6 +213,9 @@ Coordination occurs through events, not direct hidden calls.
 | Projection | custom `SituationModel` projector |
 | Durable consumer progress | `ConsumerCheckpoint` / `ConsumerCheckpointProjection` |
 | Observational autonomic runtime | `AutonomicShadowWorker` |
+| Epistemic memory | `SemanticAssertion` / `EvidenceLink` / `MemoryProjection` |
+| Decision-relevant retrieval | `MemoryRetriever` / disposable index adapters |
+| Durable memory projection | `MemoryProjector` |
 | Endogenous cognition (planned) | durable `Inquiry` / `IntrinsicActivity` contracts |
 
 ## Non-goals of the core
@@ -212,5 +236,6 @@ See [Architecture principles](ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](adr/0001-portable-durable-agent.md),
 [ADR 0002](adr/0002-autonomic-fabric.md),
 [ADR 0003](adr/0003-endogenous-drive-ecology.md),
-[ADR 0004](adr/0004-durable-consumer-checkpoints.md), and the
+[ADR 0004](adr/0004-durable-consumer-checkpoints.md),
+[ADR 0005](adr/0005-persistent-cognitive-memory.md), and the
 [engineering roadmap](ROADMAP.md).
