@@ -67,16 +67,19 @@ event → evidence relation → semantic assertion → bitemporal belief query
 ```
 
 `SemanticAssertion` versions are immutable. They carry explicit epistemic
-provenance, evidence/derivation references, valid-world time, recorded-knowledge
-time, freshness, confidence, and hypothesis/active status. Supersession and
-validity closure are later events, never row updates. Conflicting visible
+provenance, source/derivation anchors, valid-world time, recorded-knowledge
+time, freshness, confidence, and hypothesis/active status. `EvidenceLink` is
+the sole graph describing how resolved evidence bears on a claim. Supersession
+and validity closure are later events, never row updates. Conflicting visible
 assertions remain present and make the projected belief uncertain.
 
 The [memory architecture](PERSISTENT_COGNITIVE_MEMORY.md) uses the same generic
 checkpoint contract as other durable consumers. Required deterministic derived
 events precede checkpoint advancement. Local lexical and future FTS/vector
 indexes are projections that can be removed and rebuilt; canonical assertions
-and their evidence remain the source of truth.
+and their evidence remain the source of truth. A same-process write failure
+also rebuilds speculative state through the last durable checkpoint before
+retry.
 
 ## Portable durability
 

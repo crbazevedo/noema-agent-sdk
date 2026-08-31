@@ -41,8 +41,8 @@ and contradictions. These concepts are deliberately not interchangeable.
 
 `SemanticAssertion` is immutable and content-addressed when created through its
 factory. It records a structured subject, predicate, scalar value, confidence,
-status, evidence and derivation references, optional supersession, and one of
-five epistemic types:
+status, source and derivation references, optional supersession, and one of five
+epistemic types:
 
 - `OBSERVED`
 - `INFERRED`
@@ -50,10 +50,28 @@ five epistemic types:
 - `ASSUMED`
 - `SIMULATED`
 
-Every non-assumption has an evidence or derivation reference. Every inference
-has an explicit derivation. A mutable-world assertion must declare either
+Every non-assumption has a provenance source or derivation reference. Every
+inference has an explicit derivation. A mutable-world assertion must declare either
 `fresh_until` or `valid_to`. Simulated provenance survives serialization and
 cannot be linked as positive evidence for an observed fact.
+
+`source_refs` are the minimum provenance anchors needed to admit an assertion.
+They do not encode how evidence bears on the claim. `EvidenceLink` is the one
+canonical graph for `SUPPORTS`, `CONTRADICTS`, `REFINES`, `SUPERSEDES`, and
+`DERIVED_FROM` relations, including relation strength and typed provenance.
+
+`MemoryProjection.resolve_evidence_ref()` is the single fail-closed resolver for
+both inline anchors and evidence-graph edges:
+
+```text
+event:<id>       → existing canonical event
+assertion:<id>   → existing semantic assertion
+simulation:<id>  → canonical event explicitly typed as simulated
+```
+
+Unknown namespaces and missing identities are rejected. An observed assertion
+cannot use a simulated assertion indirectly through `source_refs`, so inline
+anchors cannot bypass the evidence-link provenance gate.
 
 Hypotheses reuse the same assertion contract with `status=HYPOTHESIS`; they are
 not silently mixed into the default held-belief projection.
@@ -84,6 +102,9 @@ in conflict unless one directly supersedes the other. Both assertions and their
 evidence remain available. The query returns `UNCERTAIN`, a null selected value,
 the competing assertions, and the unresolved contradiction record.
 
+`BeliefState` names the aggregate field `max_assertion_confidence`; it is not
+the confidence of a selected value when the disposition is uncertain.
+
 Cross-predicate and domain-semantic contradiction rules belong in later typed
 detectors. They must produce the same canonical contradiction events instead of
 silently overwriting either claim.
@@ -110,6 +131,11 @@ resolution outputs before advancing its checkpoint. On restart it rebuilds
 through the checkpoint event, replays every later eligible input, reuses any
 partial outputs by ID, and completes the checkpoint. There is no private memory
 offset store.
+
+The same rule applies without a process restart. Any processing exception
+immediately discards speculative projection state and rebuilds through the last
+durable checkpoint before the input may be retried. A live worker therefore
+cannot remember an assertion while silently omitting its failed derived event.
 
 The checkpoint's processing lag remains a canonical sequence gap. It includes
 system and derived events and is not necessarily the count of useful memory

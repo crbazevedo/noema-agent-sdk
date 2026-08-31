@@ -21,6 +21,7 @@ from .projection import (
     BeliefDisposition,
     BeliefState,
     EpisodicMemory,
+    EvidenceObject,
     MemoryProjection,
 )
 from .retrieval import (
@@ -44,6 +45,7 @@ __all__ = [
     "EVIDENCE_LINKED_EVENT",
     "EpistemicType",
     "EpisodicMemory",
+    "EvidenceObject",
     "EvidenceLink",
     "EvidenceRelation",
     "LexicalMemoryIndex",

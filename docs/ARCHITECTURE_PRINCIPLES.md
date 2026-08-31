@@ -18,6 +18,8 @@ principle they change.
 | Beliefs are append-only projections | Assertion changes create versions and transition events; no belief mutates in place. |
 | Memory is bitemporal | World-valid time and recorded knowledge time remain independently queryable. |
 | Epistemic provenance is durable | Observed, inferred, reported, assumed, and simulated claims remain explicitly typed through replay. |
+| Evidence references fail closed | One resolver admits only existing canonical events, assertions, or typed simulation artifacts. |
+| Evidence has one semantic graph | Assertion source anchors establish provenance; only `EvidenceLink` describes how evidence bears on a claim. |
 | Contradictions are preserved | Competing evidence produces inspectable uncertainty rather than last-write-wins replacement. |
 | Indexes are not memory | Lexical, full-text, and vector indexes may disappear without semantic-state loss. |
 | Retrieval is decision-relevant | Similarity competes with time, goals, evidence, freshness, and contradiction penalties. |

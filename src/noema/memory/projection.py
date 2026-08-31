@@ -42,7 +42,7 @@ class BeliefState:
     predicate: str
     disposition: BeliefDisposition
     value: JSONScalar
-    confidence: float
+    max_assertion_confidence: float
     assertions: tuple[SemanticAssertion, ...]
     evidence: tuple[EvidenceLink, ...]
     contradictions: tuple[MemoryContradiction, ...]
@@ -52,6 +52,16 @@ class BeliefState:
     @property
     def uncertain(self) -> bool:
         return self.disposition is BeliefDisposition.UNCERTAIN
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceObject:
+    """A provenance reference resolved against canonical memory state."""
+
+    reference: str
+    namespace: str
+    value: Event | SemanticAssertion
+    epistemic_type: EpistemicType | None
 
 
 class EpisodicMemory:
@@ -188,6 +198,12 @@ class MemoryProjection:
         elif event.type == EVIDENCE_LINKED_EVENT:
             link = EvidenceLink.from_event(event)
             target = self._require_assertion(link.assertion_ref)
+            evidence_object = self.resolve_evidence_ref(link.evidence_ref)
+            if (
+                evidence_object.epistemic_type is not None
+                and evidence_object.epistemic_type is not link.evidence_type
+            ):
+                raise ValueError("evidence link provenance does not match its source")
             if (
                 target.epistemic_type is EpistemicType.OBSERVED
                 and link.evidence_type is EpistemicType.SIMULATED
@@ -200,12 +216,6 @@ class MemoryProjection:
                 }
             ):
                 raise ValueError("simulated evidence cannot support an observed assertion")
-            evidence_assertion = self._assertions.get(link.evidence_ref)
-            if (
-                evidence_assertion is not None
-                and evidence_assertion.epistemic_type is not link.evidence_type
-            ):
-                raise ValueError("evidence link provenance does not match its assertion")
             existing_link = self._evidence.get(link.link_id)
             if existing_link is not None and existing_link != link:
                 raise ValueError(f"conflicting evidence-link identity: {link.link_id}")
@@ -374,21 +384,21 @@ class MemoryProjection:
         if not assertions:
             disposition = BeliefDisposition.UNKNOWN
             value: JSONScalar = None
-            confidence = 0.0
+            max_assertion_confidence = 0.0
         elif len(values) > 1 or contradictions:
             disposition = BeliefDisposition.UNCERTAIN
             value = None
-            confidence = max(assertion.confidence for assertion in assertions)
+            max_assertion_confidence = max(assertion.confidence for assertion in assertions)
         else:
             disposition = BeliefDisposition.HELD
             value = assertions[-1].value
-            confidence = max(assertion.confidence for assertion in assertions)
+            max_assertion_confidence = max(assertion.confidence for assertion in assertions)
         return BeliefState(
             subject=subject,
             predicate=predicate,
             disposition=disposition,
             value=value,
-            confidence=confidence,
+            max_assertion_confidence=max_assertion_confidence,
             assertions=assertions,
             evidence=evidence,
             contradictions=contradictions,
@@ -591,16 +601,71 @@ class MemoryProjection:
         return assertion
 
     def _validate_assertion_provenance(self, assertion: SemanticAssertion) -> None:
-        for ref in (*assertion.evidence_refs, *assertion.derivation_refs):
-            namespace, separator, identifier = ref.partition(":")
-            if not separator or not namespace or not identifier:
-                raise ValueError("evidence refs require a non-empty namespace and identity")
-            if namespace == "event" and self.episodes.get(identifier) is None:
+        anchors = tuple(
+            self.resolve_evidence_ref(ref)
+            for ref in (*assertion.source_refs, *assertion.derivation_refs)
+        )
+        if assertion.epistemic_type is EpistemicType.OBSERVED and any(
+            anchor.epistemic_type is EpistemicType.SIMULATED for anchor in anchors
+        ):
+            raise ValueError("simulated provenance cannot support an observed assertion")
+
+    def resolve_evidence_ref(self, ref: str) -> EvidenceObject:
+        """Resolve a closed provenance namespace or fail without recording an edge."""
+
+        namespace, separator, identifier = ref.partition(":")
+        if not separator or not namespace or not identifier:
+            raise ValueError("evidence refs require a non-empty namespace and identity")
+        if namespace == "event":
+            event = self.episodes.get(identifier)
+            if event is None:
+                raise ValueError(f"unknown canonical evidence event: {identifier}")
+            return EvidenceObject(
+                reference=ref,
+                namespace=namespace,
+                value=event,
+                epistemic_type=self._event_epistemic_type(event),
+            )
+        if namespace == "assertion":
+            source_assertion = self._assertions.get(ref)
+            if source_assertion is None:
+                raise ValueError(f"unknown evidence assertion: {ref}")
+            return EvidenceObject(
+                reference=ref,
+                namespace=namespace,
+                value=source_assertion,
+                epistemic_type=source_assertion.epistemic_type,
+            )
+        if namespace == "simulation":
+            event = self.episodes.get(identifier)
+            if event is None:
+                raise ValueError(f"unknown simulation artifact: {identifier}")
+            epistemic_type = self._event_epistemic_type(event)
+            if epistemic_type is not EpistemicType.SIMULATED:
                 raise ValueError(
-                    f"assertion references unknown canonical evidence event: {identifier}"
+                    f"simulation reference is not a registered simulation artifact: {identifier}"
                 )
-            if namespace == "assertion" and ref not in self._assertions:
-                raise ValueError(f"assertion references unknown derivation: {ref}")
+            return EvidenceObject(
+                reference=ref,
+                namespace=namespace,
+                value=event,
+                epistemic_type=epistemic_type,
+            )
+        raise ValueError(f"unsupported evidence reference namespace: {namespace}")
+
+    @staticmethod
+    def _event_epistemic_type(event: Event) -> EpistemicType | None:
+        value = event.metadata.get("epistemic_type")
+        if value is None:
+            if event.type.startswith("simulation."):
+                return EpistemicType.SIMULATED
+            return None
+        try:
+            return EpistemicType(str(value))
+        except ValueError as error:
+            raise ValueError(
+                f"canonical event has invalid epistemic provenance: {event.id}"
+            ) from error
 
     @staticmethod
     def _value_key(value: JSONScalar) -> tuple[str, str]:

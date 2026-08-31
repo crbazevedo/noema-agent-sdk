@@ -41,7 +41,7 @@ def observed_assertion(
         valid_from=valid_from,
         recorded_at=recorded_at,
         fresh_until=fresh_until,
-        evidence_refs=(evidence_ref,),
+        source_refs=(evidence_ref,),
         supersedes=supersedes,
         mutable_world=True,
     )
@@ -173,6 +173,8 @@ class PersistentCognitiveMemoryTests(unittest.TestCase):
         )
         self.assertEqual(belief.disposition, BeliefDisposition.UNCERTAIN)
         self.assertIsNone(belief.value)
+        self.assertEqual(belief.max_assertion_confidence, 0.99)
+        self.assertFalse(hasattr(belief, "confidence"))
         self.assertEqual(len(belief.assertions), 2)
         self.assertEqual(len(belief.contradictions), 1)
         self.assertEqual(len(projection.assertions), 2)
@@ -190,7 +192,7 @@ class PersistentCognitiveMemoryTests(unittest.TestCase):
             confidence=0.62,
             valid_from=MONDAY,
             recorded_at=MONDAY,
-            evidence_refs=("simulation:rollout-17",),
+            source_refs=("simulation:rollout-17",),
             fresh_until=MONDAY + timedelta(hours=1),
             mutable_world=True,
             status=AssertionStatus.HYPOTHESIS,
@@ -210,7 +212,7 @@ class PersistentCognitiveMemoryTests(unittest.TestCase):
                 confidence=0.8,
                 valid_from=MONDAY,
                 recorded_at=MONDAY,
-                evidence_refs=("event:metric-spike",),
+                source_refs=("event:metric-spike",),
             )
         with self.assertRaisesRegex(ValueError, "mutable-world"):
             SemanticAssertion.create(
@@ -221,7 +223,7 @@ class PersistentCognitiveMemoryTests(unittest.TestCase):
                 confidence=0.9,
                 valid_from=MONDAY,
                 recorded_at=MONDAY,
-                evidence_refs=("event:health-check",),
+                source_refs=("event:health-check",),
                 mutable_world=True,
             )
         with self.assertRaisesRegex(ValueError, "simulated evidence"):
@@ -233,10 +235,20 @@ class PersistentCognitiveMemoryTests(unittest.TestCase):
                 confidence=0.8,
                 valid_from=MONDAY,
                 recorded_at=MONDAY,
-                evidence_refs=("simulation:rollout-17",),
+                source_refs=("simulation:rollout-17",),
             )
 
         projection = MemoryProjection()
+        simulation_event = Event(
+            "simulation.rollout_completed",
+            "test",
+            {"scenario": "rollout-17"},
+            id="rollout-17",
+            timestamp=MONDAY,
+            metadata={"epistemic_type": EpistemicType.SIMULATED.value},
+        )
+        projection.apply(simulation_event)
+        projection.apply(simulated.to_event(source="test"))
         observed = observed_assertion(
             subject="service:api",
             predicate="state",
@@ -266,6 +278,61 @@ class PersistentCognitiveMemoryTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "simulated evidence"):
             projection.apply(laundering_link.to_event(source="test"))
+
+        inline_laundering = SemanticAssertion.create(
+            subject="service:api",
+            predicate="state",
+            value="failed",
+            epistemic_type=EpistemicType.OBSERVED,
+            confidence=0.9,
+            valid_from=MONDAY,
+            recorded_at=MONDAY + timedelta(minutes=2),
+            source_refs=(simulated.assertion_id,),
+            fresh_until=MONDAY + timedelta(hours=1),
+            mutable_world=True,
+        )
+        with self.assertRaisesRegex(ValueError, "simulated provenance"):
+            projection.apply(inline_laundering.to_event(source="test"))
+
+    def test_evidence_links_fail_closed_for_missing_or_unknown_sources(self) -> None:
+        projection = MemoryProjection()
+        source_event = Event(
+            "service.health_observed",
+            "test",
+            {},
+            id="real-health-check",
+            timestamp=MONDAY,
+        )
+        projection.apply(source_event)
+        assertion = observed_assertion(
+            subject="service:api",
+            predicate="state",
+            value="healthy",
+            valid_from=MONDAY,
+            recorded_at=MONDAY,
+            evidence_ref=f"event:{source_event.id}",
+            fresh_until=MONDAY + timedelta(hours=1),
+        )
+        projection.apply(assertion.to_event(source="test"))
+
+        for reference, message in (
+            ("event:this-never-existed", "unknown canonical evidence event"),
+            ("opaque:unregistered", "unsupported evidence reference namespace"),
+            ("simulation:unregistered", "unknown simulation artifact"),
+        ):
+            link = EvidenceLink.create(
+                evidence_ref=reference,
+                assertion_ref=assertion.assertion_id,
+                relation=EvidenceRelation.SUPPORTS,
+                strength=1.0,
+                evidence_type=EpistemicType.OBSERVED,
+                recorded_at=MONDAY + timedelta(minutes=1),
+            )
+            with self.subTest(reference=reference):
+                with self.assertRaisesRegex(ValueError, message):
+                    projection.apply(link.to_event(source="test"))
+
+        self.assertEqual(projection.evidence_links, ())
 
     def test_fresh_evidence_beats_one_hundred_old_similar_memories(self) -> None:
         projection = MemoryProjection()

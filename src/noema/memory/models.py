@@ -98,7 +98,7 @@ class SemanticAssertion:
     valid_to: datetime | None
     recorded_at: datetime
     fresh_until: datetime | None
-    evidence_refs: tuple[str, ...]
+    source_refs: tuple[str, ...]
     derivation_refs: tuple[str, ...] = ()
     supersedes: str | None = None
     status: AssertionStatus = AssertionStatus.ACTIVE
@@ -127,19 +127,19 @@ class SemanticAssertion:
             raise ValueError(
                 "mutable-world assertions require fresh_until or a closed validity interval"
             )
-        if any(not ref.strip() for ref in (*self.evidence_refs, *self.derivation_refs)):
-            raise ValueError("assertion evidence and derivation refs must be non-empty")
-        if len(set(self.evidence_refs)) != len(self.evidence_refs):
-            raise ValueError("assertion evidence refs must be unique")
+        if any(not ref.strip() for ref in (*self.source_refs, *self.derivation_refs)):
+            raise ValueError("assertion source and derivation refs must be non-empty")
+        if len(set(self.source_refs)) != len(self.source_refs):
+            raise ValueError("assertion source refs must be unique")
         if len(set(self.derivation_refs)) != len(self.derivation_refs):
             raise ValueError("assertion derivation refs must be unique")
         if self.epistemic_type is EpistemicType.ASSUMED:
             if self.derivation_refs:
                 raise ValueError("assumptions cannot claim derivation evidence")
-        elif not self.evidence_refs and not self.derivation_refs:
-            raise ValueError("non-assumed assertions require evidence or derivation")
+        elif not self.source_refs and not self.derivation_refs:
+            raise ValueError("non-assumed assertions require a source or derivation")
         if self.epistemic_type is EpistemicType.OBSERVED and any(
-            ref.startswith("simulation:") for ref in self.evidence_refs
+            ref.startswith("simulation:") for ref in self.source_refs
         ):
             raise ValueError("simulated evidence cannot be recorded as an observation")
         if self.epistemic_type is EpistemicType.INFERRED and not self.derivation_refs:
@@ -161,7 +161,7 @@ class SemanticAssertion:
         confidence: float,
         valid_from: datetime,
         recorded_at: datetime,
-        evidence_refs: tuple[str, ...],
+        source_refs: tuple[str, ...],
         valid_to: datetime | None = None,
         fresh_until: datetime | None = None,
         derivation_refs: tuple[str, ...] = (),
@@ -179,7 +179,7 @@ class SemanticAssertion:
             valid_to=valid_to,
             recorded_at=recorded_at,
             fresh_until=fresh_until,
-            evidence_refs=evidence_refs,
+            source_refs=source_refs,
             derivation_refs=derivation_refs,
             supersedes=supersedes,
             status=status,
@@ -196,7 +196,7 @@ class SemanticAssertion:
             valid_to=valid_to,
             recorded_at=recorded_at,
             fresh_until=fresh_until,
-            evidence_refs=evidence_refs,
+            source_refs=source_refs,
             derivation_refs=derivation_refs,
             supersedes=supersedes,
             status=status,
@@ -215,7 +215,7 @@ class SemanticAssertion:
         valid_to: datetime | None,
         recorded_at: datetime,
         fresh_until: datetime | None,
-        evidence_refs: tuple[str, ...],
+        source_refs: tuple[str, ...],
         derivation_refs: tuple[str, ...],
         supersedes: str | None,
         status: AssertionStatus,
@@ -231,7 +231,7 @@ class SemanticAssertion:
             "valid_to": valid_to.isoformat() if valid_to is not None else None,
             "recorded_at": recorded_at.isoformat(),
             "fresh_until": fresh_until.isoformat() if fresh_until is not None else None,
-            "evidence_refs": list(evidence_refs),
+            "source_refs": list(source_refs),
             "derivation_refs": list(derivation_refs),
             "supersedes": supersedes,
             "status": status.value,
@@ -249,7 +249,7 @@ class SemanticAssertion:
             valid_to=self.valid_to,
             recorded_at=self.recorded_at,
             fresh_until=self.fresh_until,
-            evidence_refs=self.evidence_refs,
+            source_refs=self.source_refs,
             derivation_refs=self.derivation_refs,
             supersedes=self.supersedes,
             status=self.status,
@@ -259,7 +259,7 @@ class SemanticAssertion:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> SemanticAssertion:
-        evidence = cast(list[object] | tuple[object, ...], data.get("evidence_refs", ()))
+        sources = cast(list[object] | tuple[object, ...], data.get("source_refs", ()))
         derivations = cast(list[object] | tuple[object, ...], data.get("derivation_refs", ()))
         assertion = cls(
             assertion_id=str(data["assertion_id"]),
@@ -272,7 +272,7 @@ class SemanticAssertion:
             valid_to=parse_datetime(cast(str | datetime | None, data.get("valid_to"))),
             recorded_at=_datetime(data, "recorded_at"),
             fresh_until=parse_datetime(cast(str | datetime | None, data.get("fresh_until"))),
-            evidence_refs=tuple(str(value) for value in evidence),
+            source_refs=tuple(str(value) for value in sources),
             derivation_refs=tuple(str(value) for value in derivations),
             supersedes=(str(data["supersedes"]) if data.get("supersedes") else None),
             status=AssertionStatus(str(data.get("status", AssertionStatus.ACTIVE.value))),

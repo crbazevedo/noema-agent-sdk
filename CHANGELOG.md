@@ -16,6 +16,13 @@
   loss, preserving the boundary for later FTS and vector adapters;
 - added the crash-recoverable `MemoryProjector` using generic canonical
   `ConsumerCheckpoint` records and deterministic derived event IDs;
+- hardened same-process retries by rebuilding speculative projection state from
+  the durable checkpoint after derived-event write failures;
+- centralized fail-closed evidence resolution, blocked missing references and
+  inline simulation laundering, and separated assertion source anchors from the
+  authoritative `EvidenceLink` graph;
+- renamed projected belief confidence to `max_assertion_confidence` so an
+  uncertain belief cannot imply confidence in a selected value;
 - validated late knowledge, conflicting evidence, partial-write replay, and
   fresh-evidence-over-stale-similarity acceptance scenarios;
 - recorded the persistent cognitive memory architecture in ADR 0005 and added

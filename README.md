@@ -292,9 +292,16 @@ valid and knowledge times, preserves contradictory claims, and excludes known
 stale state by default. `MemoryRetriever` ranks canonical assertions while its
 `LexicalMemoryIndex` can be deleted without semantic-state loss.
 
+Assertions carry minimum `source_refs`; `EvidenceLink` remains the authoritative
+graph for how a resolved event or assertion supports, contradicts, refines,
+supersedes, or derives a claim. Missing references, unknown namespaces, and
+simulation-to-observation laundering fail closed.
+
 `MemoryProjector` consumes canonical history continuously. Deterministic
 supersession and contradiction events are durable before its generic checkpoint
 advances, so restart repeats incomplete work without duplicate logical memory.
+The worker also restores its last durable projection immediately after a live
+processing failure, making same-process retry equivalent to restart recovery.
 
 The acceptance scenarios cover deep-work suppression, expiring code-review
 opportunities, stale delegation, and byte-equivalent replay:

@@ -65,12 +65,7 @@ class MemoryProjector:
         self._subscription_id = await self.kernel.bus.subscribe("*", self._handle_event)
         try:
             history = await self.kernel.history()
-            checkpoints = ConsumerCheckpointProjection()
-            checkpoints.rebuild(history)
-            checkpoint = checkpoints.get(self.consumer_id)
-            through_sequence = checkpoint.event_sequence if checkpoint is not None else 0
-            self.projection.rebuild(history, through_sequence=through_sequence)
-            self._checkpoint = checkpoint
+            checkpoint = self._restore_projection(history)
             self._started = True
             self._ready.set()
             after_sequence = checkpoint.last_completed_sequence if checkpoint is not None else 0
@@ -113,8 +108,11 @@ class MemoryProjector:
                 if checkpoint is not None and event.sequence <= checkpoint.last_completed_sequence:
                     return
                 await self._process_event(event)
-            except BaseException:
+            except asyncio.CancelledError:
                 self._processed_event_ids.discard(event.id)
+                raise
+            except BaseException:
+                await self._recover_projection()
                 raise
 
     async def _process_event(self, event: Event) -> None:
@@ -144,6 +142,22 @@ class MemoryProjector:
                 {"consumer": self.consumer_id},
             )
         )
+
+    async def _recover_projection(self) -> None:
+        """Discard speculative state and return to the last durable checkpoint."""
+
+        history = await self.kernel.history()
+        self._restore_projection(history)
+        self._processed_event_ids.clear()
+
+    def _restore_projection(self, history: list[Event]) -> ConsumerCheckpoint | None:
+        checkpoints = ConsumerCheckpointProjection()
+        checkpoints.rebuild(history)
+        checkpoint = checkpoints.get(self.consumer_id)
+        through_sequence = checkpoint.event_sequence if checkpoint is not None else 0
+        self.projection.rebuild(history, through_sequence=through_sequence)
+        self._checkpoint = checkpoint
+        return checkpoint
 
     async def _advance_checkpoint(
         self,

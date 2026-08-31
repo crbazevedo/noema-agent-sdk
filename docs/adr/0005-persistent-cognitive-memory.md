@@ -20,28 +20,38 @@ the canonical event log and makes retrospective decision evaluation unreliable.
 1. Keep events, evidence links, and semantic assertions as separate contracts.
    All durable memory state remains reconstructible from canonical events.
 2. Record immutable `SemanticAssertion` versions with structured semantic keys,
-   epistemic type, confidence, valid time, knowledge time, freshness, evidence,
-   derivation, status, and supersession provenance.
-3. Type provenance as observed, inferred, reported, assumed, or simulated.
+   epistemic type, confidence, valid time, knowledge time, freshness, source
+   anchors, derivation, status, and supersession provenance.
+3. Treat assertion `source_refs` as minimum admission anchors and
+   `EvidenceLink` as the sole semantic evidence graph. One fail-closed resolver
+   validates both paths against existing canonical events, assertions, or
+   explicitly typed simulation artifacts. Unknown namespaces and identities
+   are rejected.
+4. Type provenance as observed, inferred, reported, assumed, or simulated.
    Non-assumptions require evidence or derivation, inferences require explicit
    derivations, and simulated evidence cannot become positive evidence for an
    observed fact through serialization or linking.
-4. Use bitemporal queries. `valid_from`/`valid_to` describe the world;
+5. Use bitemporal queries. `valid_from`/`valid_to` describe the world;
    `recorded_at` and transition timestamps describe agent knowledge.
-5. Never mutate a belief in place. Supersession, validity closure,
+6. Never mutate a belief in place. Supersession, validity closure,
    contradiction detection, and contradiction resolution are append-only
    canonical events. Belief state is a projection.
-6. Preserve competing assertions. The initial deterministic contradiction
+7. Preserve competing assertions. The initial deterministic contradiction
    detector covers different values for one subject/predicate over overlapping
    intervals. Richer semantic contradiction detectors may emit the same event
    contracts later.
-7. Rank retrieval by lexical relevance, time, goals, evidence, freshness, and
+8. Name aggregate query confidence `max_assertion_confidence`. An uncertain
+   belief has no selected value, so the strongest alternative's confidence must
+   not look like confidence in a selected conclusion.
+9. Rank retrieval by lexical relevance, time, goals, evidence, freshness, and
    contradiction/staleness. Full-text and vector indexes are disposable
    accelerators, never semantic authority.
-8. Reuse `ConsumerCheckpoint`. The memory projector persists deterministic
+10. Reuse `ConsumerCheckpoint`. The memory projector persists deterministic
    derived events before checkpoint advancement and closes partial-write crash
-   windows by replay and ID-based idempotency.
-9. Defer autonomous consolidation and promotion. Future pattern extraction must
+   windows by replay and ID-based idempotency. Any same-process processing
+   failure first rebuilds speculative projection state through the last durable
+   checkpoint.
+11. Defer autonomous consolidation and promotion. Future pattern extraction must
    begin in observational shadow mode.
 
 ## Consequences
@@ -50,6 +60,9 @@ the canonical event log and makes retrospective decision evaluation unreliable.
   a knowledge time.
 - Contradictions become inspectable uncertainty rather than last-write-wins
   corruption.
+- A missing evidence identity, unsupported namespace, or provenance mismatch
+  cannot affect retrieval scores or semantic state.
+- Same-process retries have the same projection semantics as process restarts.
 - Mutable-world claims require an explicit freshness or validity boundary.
 - Deleting lexical or vector indexes cannot delete memory.
 - The initial value domain is deliberately scalar. Rich structured values can
@@ -80,10 +93,12 @@ the canonical event log and makes retrospective decision evaluation unreliable.
   belief;
 - a crash after evidence persistence but before checkpoint replays to identical
   assertion, evidence, and contradiction identities without duplicates;
+- failed contradiction and supersession writes roll back speculative state and
+  succeed exactly once when retried by the same worker;
 - one fresh evidence-bearing contradiction outranks one hundred stale similar
   assertions;
 - simulation provenance survives serialization and cannot support an observed
-  fact;
+  fact through either source anchors or graph links;
 - memory core code cannot import providers, adapters, effects, or the event bus;
 - clearing the lexical index leaves retrieval and semantic state unchanged.
 
