@@ -502,13 +502,15 @@ The fabric is a cross-cutting track, not one monolithic release:
   consumer checkpoints, crash-window replay, and processing telemetry. These
   foundations are implemented; persistent memory provides the broader evidence
   substrate.
-- **v0.4:** add coordination cells for delegations, leases, and agent ecology;
+- **v0.4:** link evaluation-epoch identity to deterministic awake epochs and
+  situated orientation; keep active wake control disabled.
+- **v0.5:** add coordination cells for delegations, leases, and agent ecology;
   rules remain protocol-neutral.
-- **v0.5:** add counterfactual replay, compile-down candidate mining, fitness,
+- **v0.6:** add counterfactual replay, compile-down candidate mining, fitness,
   meta-rule proposals, and governed lifecycle transitions.
-- **v0.6:** add durable timer workers, richer opportunity patterns,
-  sensing-request signals, evaluation/awake-epoch linkage, active wake control,
-  and salience-based situated continuity.
+- **later:** add durable timer workers, richer opportunity patterns,
+  sensing-request signals, active wake control, and salience-driven adaptive
+  perception.
 
 Automatic canary reflexes should wait until these foundations provide durable
 evidence, replay, temporal semantics, and metacontrol.

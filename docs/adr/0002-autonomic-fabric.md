@@ -43,7 +43,7 @@ systems, Noema can no longer reconstruct or govern its behavior.
 9. Make every firing and lifecycle transition observable. Meta-rules may
    propose throttling, quarantine, revision, or retirement but cannot silently
    mutate active policy.
-10. Implement the fabric incrementally across v0.3–v0.6. Begin with effect-free
+10. Implement the fabric incrementally from v0.3 onward. Begin with effect-free
     shadow rules; defer automatic canary reflexes and RETE optimization until
     evidence and profiling justify them.
 11. Keep `RuleCell` state rebuildable from canonical evidence. The live signal
@@ -56,7 +56,7 @@ systems, Noema can no longer reconstruct or govern its behavior.
     propose immutable candidates, but it cannot mutate a pinned ruleset.
 14. Make rule telemetry, deterministic replay, temporal evaluation, and
     salience resolution part of v0.3, before HabitForge learns from the resulting
-    evidence in v0.5.
+    evidence in v0.6 or later.
 15. Run the fabric continuously through an outer observational worker. It may
     persist content artifacts, epochs, evaluation traces, and hypothetical
     decisions, but cannot import or call the effect plane.

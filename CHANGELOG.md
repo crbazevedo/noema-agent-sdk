@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+## 0.4.0 — 2026-08-30
+
+- promoted Situated Continuity ahead of agent society in dependency order and
+  implemented the deterministic, connector-free foundation;
+- added `TemporalService` with explicit restart-safe wall time, monotonic local
+  durations, time zones, deadlines, and sleep intervals;
+- added durable `AwakeEpoch` and provider-neutral `SourceState` event contracts
+  plus exponential domain-sensitive freshness decay;
+- added decision-relevant `AwarenessCoverage`, effect-free `RefreshRequest`
+  proposals, explicit observation budgets, and a pure selective
+  `WakeReconciler`;
+- added a shadow-only `OrientationBarrier` that exposes insufficient
+  freshness/confidence prerequisites without reaching models, authority,
+  agents, capabilities, reasoning, dispatch, or execution;
+- added deterministic cursor-driven `FakeSource` adapters and an effect-free
+  `SituatedContinuityWorker` that reuses the canonical event store, memory
+  projection, generic consumer checkpoints, and optional autonomic evaluation
+  epoch identity;
+- preserved the existing event envelope for delayed observations: observation
+  time remains `Event.timestamp`, source world time is `payload.occurred_at`,
+  and memory maps those to assertion knowledge and valid time;
+- added canonical orientation reports and telemetry for orientation efficiency,
+  sources considered/refreshed, fetched events, updated beliefs, retained
+  staleness, latency/cost, unnecessary refreshes, and missed changes;
+- demonstrated the 65-hour selective wake, silent no-change wake, delayed
+  knowledge, unavailable critical source, and four-of-one-hundred selective
+  freshness acceptances with no consequential effect;
+- recorded the architecture in ADR 0006 and added a structural gate that keeps
+  situated continuity isolated from the effect plane.
+
 ## 0.3.0 — 2026-08-30
 
 - added immutable, content-addressed semantic assertions with observed,
@@ -44,7 +74,8 @@
   escalation, cheap resolution, and byte-equivalent replay;
 - moved temporal evaluation plus rule telemetry/replay into the mandatory v0.3
   substrate, before HabitForge or active reflexes;
-- staged governed HabitForge learning and situated wake control across v0.5–v0.6;
+- staged governed HabitForge learning and active wake control behind additional
+  shadow evidence and metacontrol;
 - accepted the Endogenous Drive Ecology as a staged mid-term architecture for
   bounded inquiry, calibration, consolidation, and intrinsic agenda formation;
 - added architecture gates for retired terminology, dynamic rule execution,

@@ -46,9 +46,9 @@ longer explain or deterministically rebuild agent behavior.
    canonical causal record; traces are an operational projection.
 7. `deployment_from_env()` selects topology. Application policies and
    capability code do not branch on deployment mode.
-8. Situated Continuity remains a v0.6 plane above these primitives. Its
-   temporal, sensing, memory, and ecology semantics must not be prematurely
-   folded into `Event` or the v0.2 delivery machinery.
+8. Situated Continuity remains a plane above these primitives. Its v0.4
+   foundation reuses canonical events without redefining the envelope; sensing
+   and ecology semantics remain outside the v0.2 delivery machinery.
 
 ## Consequences and tradeoffs
 

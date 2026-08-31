@@ -81,6 +81,33 @@ and their evidence remain the source of truth. A same-process write failure
 also rebuilds speculative state through the last durable checkpoint before
 retry.
 
+## Situated continuity
+
+Memory reconstruction does not prove that a mutable world remained unchanged
+while the process was inactive. The v0.4
+[Situated Continuity](SITUATED_CONTINUITY.md) foundation therefore treats every
+wake as an epistemic reconstruction:
+
+```text
+canonical replay → freshness decay → awareness gaps → budgeted refresh
+                 → bitemporal reconciliation → orientation report
+```
+
+`AwakeEpoch` records the sleep interval, canonical cursors, and orientation
+status. Provider-neutral `SourceState` values expose source cursor, hazard,
+confidence, goal relevance, decision sensitivity, and observation cost.
+`WakeReconciler` is a pure planner over those inputs; `FakeSource` is the only
+v0.4 observation adapter. The orientation barrier is shadow-only and cannot
+reach models, authority, capabilities, or effects.
+
+Delayed observations retain the existing event-envelope contract: the event
+timestamp is when Noema observed the report, while `payload.occurred_at` is the
+source-reported world time. Memory maps them to assertion knowledge time and
+valid time. Source states, wake epochs, observations, assertions, and reports
+are canonical events; freshness, coverage, plans, and barrier decisions are
+rebuildable projections. See
+[ADR 0006](adr/0006-situated-continuity-foundation.md).
+
 ## Portable durability
 
 Noema has one semantic runtime with two deployment profiles:
@@ -219,6 +246,9 @@ Coordination occurs through events, not direct hidden calls.
 | Epistemic memory | `SemanticAssertion` / `EvidenceLink` / `MemoryProjection` |
 | Decision-relevant retrieval | `MemoryRetriever` / disposable index adapters |
 | Durable memory projection | `MemoryProjector` |
+| Wake-time temporal semantics | `TemporalService` / `AwakeEpoch` |
+| Selective source refresh | `SourceState` / `WakeReconciler` / `RefreshRequest` |
+| Situated orientation | `AwarenessCoverage` / `OrientationReport` / `OrientationBarrier` |
 | Endogenous cognition (planned) | durable `Inquiry` / `IntrinsicActivity` contracts |
 
 ## Non-goals of the core
@@ -240,5 +270,6 @@ See [Architecture principles](ARCHITECTURE_PRINCIPLES.md),
 [ADR 0002](adr/0002-autonomic-fabric.md),
 [ADR 0003](adr/0003-endogenous-drive-ecology.md),
 [ADR 0004](adr/0004-durable-consumer-checkpoints.md),
-[ADR 0005](adr/0005-persistent-cognitive-memory.md), and the
+[ADR 0005](adr/0005-persistent-cognitive-memory.md),
+[ADR 0006](adr/0006-situated-continuity-foundation.md), and the
 [engineering roadmap](ROADMAP.md).

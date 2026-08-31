@@ -195,6 +195,37 @@ class ArchitectureFitnessTests(unittest.TestCase):
                 violations.append(f"calls {node.func.attr}")
         self.assertEqual(violations, [])
 
+    def test_continuity_core_and_worker_cannot_reach_the_effect_plane(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        paths = tuple((source_root / "continuity").rglob("*.py")) + (
+            source_root / "continuity_worker.py",
+        )
+        forbidden_modules = {"agent", "authority", "capabilities", "models", "reasoning"}
+        forbidden_calls = {"authorize", "deliberate", "dispatch", "execute"}
+        violations: list[str] = []
+        for path in paths:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.ImportFrom)
+                    and node.module
+                    and node.module.split(".")[0] in forbidden_modules
+                    and (
+                        node.level >= 2
+                        or node.level == 1
+                        and path.parent == source_root
+                        or node.level == 0
+                    )
+                ):
+                    violations.append(f"{path.relative_to(source_root)} imports {node.module}")
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in forbidden_calls
+                ):
+                    violations.append(f"{path.relative_to(source_root)} calls {node.func.attr}")
+        self.assertEqual(violations, [])
+
     def test_memory_core_is_a_provider_free_projection_not_an_effect_plane(self) -> None:
         source_root = Path(__file__).parents[1] / "src" / "noema"
         memory_root = source_root / "memory"

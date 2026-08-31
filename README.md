@@ -34,6 +34,14 @@ freshness, and conflict penalties. Lexical and future vector indexes remain
 disposable accelerators rather than memory authority. Its projector reuses
 `ConsumerCheckpoint` to close partial-write crash windows deterministically.
 
+The [Situated Continuity](docs/SITUATED_CONTINUITY.md) foundation makes wake a
+selective epistemic reconstruction rather than a prompt resume. It separates
+wall, monotonic, and source-reported world time; decays source-specific
+freshness; computes decision-relevant awareness gaps; and plans minimum
+sufficient refreshes under an observation budget. A deterministic fake ecology
+updates bitemporal memory and produces orientation reports without connectors,
+models, or effects. Its orientation barrier is shadow-only.
+
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture for bounded inquiry, calibration, consolidation,
 and intrinsic agenda formation. It is deliberately staged behind observational
@@ -82,6 +90,8 @@ environment / agents / timers
 - **Durable:** SQLite can reconstruct the exact situation and causal trace after restart.
 - **Epistemic:** memory distinguishes events, evidence, beliefs, simulation,
   world-valid time, and knowledge time without overwriting contradictions.
+- **Situated:** wake epochs assess mutable source freshness and reconstruct
+  sufficient decision context before reasoning or consequential action.
 - **Portable:** the same agent application runs embedded with SQLite or distributed with PostgreSQL, a transactional outbox/inbox, and NATS JetStream.
 - **Provider-agnostic:** `Reasoner` can be deterministic, LLM-backed, search-based, learned, symbolic, or an ensemble; model SDKs remain adapters.
 - **Recoverable:** durable action lifecycle events restore completed idempotency keys and unfinished authorized work after a crash.
@@ -310,6 +320,25 @@ opportunities, stale delegation, and byte-equivalent replay:
 PYTHONPATH=src python -m unittest tests.test_autonomic tests.test_shadow tests.test_memory tests.test_memory_worker -v
 ```
 
+### Situated Continuity Foundation
+
+`TemporalService`, `AwakeEpoch`, `SourceState`, `FreshnessModel`,
+`AwarenessCoverage`, and `WakeReconciler` form an effect-free wake planner.
+`SituatedContinuityWorker` rebuilds source state from canonical events, decays
+freshness, requests only decision-relevant observations from deterministic
+`FakeSource` adapters, updates semantic memory, and emits an
+`OrientationReport` plus a generic durable checkpoint.
+
+Delayed observations keep `Event.timestamp` as observation time and carry
+source world time in `payload.occurred_at`; semantic assertions preserve the
+distinction through `recorded_at` and `valid_from`. `OrientationBarrier`
+evaluates action-specific freshness/confidence prerequisites in shadow mode and
+cannot authorize or execute an effect.
+
+```bash
+PYTHONPATH=src python -m unittest tests.test_continuity tests.test_continuity_worker -v
+```
+
 ### `NoemaSystem`
 
 Runs multiple autonomous agents, detectors, scheduling, persistence, and a shared situation model.
@@ -359,6 +388,8 @@ The test suite covers:
 - deadline signal detection;
 - bitemporal belief queries, contradiction preservation, and memory retrieval;
 - memory-projector crash recovery without duplicate logical memories;
+- selective wake reconciliation, delayed observations, unavailable sources,
+  and shadow orientation prerequisites;
 - multi-step autonomous incident recovery.
 
 The CI acceptance suite also runs the incident application against real
@@ -366,10 +397,10 @@ PostgreSQL and NATS containers.
 
 ## Release sequence
 
-v0.3 is the Persistent Cognitive Agent milestone. The roadmap next layers
-situated continuity, agent society, endogenous agenda formation, HabitForge,
-and SkillForge above the durable event, governance, autonomic, and epistemic
-memory substrates.
+v0.4 is the Situated Continuity Foundation milestone. The roadmap next layers
+agent society, endogenous agenda formation, HabitForge, SkillForge, and real
+perception adapters above the durable event, governance, autonomic, memory, and
+orientation substrates.
 
 See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](docs/adr/0001-portable-durable-agent.md), [autonomy](docs/AUTONOMY.md),
@@ -378,4 +409,5 @@ See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITE
 [Autonomic Fabric](docs/AUTONOMIC_FABRIC.md) and its
 [architecture decision](docs/adr/0002-autonomic-fabric.md), and
 [Persistent Cognitive Memory](docs/PERSISTENT_COGNITIVE_MEMORY.md) with
-[ADR 0005](docs/adr/0005-persistent-cognitive-memory.md).
+[ADR 0005](docs/adr/0005-persistent-cognitive-memory.md), and
+[ADR 0006](docs/adr/0006-situated-continuity-foundation.md).

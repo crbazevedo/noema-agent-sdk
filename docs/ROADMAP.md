@@ -15,12 +15,13 @@ not a monolithic rules release:
   epochs, deterministic predicate/temporal/scoring evaluation, firing
   telemetry/replay, hard and graded inhibition, shadow-only cells, salience
   resolution, and a continuous observational worker;
-- v0.4 adds protocol-neutral coordination cells over delegations and leases;
-- v0.5 adds candidate mining, counterfactual replay, fitness, meta-rule
+- v0.4 links optional evaluation epochs to durable awake epochs and adds
+  deterministic freshness/orientation projections without active wake control;
+- v0.5 adds protocol-neutral coordination cells over delegations and leases;
+- v0.6 adds candidate mining, counterfactual replay, fitness, meta-rule
   proposals, and governed lifecycle transitions;
-- v0.6 adds durable timer workers, richer opportunity patterns,
-  sensing-request signals, evaluation/awake-epoch linkage, active wake control,
-  and salience-based continuity.
+- later work adds durable timer workers, richer opportunity patterns,
+  sensing-request signals, active wake control, and salience-based continuity.
 
 Rules emit signals by default. Learned policies never execute arbitrary code or
 bypass the existing policy/capability boundary. Automatic reflex canaries wait
@@ -35,12 +36,13 @@ new effect path:
 
 - v0.3 collects real shadow evaluations and hypothetical decisions; no
   HabitForge, SkillForge, or intrinsic scheduler is implemented;
-- v0.4 introduces first-class inquiry and peer-calibration event contracts;
-- v0.5 introduces budgeted value-of-cognition experiments and a shadow
+- v0.4 adds no endogenous scheduler; wake orientation remains effect-free;
+- v0.5 introduces first-class inquiry and peer-calibration event contracts;
+- v0.6 introduces budgeted value-of-cognition experiments and a shadow
   `IntrinsicAgenda`, then evaluates HabitForge candidates from the accumulated
   corpus;
-- v0.6 links SLEEP/DREAM/AWAKE epochs, cognitive slack, foreground preemption,
-  and situated continuity;
+- later work links SLEEP/DREAM/AWAKE scheduling, cognitive slack, and foreground
+  preemption to the implemented awake-epoch substrate;
 - SkillForge remains later work requiring independent sandbox, supply-chain,
   capability-registration, and authority governance.
 
@@ -51,12 +53,12 @@ questions and candidates more readily than actions.
 With shadow reliability hardened, the dependency order is:
 
 ```text
-✓ persistent memory → situated continuity → agent ecology → endogenous agenda
+✓ persistent memory → ✓ situated continuity foundation → agent ecology → endogenous agenda
   → HabitForge → SkillForge
 ```
 
-Autonomic feature expansion remains paused. The persistent-memory substrate is
-implemented; situated continuity is the next dependency.
+Autonomic feature expansion remains paused. Persistent memory and the situated
+continuity foundation are implemented; agent ecology is the next dependency.
 
 ## v0.2 — Portable Durable Agent
 
@@ -105,7 +107,33 @@ and cognitive state without replaying its full transcript into a model; late
 knowledge remains bitemporally queryable, contradictions stay visible, indexes
 are disposable, and partial projection writes replay without duplicates.
 
-## v0.4 — Agent Society
+## v0.4 — Situated Continuity Foundation
+
+Implemented:
+
+- explicit wall, monotonic, world/occurrence, and knowledge-time distinctions;
+- durable `AwakeEpoch` records with canonical cursors and optional evaluation
+  epoch identity;
+- provider-neutral source state, hazard-based freshness, awareness coverage,
+  refresh requests, and observation budgets;
+- a pure selective `WakeReconciler` and shadow-only orientation barrier;
+- deterministic fake-source ecology and effect-free wake worker;
+- bitemporal delayed-observation mapping without changing `Event.timestamp`;
+- canonical orientation reports, generic consumer checkpoints, and orientation
+  efficiency/quality metrics;
+- structural isolation from model, authority, capability, reasoning, and effect
+  paths.
+
+Acceptance: after a simulated 65-hour absence, Noema refreshes only four
+decision-relevant changed domains, updates bitemporal memory, identifies the
+highest-value issue, remains explicit when a critical source is unavailable,
+and performs no consequential effect. A no-change wake stays silent, and four
+relevant sources out of one hundred produce four refresh requests.
+
+See [`SITUATED_CONTINUITY.md`](SITUATED_CONTINUITY.md) and
+[ADR 0006](adr/0006-situated-continuity-foundation.md).
+
+## v0.5 — Agent Society
 
 - coordination cells for delegation, lease, and presence signals;
 - MCP capability adapter and A2A agent adapter;
@@ -119,7 +147,7 @@ are disposable, and partial projection writes replay without duplicates.
 Acceptance: a Noema agent delegates to a non-Noema A2A agent and consumes an
 MCP server without exposing Noema's internal memory or runtime protocol.
 
-## v0.5 — Reflective Autonomous System
+## v0.6 — Reflective Autonomous System
 
 - governed HabitForge candidate mining from corrections and repeated trajectories;
 - rule fitness, collision analysis, meta-rule proposals, and lifecycle gates;
@@ -134,23 +162,21 @@ MCP server without exposing Noema's internal memory or runtime protocol.
 Acceptance: learned control cannot execute before deterministic shadow
 evaluation, and identical captured inputs reproduce the same semantic trace.
 
-## v0.6 — Situated Continuity
+## Later — Situated Presence and Adaptive Perception
 
 - durable timer workers, advanced opportunity patterns, and active
   salience-driven wake control;
 - sensing-request signals governed by perception policy;
-- temporal semantics, source cursors, freshness, and awake epochs;
-- wake reconciliation and an orientation barrier;
 - substrate/sensor contracts and adaptive perception;
 - provenance-bearing situation capsules and artifact retention;
 - user, workflow, and agent ecology models;
 - durable delegations, work leases, and opportunity windows;
-- macOS reference sidecar and simulated sleep/wake flagship demo;
+- macOS reference sidecar and real-environment sleep/wake acceptances;
 - governed SLEEP/DREAM/AWAKE linkage with foreground preemption and cognitive
   slack; dream outputs remain observational or proposals by default.
 
-See [`SITUATED_CONTINUITY.md`](SITUATED_CONTINUITY.md) for its invariants and
-dependency sequence.
+These capabilities extend the implemented v0.4 continuity substrate. They may
+not introduce connector-owned temporal, cursor, freshness, or memory truth.
 
 ## Ongoing production ratchet
 

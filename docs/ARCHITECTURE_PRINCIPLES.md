@@ -17,6 +17,9 @@ principle they change.
 | Events, evidence, and beliefs differ | An occurrence, its bearing on a proposition, and current belief state use separate contracts. |
 | Beliefs are append-only projections | Assertion changes create versions and transition events; no belief mutates in place. |
 | Memory is bitemporal | World-valid time and recorded knowledge time remain independently queryable. |
+| Wake is reconstruction | Restarting or resuming cognition never implies mutable external beliefs remain trustworthy. |
+| Clocks are distinct | Durable wall time, local monotonic duration, and source-reported world time cannot substitute for one another. |
+| Orientation precedes consequence | Action prerequisites expose minimum freshness and confidence before the effect path. |
 | Epistemic provenance is durable | Observed, inferred, reported, assumed, and simulated claims remain explicitly typed through replay. |
 | Evidence references fail closed | One resolver admits only existing canonical events, assertions, or typed simulation artifacts. |
 | Evidence has one semantic graph | Assertion source anchors establish provenance; only `EvidenceLink` describes how evidence bears on a claim. |
@@ -29,7 +32,7 @@ principle they change.
 | Failure is data | Failed decisions, deliveries, retries, actions, and compensation enter durable state. |
 | External protocols stay at boundaries | NATS, MCP, A2A, provider APIs, and cloud services do not become domain models. |
 | Research uses the production path | Replay fixtures and traces wrap the same runtime interfaces used in deployment. |
-| Sensing is minimal and sufficient | Future situated-continuity adapters escalate sensing by value, privacy, and cost. |
+| Sensing is minimal and sufficient | Refresh planning is decision-relevant and budgeted; future adapters escalate sensing by value, privacy, and cost. |
 | Competence compiles downward by proof | Repeated deliberation may forge a candidate micro-policy, but only evidence and lifecycle gates can advance it. |
 | Rules are signal-first | Autonomic rules emit typed signals by default and can only propose, never execute, an external effect. |
 | Learned policy is data | Rule versions use sanctioned typed encodings; arbitrary generated code and in-place mutation are forbidden. |
