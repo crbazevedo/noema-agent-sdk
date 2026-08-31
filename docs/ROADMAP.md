@@ -17,7 +17,8 @@ not a monolithic rules release:
   resolution, and a continuous observational worker;
 - v0.4 links optional evaluation epochs to durable awake epochs and adds
   deterministic freshness/orientation projections without active wake control;
-- v0.5 adds protocol-neutral coordination cells over delegations and leases;
+- v0.5 exposes protocol-neutral work, lease, and ecology events to observational
+  cells while keeping coordination in the work control plane;
 - v0.6 adds candidate mining, counterfactual replay, fitness, meta-rule
   proposals, and governed lifecycle transitions;
 - later work adds durable timer workers, richer opportunity patterns,
@@ -37,8 +38,9 @@ new effect path:
 - v0.3 collects real shadow evaluations and hypothetical decisions; no
   HabitForge, SkillForge, or intrinsic scheduler is implemented;
 - v0.4 adds no endogenous scheduler; wake orientation remains effect-free;
-- v0.5 introduces first-class inquiry and peer-calibration event contracts;
-- v0.6 introduces budgeted value-of-cognition experiments and a shadow
+- v0.5 adds no endogenous scheduler or intrinsic-work generator;
+- v0.6 introduces first-class inquiry and peer-calibration event contracts,
+  budgeted value-of-cognition experiments, and a shadow
   `IntrinsicAgenda`, then evaluates HabitForge candidates from the accumulated
   corpus;
 - later work links SLEEP/DREAM/AWAKE scheduling, cognitive slack, and foreground
@@ -53,12 +55,13 @@ questions and candidates more readily than actions.
 With shadow reliability hardened, the dependency order is:
 
 ```text
-✓ persistent memory → ✓ situated continuity foundation → agent ecology → endogenous agenda
-  → HabitForge → SkillForge
+✓ persistent memory → ✓ situated continuity → ✓ durable work coordination
+  → endogenous agenda → HabitForge → SkillForge
 ```
 
-Autonomic feature expansion remains paused. Persistent memory and the situated
-continuity foundation are implemented; agent ecology is the next dependency.
+Autonomic feature expansion remains paused. Persistent memory, situated
+continuity, and the deterministic durable-work slice are implemented;
+endogenous agenda formation is the next dependency.
 
 ## v0.2 — Portable Durable Agent
 
@@ -135,19 +138,32 @@ relevant sources out of one hundred produce four refresh requests.
 See [`SITUATED_CONTINUITY.md`](SITUATED_CONTINUITY.md) and
 [ADR 0006](adr/0006-situated-continuity-foundation.md).
 
-## v0.5 — Agent Society
+## v0.5 — Durable Work Coordination
 
-- coordination cells for delegation, lease, and presence signals;
-- MCP capability adapter and A2A agent adapter;
-- capability manifests and discovery;
-- typed task offers, bids, awards, progress, result, failure, cancellation;
-- domain-specific trust, authority, rehabilitation, and exploration;
-- durable multi-agent cancellation and contracting;
-- first-class `Inquiry`, `CalibrationRequest`, and `CalibrationResponse` event
-  contracts with evidence-preserving disagreement.
+Implemented:
 
-Acceptance: a Noema agent delegates to a non-Noema A2A agent and consumes an
-MCP server without exposing Noema's internal memory or runtime protocol.
+- distinct durable `WorkOrder`, proposed plan, accepted `WorkGraph`,
+  `WorkNode`, and later `ActionIntent` boundaries;
+- provider-neutral `Planner`, deterministic `FakePlanner`, causal/version-pinned
+  `PlanProposal`, and fail-closed `PlanValidator`;
+- provider-neutral presence and capability manifests plus seeded/evidence-ready
+  competence estimates, kept separate from authority;
+- derived dependency frontiers and deterministic feasibility matching;
+- ordinary independent verification work;
+- fenced lease grant, completion, expiry, stale-token rejection, recovery, and
+  reassignment;
+- source-level orientation prerequisites and causal plan invalidation;
+- canonical replay of the complete implemented work lifecycle;
+- structural isolation from models, effects, external connectors, endogenous
+  scheduling, and generalized workflow languages.
+
+Acceptance: the deterministic release graph advances through dependency waves,
+matches feasible workers, recovers a crashed lease, uses an independent
+verifier, blocks release on stale deployment knowledge, and invalidates after a
+causal-state change without invoking a model or effect.
+
+See [`DURABLE_WORK_COORDINATION.md`](DURABLE_WORK_COORDINATION.md) and
+[ADR 0007](adr/0007-durable-work-coordination.md).
 
 ## v0.6 — Reflective Autonomous System
 
@@ -172,7 +188,8 @@ evaluation, and identical captured inputs reproduce the same semantic trace.
 - substrate/sensor contracts and adaptive perception;
 - provenance-bearing situation capsules and artifact retention;
 - user, workflow, and agent ecology models;
-- durable delegations, work leases, and opportunity windows;
+- richer delegation protocols, lease renewal/cancellation, and opportunity
+  windows;
 - macOS reference sidecar and real-environment sleep/wake acceptances;
 - governed SLEEP/DREAM/AWAKE linkage with foreground preemption and cognitive
   slack; dream outputs remain observational or proposals by default.

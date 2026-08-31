@@ -20,6 +20,11 @@ principle they change.
 | Wake is reconstruction | Restarting or resuming cognition never implies mutable external beliefs remain trustworthy. |
 | Clocks are distinct | Durable wall time, local monotonic duration, and source-reported world time cannot substitute for one another. |
 | Orientation precedes consequence | Action prerequisites expose minimum freshness and confidence before the effect path. |
+| Work identity is layered | `Goal`, `WorkOrder`, `PlanProposal`, `WorkGraph`, `WorkNode`, and `ActionIntent` cannot substitute for one another. |
+| Planners propose structure | A planner cannot admit a graph, select a worker, grant a lease, authorize, or execute. |
+| Graphs own dependency progress | Ready frontiers derive from accepted dependencies, canonical completions, leases, orientation, and invalidation. |
+| Capability, competence, and authority differ | Declarations establish feasibility, evidence estimates quality, and policy alone grants authority. |
+| Work ownership is fenced | Every reassignment increments a node fencing token; stale workers cannot complete newer attempts. |
 | Epistemic provenance is durable | Observed, inferred, reported, assumed, and simulated claims remain explicitly typed through replay. |
 | Evidence references fail closed | One resolver admits only existing canonical events, assertions, or typed simulation artifacts. |
 | Evidence has one semantic graph | Assertion source anchors establish provenance; only `EvidenceLink` describes how evidence bears on a claim. |

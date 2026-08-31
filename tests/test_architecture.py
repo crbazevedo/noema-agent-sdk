@@ -289,3 +289,80 @@ class ArchitectureFitnessTests(unittest.TestCase):
                                 f"{path.relative_to(source_root)} imports {alias.name}"
                             )
         self.assertEqual(violations, [])
+
+    def test_work_control_plane_cannot_plan_with_agents_or_execute_effects(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        work_root = source_root / "work"
+        forbidden_modules = {
+            "adapters",
+            "agent",
+            "capabilities",
+            "delivery",
+            "models",
+            "reasoning",
+            "scheduler",
+            "system",
+        }
+        forbidden_calls = {
+            "authorize",
+            "deliberate",
+            "dispatch",
+            "execute",
+            "invoke",
+        }
+        violations: list[str] = []
+        for path in work_root.rglob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(path))
+            for deferred_name in (
+                "LLMPlanSynthesizer",
+                "RDDLPlanner",
+                "MDPPlanner",
+                "OversightAllocator",
+                "HabitForge",
+                "SkillForge",
+                "WorkflowDSL",
+            ):
+                if deferred_name in source:
+                    violations.append(
+                        f"{path.relative_to(source_root)} implements deferred {deferred_name}"
+                    )
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    root = node.module.split(".")[0]
+                    if node.level >= 2 and root in forbidden_modules:
+                        violations.append(
+                            f"{path.relative_to(source_root)} imports {node.module}"
+                        )
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        parts = alias.name.split(".")
+                        if (
+                            len(parts) >= 2
+                            and parts[0] == "noema"
+                            and parts[1] in forbidden_modules
+                        ):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports {alias.name}"
+                            )
+                if isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name) and node.func.id in {
+                        "compile",
+                        "eval",
+                        "exec",
+                    }:
+                        violations.append(
+                            f"{path.relative_to(source_root)} calls {node.func.id}"
+                        )
+                    if (
+                        isinstance(node.func, ast.Attribute)
+                        and node.func.attr in forbidden_calls
+                    ):
+                        violations.append(
+                            f"{path.relative_to(source_root)} calls {node.func.attr}"
+                        )
+        planning_source = (work_root / "planning.py").read_text(encoding="utf-8")
+        for forbidden_name in ("AgentPresence", "CompetenceEstimate", "WorkerMatcher"):
+            if forbidden_name in planning_source:
+                violations.append(f"work/planning.py references {forbidden_name}")
+        self.assertEqual(violations, [])

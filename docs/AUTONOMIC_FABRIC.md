@@ -504,8 +504,8 @@ The fabric is a cross-cutting track, not one monolithic release:
   substrate.
 - **v0.4:** link evaluation-epoch identity to deterministic awake epochs and
   situated orientation; keep active wake control disabled.
-- **v0.5:** add coordination cells for delegations, leases, and agent ecology;
-  rules remain protocol-neutral.
+- **v0.5:** observe protocol-neutral durable work, lease, and agent-ecology
+  events; coordination remains owned by the work control plane.
 - **v0.6:** add counterfactual replay, compile-down candidate mining, fitness,
   meta-rule proposals, and governed lifecycle transitions.
 - **later:** add durable timer workers, richer opportunity patterns,

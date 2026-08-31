@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+## 0.5.0 — 2026-08-31
+
+- added immutable `WorkOrder`, `WorkNode`, `WorkDependency`, and validated
+  `WorkGraph` contracts without conflating goals, plans, work, or actions;
+- added the provider-neutral `Planner` protocol, deterministic `FakePlanner`,
+  causal/version-pinned `PlanProposal`, and a fail-closed DAG `PlanValidator`;
+- added durable `AgentPresence`, `CapabilityManifest`, and seeded/evidence-ready
+  `CompetenceEstimate` facts while keeping capability, competence, and
+  authority separate;
+- added derived `ReadyFrontier`, deterministic capability/competence-aware
+  `WorkerMatcher`, and structurally independent verification work;
+- added fenced `WorkLease` grants, mutually exclusive terminal completion or
+  expiry, stale-token rejection, replay recovery, and safe reassignment;
+- integrated Situated Continuity source prerequisites into work readiness and
+  added causal-state plan invalidation without erasing completed artifacts;
+- added canonical `WorkProjection` replay and a coordinator that rebuilds from
+  history before each lifecycle transition rather than owning a second store;
+- demonstrated dependency waves, worker loss, independent verification, stale
+  release knowledge, fresh readiness, and causal invalidation in one
+  deterministic model-free, connector-free, effect-free acceptance scenario;
+- recorded the boundaries, tradeoffs, explicit deferrals, and structural gates
+  in ADR 0007.
+
 ## 0.4.0 — 2026-08-30
 
 - promoted Situated Continuity ahead of agent society in dependency order and

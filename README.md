@@ -43,6 +43,14 @@ canonical cut, inserts delayed observations by valid time, and produces
 orientation reports without connectors, models, or effects. Its orientation
 barrier is shadow-only.
 
+[Durable Work Coordination](docs/DURABLE_WORK_COORDINATION.md) adds the minimum
+v0.5 work control plane. `FakePlanner` proposes dependency structure;
+`PlanValidator` admits a durable graph; `ReadyFrontier` derives legal work;
+`WorkerMatcher` combines availability, declared capability, and seeded
+competence evidence; and fenced leases recover after worker loss. Planning,
+matching, and work ownership remain distinct from `ActionIntent`, authority,
+and capability execution.
+
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture for bounded inquiry, calibration, consolidation,
 and intrinsic agenda formation. It is deliberately staged behind observational
@@ -343,6 +351,21 @@ cannot authorize or execute an effect.
 PYTHONPATH=src python -m unittest tests.test_continuity tests.test_continuity_worker -v
 ```
 
+### Durable Work Coordination
+
+`WorkOrder`, `PlanProposal`, `WorkGraph`, ecology facts, fenced `WorkLease`
+transitions, completions, and invalidations are canonical events.
+`WorkProjection` reconstructs them without a private work database.
+
+The deterministic release acceptance proves dependency waves,
+capability/competence-aware assignment, independent verification, lease-expiry
+recovery, a stale orientation prerequisite, and causal plan invalidation without
+a model, external connector, or effect.
+
+```bash
+PYTHONPATH=src python -m unittest tests.test_work tests.test_work_coordination -v
+```
+
 ### `NoemaSystem`
 
 Runs multiple autonomous agents, detectors, scheduling, persistence, and a shared situation model.
@@ -394,6 +417,8 @@ The test suite covers:
 - memory-projector crash recovery without duplicate logical memories;
 - selective wake reconciliation, delayed observations, unavailable sources,
   and shadow orientation prerequisites;
+- validated work graphs, dependency frontiers, deterministic worker matching,
+  fenced lease recovery, independent verification, and causal invalidation;
 - multi-step autonomous incident recovery.
 
 The CI acceptance suite also runs the incident application against real
@@ -401,10 +426,9 @@ PostgreSQL and NATS containers.
 
 ## Release sequence
 
-v0.4 is the Situated Continuity Foundation milestone. The roadmap next layers
-agent society, endogenous agenda formation, HabitForge, SkillForge, and real
-perception adapters above the durable event, governance, autonomic, memory, and
-orientation substrates.
+v0.5 is the Durable Work Coordination milestone. The roadmap next layers richer
+agent interoperability and endogenous agenda formation above the durable event,
+governance, autonomic, memory, orientation, and work-control substrates.
 
 See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](docs/adr/0001-portable-durable-agent.md), [autonomy](docs/AUTONOMY.md),
@@ -414,4 +438,6 @@ See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITE
 [architecture decision](docs/adr/0002-autonomic-fabric.md), and
 [Persistent Cognitive Memory](docs/PERSISTENT_COGNITIVE_MEMORY.md) with
 [ADR 0005](docs/adr/0005-persistent-cognitive-memory.md), and
-[ADR 0006](docs/adr/0006-situated-continuity-foundation.md).
+[ADR 0006](docs/adr/0006-situated-continuity-foundation.md), and
+[Durable Work Coordination](docs/DURABLE_WORK_COORDINATION.md) with
+[ADR 0007](docs/adr/0007-durable-work-coordination.md).

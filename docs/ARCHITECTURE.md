@@ -112,6 +112,44 @@ coverage, plans, and barrier decisions are rebuildable projections. Runtime
 latency is telemetry, not canonical report identity. See
 [ADR 0006](adr/0006-situated-continuity-foundation.md).
 
+## Durable work coordination
+
+v0.5 adds the minimum durable control plane between goals and effects:
+
+```text
+Goal → WorkOrder → FakePlanner → PlanProposal → PlanValidator → WorkGraph
+                                                      ↓
+                               completions → ReadyFrontier → WorkerMatcher
+                                                      ↓
+                                                 WorkLease
+```
+
+These contracts are deliberately distinct. A goal is not a work order; a work
+order is not a plan; a proposed plan is not an accepted graph; a work node is
+not an `ActionIntent`. The planner receives capability types but no agent
+identity, competence, load, credentials, or authority policy. It proposes
+structure only. `PlanValidator` owns DAG legality and graph admission, while
+dependency waves emerge from canonical completions.
+
+Agent ecology is similarly separated. `CapabilityManifest` records declared
+capability types. `CompetenceEstimate` records seeded or evidence-backed
+quality estimates. `AuthorityLevel` remains a separate governance ceiling and
+is never inferred by `WorkerMatcher`. Independent verification is ordinary
+work whose matcher excludes the worker recorded as completing its target.
+
+`WorkLease` grants carry monotonically increasing fencing tokens. Grant,
+completion, expiration, and plan invalidation are canonical events;
+`WorkProjection` is rebuildable. Completion and expiration share a terminal
+event identity per lease, preventing two terminal outcomes under event-ID
+uniqueness. A declared causal-state change after the proposal cursor invalidates
+the active graph without erasing completed artifacts.
+
+`ReadyFrontier` also evaluates source freshness/confidence prerequisites through
+Situated Continuity coverage. This controls work readiness but does not
+authorize effects: actual effects still require `ActionIntent`, policy, and a
+typed capability. See [Durable Work Coordination](DURABLE_WORK_COORDINATION.md)
+and [ADR 0007](adr/0007-durable-work-coordination.md).
+
 ## Portable durability
 
 Noema has one semantic runtime with two deployment profiles:
@@ -253,6 +291,9 @@ Coordination occurs through events, not direct hidden calls.
 | Wake-time temporal semantics | `TemporalService` / `AwakeEpoch` |
 | Selective source refresh | `SourceState` / `AwarenessDemand` / `WakeReconciler` / `RefreshRequest` |
 | Situated orientation | `AwarenessCoverage` / `OrientationReport` / `OrientationBarrier` |
+| Durable work identity and planning | `WorkOrder` / `PlanProposal` / `WorkGraph` / `PlanValidator` |
+| Work readiness and assignment | `ReadyFrontier` / `WorkerMatcher` / `WorkLease` |
+| Agent ecology | `AgentPresence` / `CapabilityManifest` / `CompetenceEstimate` |
 | Endogenous cognition (planned) | durable `Inquiry` / `IntrinsicActivity` contracts |
 
 ## Non-goals of the core
@@ -275,5 +316,6 @@ See [Architecture principles](ARCHITECTURE_PRINCIPLES.md),
 [ADR 0003](adr/0003-endogenous-drive-ecology.md),
 [ADR 0004](adr/0004-durable-consumer-checkpoints.md),
 [ADR 0005](adr/0005-persistent-cognitive-memory.md),
-[ADR 0006](adr/0006-situated-continuity-foundation.md), and the
+[ADR 0006](adr/0006-situated-continuity-foundation.md),
+[ADR 0007](adr/0007-durable-work-coordination.md), and the
 [engineering roadmap](ROADMAP.md).
