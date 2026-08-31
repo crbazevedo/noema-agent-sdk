@@ -40,6 +40,14 @@ class InboxClaim:
 class TransactionalDeliveryStore(Protocol):
     async def append_with_outbox(self, event: Event, *, topic: str) -> Event: ...
 
+    async def append_with_outbox_if_head(
+        self,
+        event: Event,
+        *,
+        topic: str,
+        expected_head_sequence: int,
+    ) -> Event: ...
+
     async def claim_outbox(
         self,
         worker_id: str,

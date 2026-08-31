@@ -5,7 +5,7 @@ import os
 import unittest
 from uuid import uuid4
 
-from noema import Event, InboxDisposition
+from noema import ConcurrentAppendError, Event, InboxDisposition
 from noema.adapters.stores import PostgresEventStore
 
 POSTGRES_DSN = os.getenv("NOEMA_TEST_POSTGRES_DSN")
@@ -31,6 +31,43 @@ class PostgresConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first.id, event.id)
         self.assertEqual(second.id, event.id)
         self.assertEqual(first.sequence, second.sequence)
+
+    async def test_conditional_append_has_one_cross_connection_head_winner(self) -> None:
+        expected_head = await self.first.latest_sequence()
+        results = await asyncio.gather(
+            self.first.append_if_head(
+                Event(f"test.head.first.{uuid4()}", "postgres-test"),
+                expected_head_sequence=expected_head,
+            ),
+            self.second.append_if_head(
+                Event(f"test.head.second.{uuid4()}", "postgres-test"),
+                expected_head_sequence=expected_head,
+            ),
+            return_exceptions=True,
+        )
+
+        self.assertEqual(sum(isinstance(value, Event) for value in results), 1)
+        self.assertEqual(
+            sum(isinstance(value, ConcurrentAppendError) for value in results),
+            1,
+        )
+
+    async def test_conditional_append_keeps_postgres_outbox_transactional(self) -> None:
+        expected_head = await self.first.latest_sequence()
+        event = Event(f"test.outbox.conditional.{uuid4()}", "postgres-test")
+        stored = await self.first.append_with_outbox_if_head(
+            event,
+            topic="noema.test.conditional",
+            expected_head_sequence=expected_head,
+        )
+        claimed = await self.first.claim_outbox(
+            f"conditional-worker-{uuid4()}",
+            limit=1000,
+            lease_seconds=10,
+        )
+
+        self.assertEqual(stored.id, event.id)
+        self.assertIn(event.id, {record.event.id for record in claimed})
 
     async def test_concurrent_inbox_claim_has_one_lease_winner(self) -> None:
         message_id = f"message-{uuid4()}"

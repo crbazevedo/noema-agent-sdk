@@ -58,14 +58,42 @@ class NoemaKernel:
         self._started = True
 
     async def emit(self, event: Event) -> Event:
-        return await self._commit(event, distribute=True)
+        return await self._commit(
+            event,
+            distribute=True,
+            expected_head_sequence=None,
+        )
+
+    async def emit_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        """Commit only if no other canonical event followed the observed head."""
+
+        return await self._commit(
+            event,
+            distribute=True,
+            expected_head_sequence=expected_head_sequence,
+        )
 
     async def ingest(self, event: Event) -> Event:
         """Commit a broker-delivered event without creating another outbox row."""
 
-        return await self._commit(event, distribute=False)
+        return await self._commit(
+            event,
+            distribute=False,
+            expected_head_sequence=None,
+        )
 
-    async def _commit(self, event: Event, *, distribute: bool) -> Event:
+    async def _commit(
+        self,
+        event: Event,
+        *,
+        distribute: bool,
+        expected_head_sequence: int | None,
+    ) -> Event:
         if not self._started:
             await self.start()
         attributes = {
@@ -79,12 +107,26 @@ class NoemaKernel:
             async with self._emit_lock:
                 if self.distributed and distribute:
                     delivery_store = cast(TransactionalDeliveryStore, self.store)
-                    stored = await delivery_store.append_with_outbox(
-                        event,
-                        topic=event_topic(event, prefix=self.topic_prefix),
-                    )
+                    topic = event_topic(event, prefix=self.topic_prefix)
+                    if expected_head_sequence is None:
+                        stored = await delivery_store.append_with_outbox(
+                            event,
+                            topic=topic,
+                        )
+                    else:
+                        stored = await delivery_store.append_with_outbox_if_head(
+                            event,
+                            topic=topic,
+                            expected_head_sequence=expected_head_sequence,
+                        )
                 else:
-                    stored = await self.store.append(event)
+                    if expected_head_sequence is None:
+                        stored = await self.store.append(event)
+                    else:
+                        stored = await self.store.append_if_head(
+                            event,
+                            expected_head_sequence=expected_head_sequence,
+                        )
                 if stored.sequence is not None and stored.sequence <= self.situation.version:
                     if distribute:
                         # Idempotent local re-emission of canonical history.

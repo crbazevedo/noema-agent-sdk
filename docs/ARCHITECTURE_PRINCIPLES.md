@@ -8,6 +8,7 @@ principle they change.
 | Core is provider-neutral | Model, broker, database, and cloud SDK imports stay in adapters. |
 | Local is first-class | Embedded operation requires no network or external service. |
 | Events are canonical | Situation state, recovery state, and transport messages derive from the event log. |
+| Causal admission is atomic | State validated through head `H` becomes canonical only through an expected-head conditional append at `H`. |
 | Consumer progress is canonical | Durable workers checkpoint only after required outputs; restart replays later triggers idempotently. |
 | The broker is transport | Broker retention is never treated as system history. |
 | Effects are explicit | Cognition proposes `ActionIntent`; policy authorizes a typed capability. |

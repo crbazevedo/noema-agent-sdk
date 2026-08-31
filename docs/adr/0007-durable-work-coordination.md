@@ -45,6 +45,10 @@ external connector, optimizer, learned score, or second state store.
 10. An `AVAILABLE` observation beyond its validity horizon cannot receive work.
 11. A completion reported after lease expiry cannot become canonical by
     claiming an earlier worker finish time.
+12. If any event arrives after graph validation but before append, conditional
+    admission fails at the old head. Reload rejects a newly stale proposal or
+    revalidates an unaffected proposal at the new explicit head; every resulting
+    history remains replayable.
 
 ## Decision
 
@@ -107,6 +111,10 @@ external connector, optimizer, learned score, or second state store.
 14. Reuse Situated Continuity source prerequisites for work readiness. This
     control-plane gate does not replace the effect plane's final epistemic and
     authority checks.
+15. Add generic atomic expected-head append contracts to the event store and
+    transactional outbox store. `WorkGraph` admission uses this primitive after
+    validation. A changed head reloads and revalidates; the graph is never
+    appended from a stale validation cut.
 
 ## Consequences and tradeoffs
 
@@ -120,9 +128,13 @@ external connector, optimizer, learned score, or second state store.
 - Rebuilding before commands favors clarity and recovery correctness over
   throughput. Disposable snapshots may accelerate this only if they preserve a
   single canonical cut.
-- The slice assumes serialized work-control commands. Stable lease claim IDs and
-  shared terminal IDs close the demonstrated claim/terminal races, but a
-  distributed multi-writer compare-and-append transaction remains deferred.
+- Expected-head append is a generic durability primitive, while work-control
+  policy remains serialized and deterministic. Stable lease claim IDs and
+  shared terminal IDs close the demonstrated claim/terminal races; broader
+  entity-scoped multi-writer transitions remain deferred.
+- PostgreSQL uses a brief exclusive event-table lock for conditional admission.
+  This favors unambiguous cross-connection atomicity over conditional-write
+  throughput; ordinary appends remain unchanged.
 - Presence is an expiring lease-feasibility fact, not a liveness guarantee.
 - Evidence-based competence is typed but cannot enter the v0.5 canonical work
   projection. Empirical calibration and evidence resolution remain deferred.
@@ -148,6 +160,8 @@ external connector, optimizer, learned score, or second state store.
   reassignment.
 - **Store ready/wave state separately:** creates a second source of truth that
   can diverge from graph dependencies and completions.
+- **Check the head and append separately:** leaves a validate-to-append race that
+  can create canonical history which deterministic replay rejects.
 - **Add an optimizer now:** there is no measured objective or demonstrated
   baseline gap; deterministic feasibility is sufficient for this milestone.
 - **Use model-backed planning first:** prevents falsifying whether the durable
@@ -168,6 +182,11 @@ external connector, optimizer, learned score, or second state store.
   non-operational in v0.5;
 - completion legality uses coordinator acceptance time, so a claimed earlier
   worker finish cannot bypass lease expiry;
+- in-memory, SQLite, and PostgreSQL stores expose the same atomic expected-head
+  contract, including transactional outbox behavior;
+- a replan event injected after validation leaves no graph acceptance, while an
+  unrelated event forces revalidation at the new head and produces replayable
+  history;
 - the flagship produces `A,B → C → D,E → F`, with independent verification;
 - an expired lease rejects its stale token and reassigns with the next token
   after coordinator reconstruction;

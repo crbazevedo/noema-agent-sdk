@@ -187,7 +187,13 @@ from .situation import (
     SituationModel,
     SituationSnapshot,
 )
-from .store import EventStore, InMemoryEventStore, SQLiteEventStore, copy_events
+from .store import (
+    ConcurrentAppendError,
+    EventStore,
+    InMemoryEventStore,
+    SQLiteEventStore,
+    copy_events,
+)
 from .system import NoemaSystem, RuntimeService
 from .telemetry import InMemoryTelemetry, JsonlTelemetry, Metric, TelemetrySink
 from .tracing import NullTracer, OpenTelemetryTracer, Span, Tracer
@@ -268,6 +274,7 @@ __all__ = [
     "CognitiveMode",
     "Commitment",
     "CommitmentStatus",
+    "ConcurrentAppendError",
     "CompetenceBasis",
     "CompetenceEstimate",
     "COMPETENCE_ESTIMATE_RECORDED_EVENT",

@@ -11,6 +11,7 @@ from typing import cast
 from ..continuity import AwarenessCoverage, OrientationBarrier
 from ..events import Event
 from ..kernel import NoemaKernel
+from ..store import ConcurrentAppendError
 from ..types import parse_datetime, utc_now
 from .models import (
     AGENT_PRESENCE_RECORDED_EVENT,
@@ -797,26 +798,31 @@ class DurableWorkCoordinator:
                 causation_id=f"work-order-recorded:{order.work_order_id}",
             )
         )
-        await self._reload()
-        current = self.projection.latest_graph(work_order_id)
-        acceptance_version = current.version if current is not None else 0
-        acceptance_cursor = self.projection.event_cursor
-        graph = self.validator.validate(
-            proposal,
-            order,
-            causal_event_cursor=causal_cursor,
-            acceptance_event_cursor=acceptance_cursor,
-            current_graph_version=acceptance_version,
-            available_capability_types=self.projection.available_capability_types(
-                through_sequence=causal_cursor
-            ),
-            intervening_events=self.projection.events_after(causal_cursor),
-            accepted_at=self.clock(),
-        )
-        graph_event = await self._emit(
-            graph.to_event(source=self.source, causation_id=proposal_event.id)
-        )
-        return WorkGraph.from_event(graph_event)
+        while True:
+            await self._reload()
+            current = self.projection.latest_graph(work_order_id)
+            acceptance_version = current.version if current is not None else 0
+            acceptance_cursor = self.projection.event_cursor
+            graph = self.validator.validate(
+                proposal,
+                order,
+                causal_event_cursor=causal_cursor,
+                acceptance_event_cursor=acceptance_cursor,
+                current_graph_version=acceptance_version,
+                available_capability_types=self.projection.available_capability_types(
+                    through_sequence=causal_cursor
+                ),
+                intervening_events=self.projection.events_after(causal_cursor),
+                accepted_at=self.clock(),
+            )
+            try:
+                graph_event = await self._append_graph_if_head(
+                    graph.to_event(source=self.source, causation_id=proposal_event.id),
+                    expected_head_sequence=acceptance_cursor,
+                )
+            except ConcurrentAppendError:
+                continue
+            return WorkGraph.from_event(graph_event)
 
     async def frontier(
         self,
@@ -956,6 +962,21 @@ class DurableWorkCoordinator:
 
     async def _emit(self, event: Event) -> Event:
         stored = await self.kernel.emit(event)
+        if replace(stored, sequence=None) != event:
+            raise ValueError(f"canonical event id conflict: {event.id}")
+        self.projection.apply(stored)
+        return stored
+
+    async def _append_graph_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        stored = await self.kernel.emit_if_head(
+            event,
+            expected_head_sequence=expected_head_sequence,
+        )
         if replace(stored, sequence=None) != event:
             raise ValueError(f"canonical event id conflict: {event.id}")
         self.projection.apply(stored)

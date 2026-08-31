@@ -80,6 +80,13 @@ Events are persisted before publication. The local bus provides
 at-least-once-compatible semantics; consumers use event IDs and action
 idempotency keys when external effects require deduplication.
 
+Admissions that depend on a previously observed causal head use
+`append_if_head(event, expected_head_sequence=...)`. The head comparison and
+append are one atomic store operation. A new event fails with
+`ConcurrentAppendError` if another event won first; retrying an event ID that is
+already canonical remains idempotent. Distributed conditional admission keeps
+the event and outbox row in the same transaction.
+
 In distributed mode the PostgreSQL transaction writes the event and outbox row
 together. A leased publisher sends the event through the configured broker; a
 durable inbox claims delivery before the kernel ingests it. Lease fencing

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
 
-from noema import Event, InMemoryEventStore, SQLiteEventStore
+from noema import ConcurrentAppendError, Event, InMemoryEventStore, SQLiteEventStore
 
 
 class EventStoreTests(unittest.IsolatedAsyncioTestCase):
@@ -36,6 +37,62 @@ class EventStoreTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(events[0].correlation_id, "corr-1")
             self.assertEqual(await store.latest_sequence(), 1)
             await store.close()
+
+    async def test_in_memory_conditional_append_has_one_head_winner(self) -> None:
+        store = InMemoryEventStore()
+        results = await asyncio.gather(
+            store.append_if_head(
+                Event("test.first", "test"),
+                expected_head_sequence=0,
+            ),
+            store.append_if_head(
+                Event("test.second", "test"),
+                expected_head_sequence=0,
+            ),
+            return_exceptions=True,
+        )
+
+        self.assertEqual(sum(isinstance(value, Event) for value in results), 1)
+        self.assertEqual(
+            sum(isinstance(value, ConcurrentAppendError) for value in results),
+            1,
+        )
+        self.assertEqual(len(await store.read()), 1)
+
+    async def test_sqlite_conditional_append_is_atomic_across_connections(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "events.sqlite3"
+            first = SQLiteEventStore(path)
+            second = SQLiteEventStore(path)
+            results = await asyncio.gather(
+                first.append_if_head(
+                    Event("test.first", "test"),
+                    expected_head_sequence=0,
+                ),
+                second.append_if_head(
+                    Event("test.second", "test"),
+                    expected_head_sequence=0,
+                ),
+                return_exceptions=True,
+            )
+
+            self.assertEqual(sum(isinstance(value, Event) for value in results), 1)
+            self.assertEqual(
+                sum(isinstance(value, ConcurrentAppendError) for value in results),
+                1,
+            )
+            self.assertEqual(len(await first.read()), 1)
+            await first.close()
+            await second.close()
+
+    async def test_conditional_append_preserves_event_id_idempotency(self) -> None:
+        store = InMemoryEventStore()
+        event = Event("test.once", "test")
+        stored = await store.append_if_head(event, expected_head_sequence=0)
+        repeated = await store.append_if_head(event, expected_head_sequence=0)
+
+        self.assertEqual(repeated, stored)
+        self.assertEqual(len(await store.read()), 1)
 
 
 class ReplayTests(unittest.IsolatedAsyncioTestCase):

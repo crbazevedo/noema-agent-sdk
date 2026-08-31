@@ -142,9 +142,13 @@ The cut is a causal planning snapshot: capability types used for both original
 admission and replay are reconstructed through that exact cursor. Before graph
 admission, the validator inspects the canonical planning window; a declared
 replan event after the cut rejects the proposal as stale rather than accepting
-then invalidating it. A later matching event invalidates an already active
-graph. Completed artifacts remain present, but the frontier becomes empty until
-a later plan version is accepted.
+then invalidating it. Graph admission uses an atomic expected-head append, so an
+event arriving after validation cannot create history that later replay rejects.
+A changed head forces reload and revalidation: an unrelated event may admit the
+same proposal at the new explicit head, while a declared replan event rejects
+it. A later matching event invalidates an already active graph. Completed
+artifacts remain present, but the frontier becomes empty until a later plan
+version is accepted.
 
 Work-node source prerequisites reuse Situated Continuity's
 freshness/confidence requirements. Insufficient coverage keeps the node outside
@@ -169,7 +173,9 @@ Focused hardening regressions additionally prove that a blocking planner cannot
 admit a proposal after a declared causal change, replay uses capability inputs
 from the exact planning cut, expired presence cannot receive a lease, a worker
 cannot backdate completion acceptance, and unresolved evidence-based competence
-cannot affect v0.5 routing.
+cannot affect v0.5 routing. A final admission barrier proves that a causal event
+between validation and append leaves no accepted graph, while an unrelated event
+forces a successful revalidation and replayable conditional append.
 
 ## Explicit deferrals
 

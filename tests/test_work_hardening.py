@@ -90,6 +90,32 @@ class BlockingPlanner:
         )
 
 
+class GraphAppendBarrierCoordinator(DurableWorkCoordinator):
+    def __init__(
+        self,
+        kernel: NoemaKernel,
+        *,
+        planner: FakePlanner,
+        clock: MutableClock,
+    ) -> None:
+        super().__init__(kernel, planner=planner, clock=clock)
+        self.graph_append_started = asyncio.Event()
+        self.release_graph_append = asyncio.Event()
+
+    async def _append_graph_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        self.graph_append_started.set()
+        await self.release_graph_append.wait()
+        return await super()._append_graph_if_head(
+            event,
+            expected_head_sequence=expected_head_sequence,
+        )
+
+
 async def record_capability(
     coordinator: DurableWorkCoordinator,
     *,
@@ -128,6 +154,91 @@ async def record_capability(
 
 
 class DurableWorkHardeningTests(unittest.IsolatedAsyncioTestCase):
+    async def test_replan_event_between_validation_and_append_prevents_graph(
+        self,
+    ) -> None:
+        kernel = NoemaKernel()
+        await kernel.start()
+        clock = MutableClock(NOW)
+        coordinator = GraphAppendBarrierCoordinator(
+            kernel,
+            planner=fake_planner(clock),
+            clock=clock,
+        )
+        order = work_order()
+        await coordinator.record_work_order(order)
+        await coordinator.record_manifest(
+            CapabilityManifest.create(
+                agent_id="agent-alpha",
+                capabilities=("repo-analysis",),
+                recorded_at=NOW,
+            )
+        )
+
+        planning = asyncio.create_task(coordinator.plan(order.work_order_id))
+        await coordinator.graph_append_started.wait()
+        causal_change = await kernel.emit(
+            Event(
+                id="release-constraints-after-validation",
+                type="situation.release_constraints_changed",
+                source="test:world",
+                timestamp=NOW + timedelta(minutes=1),
+            )
+        )
+        coordinator.release_graph_append.set()
+
+        with self.assertRaisesRegex(ValueError, "stale at admission"):
+            await planning
+        history = await kernel.history()
+        self.assertIn(causal_change, history)
+        self.assertFalse(any(event.type == "work.graph_accepted" for event in history))
+        replayed = WorkProjection()
+        replayed.rebuild(history)
+        self.assertEqual(replayed.graphs, ())
+        await kernel.stop()
+
+    async def test_unrelated_event_between_validation_and_append_retries_head(
+        self,
+    ) -> None:
+        kernel = NoemaKernel()
+        await kernel.start()
+        clock = MutableClock(NOW)
+        coordinator = GraphAppendBarrierCoordinator(
+            kernel,
+            planner=fake_planner(clock),
+            clock=clock,
+        )
+        order = work_order()
+        await coordinator.record_work_order(order)
+        await coordinator.record_manifest(
+            CapabilityManifest.create(
+                agent_id="agent-alpha",
+                capabilities=("repo-analysis",),
+                recorded_at=NOW,
+            )
+        )
+
+        planning = asyncio.create_task(coordinator.plan(order.work_order_id))
+        await coordinator.graph_append_started.wait()
+        unrelated = await kernel.emit(
+            Event(
+                id="unrelated-after-validation",
+                type="situation.note_recorded",
+                source="test:world",
+                timestamp=NOW + timedelta(minutes=1),
+            )
+        )
+        coordinator.release_graph_append.set()
+        graph = await planning
+
+        history = await kernel.history()
+        accepted = next(event for event in history if event.type == "work.graph_accepted")
+        self.assertLess(unrelated.sequence or 0, accepted.sequence or 0)
+        replayed = WorkProjection()
+        replayed.rebuild(history)
+        self.assertEqual(replayed.graph(graph.graph_id), graph)
+        await kernel.stop()
+
     async def test_plan_admission_rejects_replan_event_during_planning(self) -> None:
         kernel = NoemaKernel()
         await kernel.start()

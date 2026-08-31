@@ -20,8 +20,27 @@ from .events import Event
 from .types import utc_now
 
 
+class ConcurrentAppendError(RuntimeError):
+    """The canonical event head changed before a conditional append."""
+
+    def __init__(self, *, expected_head_sequence: int, actual_head_sequence: int) -> None:
+        self.expected_head_sequence = expected_head_sequence
+        self.actual_head_sequence = actual_head_sequence
+        super().__init__(
+            "canonical event head changed: "
+            f"expected {expected_head_sequence}, found {actual_head_sequence}"
+        )
+
+
 class EventStore(Protocol):
     async def append(self, event: Event) -> Event: ...
+
+    async def append_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event: ...
 
     async def read(
         self,
@@ -44,13 +63,36 @@ class InMemoryEventStore:
 
     async def append(self, event: Event) -> Event:
         async with self._lock:
+            return self._append_locked(event)
+
+    async def append_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        if expected_head_sequence < 0:
+            raise ValueError("expected event head sequence cannot be negative")
+        async with self._lock:
             existing = self._by_id.get(event.id)
             if existing is not None:
                 return existing
-            stored = event.with_sequence(len(self._events) + 1)
-            self._events.append(stored)
-            self._by_id[event.id] = stored
-            return stored
+            actual_head_sequence = len(self._events)
+            if actual_head_sequence != expected_head_sequence:
+                raise ConcurrentAppendError(
+                    expected_head_sequence=expected_head_sequence,
+                    actual_head_sequence=actual_head_sequence,
+                )
+            return self._append_locked(event)
+
+    def _append_locked(self, event: Event) -> Event:
+        existing = self._by_id.get(event.id)
+        if existing is not None:
+            return existing
+        stored = event.with_sequence(len(self._events) + 1)
+        self._events.append(stored)
+        self._by_id[event.id] = stored
+        return stored
 
     async def read(
         self,
@@ -166,7 +208,24 @@ class SQLiteEventStore:
     async def append(self, event: Event) -> Event:
         self._ensure_open()
         async with self._lock:
-            return await asyncio.to_thread(self._append_sync, event, None)
+            return await asyncio.to_thread(self._append_sync, event, None, None)
+
+    async def append_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        self._ensure_open()
+        if expected_head_sequence < 0:
+            raise ValueError("expected event head sequence cannot be negative")
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._append_sync,
+                event,
+                None,
+                expected_head_sequence,
+            )
 
     async def append_with_outbox(self, event: Event, *, topic: str) -> Event:
         """Atomically append the canonical event and its transport projection."""
@@ -175,45 +234,81 @@ class SQLiteEventStore:
         if not topic:
             raise ValueError("outbox topic must be non-empty")
         async with self._lock:
-            return await asyncio.to_thread(self._append_sync, event, topic)
+            return await asyncio.to_thread(self._append_sync, event, topic, None)
 
-    def _append_sync(self, event: Event, outbox_topic: str | None) -> Event:
+    async def append_with_outbox_if_head(
+        self,
+        event: Event,
+        *,
+        topic: str,
+        expected_head_sequence: int,
+    ) -> Event:
+        """Atomically append event/outbox rows only at the expected event head."""
+
+        self._ensure_open()
+        if not topic:
+            raise ValueError("outbox topic must be non-empty")
+        if expected_head_sequence < 0:
+            raise ValueError("expected event head sequence cannot be negative")
+        async with self._lock:
+            return await asyncio.to_thread(
+                self._append_sync,
+                event,
+                topic,
+                expected_head_sequence,
+            )
+
+    def _append_sync(
+        self,
+        event: Event,
+        outbox_topic: str | None,
+        expected_head_sequence: int | None,
+    ) -> Event:
         self._connection.execute("BEGIN IMMEDIATE")
         try:
-            cursor = self._connection.execute(
-                """
-                INSERT INTO events (
-                    event_id, event_type, source, subject, timestamp,
-                    correlation_id, causation_id, priority,
-                    payload_json, metadata_json, schema_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(event_id) DO NOTHING
-                """,
-                (
-                    event.id,
-                    event.type,
-                    event.source,
-                    event.subject,
-                    event.timestamp.isoformat(),
-                    event.correlation_id,
-                    event.causation_id,
-                    event.priority,
-                    json.dumps(dict(event.payload), separators=(",", ":"), sort_keys=True),
-                    json.dumps(dict(event.metadata), separators=(",", ":"), sort_keys=True),
-                    event.schema_version,
-                ),
-            )
-            if cursor.rowcount:
-                if cursor.lastrowid is None:
-                    raise RuntimeError("SQLite did not return an event sequence")
-                stored = event.with_sequence(int(cursor.lastrowid))
+            existing = self._connection.execute(
+                "SELECT * FROM events WHERE event_id = ?", (event.id,)
+            ).fetchone()
+            if existing is not None:
+                stored = self._row_to_event(existing)
             else:
-                row = self._connection.execute(
-                    "SELECT * FROM events WHERE event_id = ?", (event.id,)
-                ).fetchone()
-                if row is None:
-                    raise RuntimeError("event insert conflicted without an existing event")
-                stored = self._row_to_event(row)
+                if expected_head_sequence is not None:
+                    actual_head_sequence = self._latest_sequence_sync()
+                    if actual_head_sequence != expected_head_sequence:
+                        raise ConcurrentAppendError(
+                            expected_head_sequence=expected_head_sequence,
+                            actual_head_sequence=actual_head_sequence,
+                        )
+                cursor = self._connection.execute(
+                    """
+                    INSERT INTO events (
+                        event_id, event_type, source, subject, timestamp,
+                        correlation_id, causation_id, priority,
+                        payload_json, metadata_json, schema_version
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(event_id) DO NOTHING
+                    """,
+                    (
+                        event.id,
+                        event.type,
+                        event.source,
+                        event.subject,
+                        event.timestamp.isoformat(),
+                        event.correlation_id,
+                        event.causation_id,
+                        event.priority,
+                        json.dumps(
+                            dict(event.payload), separators=(",", ":"), sort_keys=True
+                        ),
+                        json.dumps(
+                            dict(event.metadata), separators=(",", ":"), sort_keys=True
+                        ),
+                        event.schema_version,
+                    ),
+                )
+                if not cursor.rowcount or cursor.lastrowid is None:
+                    raise RuntimeError("conditional SQLite event insert did not win")
+                stored = event.with_sequence(int(cursor.lastrowid))
             if outbox_topic is not None:
                 now = utc_now().isoformat()
                 self._connection.execute(

@@ -13,6 +13,7 @@ from noema import (
     CapabilityResult,
     CapabilitySpec,
     CognitiveController,
+    ConcurrentAppendError,
     Event,
     InboxConsumer,
     InMemoryBroker,
@@ -26,6 +27,26 @@ from noema.testing import EventCollector
 
 
 class DeliveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_distributed_conditional_append_preserves_outbox_atomicity(self) -> None:
+        store = SQLiteEventStore(":memory:")
+        kernel = NoemaKernel(store=store, distributed=True)
+        await kernel.start()
+
+        stored = await kernel.emit_if_head(
+            Event("external.conditional", "test"),
+            expected_head_sequence=0,
+        )
+        self.assertEqual(stored.sequence, 1)
+        self.assertEqual(await store.pending_outbox_count(), 1)
+        await kernel.emit(Event("external.intervening", "test"))
+        with self.assertRaises(ConcurrentAppendError):
+            await kernel.emit_if_head(
+                Event("external.stale", "test"),
+                expected_head_sequence=1,
+            )
+        self.assertEqual(await store.pending_outbox_count(), 2)
+        await kernel.stop()
+
     async def test_local_broker_echo_is_not_republished(self) -> None:
         kernel = NoemaKernel(store=SQLiteEventStore(":memory:"), distributed=True)
         await kernel.start()

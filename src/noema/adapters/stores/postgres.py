@@ -10,6 +10,7 @@ from typing import Any
 
 from ...delivery import InboxClaim, InboxDisposition, OutboxRecord
 from ...events import Event
+from ...store import ConcurrentAppendError
 from ...types import utc_now
 
 
@@ -104,54 +105,133 @@ class PostgresEventStore:
                 await self._connection.execute(statement)
 
     async def append(self, event: Event) -> Event:
-        return await self._append(event, outbox_topic=None)
+        return await self._append(
+            event,
+            outbox_topic=None,
+            expected_head_sequence=None,
+        )
+
+    async def append_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        if expected_head_sequence < 0:
+            raise ValueError("expected event head sequence cannot be negative")
+        return await self._append(
+            event,
+            outbox_topic=None,
+            expected_head_sequence=expected_head_sequence,
+        )
 
     async def append_with_outbox(self, event: Event, *, topic: str) -> Event:
         if not topic:
             raise ValueError("outbox topic must be non-empty")
-        return await self._append(event, outbox_topic=topic)
+        return await self._append(
+            event,
+            outbox_topic=topic,
+            expected_head_sequence=None,
+        )
 
-    async def _append(self, event: Event, *, outbox_topic: str | None) -> Event:
+    async def append_with_outbox_if_head(
+        self,
+        event: Event,
+        *,
+        topic: str,
+        expected_head_sequence: int,
+    ) -> Event:
+        if not topic:
+            raise ValueError("outbox topic must be non-empty")
+        if expected_head_sequence < 0:
+            raise ValueError("expected event head sequence cannot be negative")
+        return await self._append(
+            event,
+            outbox_topic=topic,
+            expected_head_sequence=expected_head_sequence,
+        )
+
+    async def _append(
+        self,
+        event: Event,
+        *,
+        outbox_topic: str | None,
+        expected_head_sequence: int | None,
+    ) -> Event:
         self._ensure_open()
         async with self._lock, self._connection.transaction():
-            cursor = await self._connection.execute(
-                """
-                INSERT INTO noema_events (
-                    event_id, event_type, source, subject, timestamp,
-                    correlation_id, causation_id, priority, payload_json,
-                    metadata_json, schema_version
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s
+            existing = None
+            if expected_head_sequence is not None:
+                # EXCLUSIVE conflicts with the ROW EXCLUSIVE lock taken by every
+                # INSERT, so the head check and insert are atomic across writers.
+                await self._connection.execute(
+                    "LOCK TABLE noema_events IN EXCLUSIVE MODE"
                 )
-                ON CONFLICT(event_id) DO NOTHING
-                RETURNING sequence
-                """,
-                (
-                    event.id,
-                    event.type,
-                    event.source,
-                    event.subject,
-                    event.timestamp,
-                    event.correlation_id,
-                    event.causation_id,
-                    event.priority,
-                    json.dumps(dict(event.payload), separators=(",", ":"), sort_keys=True),
-                    json.dumps(dict(event.metadata), separators=(",", ":"), sort_keys=True),
-                    event.schema_version,
-                ),
-            )
-            inserted = await cursor.fetchone()
-            if inserted is None:
                 cursor = await self._connection.execute(
                     "SELECT * FROM noema_events WHERE event_id = %s",
                     (event.id,),
                 )
-                row = await cursor.fetchone()
-                if row is None:
-                    raise RuntimeError("event insert conflicted without an existing event")
-                stored = self._row_to_event(row)
+                existing = await cursor.fetchone()
+                if existing is None:
+                    cursor = await self._connection.execute(
+                        "SELECT COALESCE(MAX(sequence), 0) AS latest FROM noema_events"
+                    )
+                    head = await cursor.fetchone()
+                    actual_head_sequence = int(head["latest"])
+                    if actual_head_sequence != expected_head_sequence:
+                        raise ConcurrentAppendError(
+                            expected_head_sequence=expected_head_sequence,
+                            actual_head_sequence=actual_head_sequence,
+                        )
+            if existing is not None:
+                stored = self._row_to_event(existing)
             else:
-                stored = event.with_sequence(int(inserted["sequence"]))
+                cursor = await self._connection.execute(
+                    """
+                    INSERT INTO noema_events (
+                        event_id, event_type, source, subject, timestamp,
+                        correlation_id, causation_id, priority, payload_json,
+                        metadata_json, schema_version
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s
+                    )
+                    ON CONFLICT(event_id) DO NOTHING
+                    RETURNING sequence
+                    """,
+                    (
+                        event.id,
+                        event.type,
+                        event.source,
+                        event.subject,
+                        event.timestamp,
+                        event.correlation_id,
+                        event.causation_id,
+                        event.priority,
+                        json.dumps(
+                            dict(event.payload), separators=(",", ":"), sort_keys=True
+                        ),
+                        json.dumps(
+                            dict(event.metadata), separators=(",", ":"), sort_keys=True
+                        ),
+                        event.schema_version,
+                    ),
+                )
+                inserted = await cursor.fetchone()
+                if inserted is None:
+                    cursor = await self._connection.execute(
+                        "SELECT * FROM noema_events WHERE event_id = %s",
+                        (event.id,),
+                    )
+                    row = await cursor.fetchone()
+                    if row is None:
+                        raise RuntimeError(
+                            "event insert conflicted without an existing event"
+                        )
+                    stored = self._row_to_event(row)
+                else:
+                    stored = event.with_sequence(int(inserted["sequence"]))
+            if stored.sequence is None:
+                raise RuntimeError("stored event is missing a canonical sequence")
             if outbox_topic is not None:
                 now = utc_now()
                 await self._connection.execute(

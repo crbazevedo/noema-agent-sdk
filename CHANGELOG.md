@@ -23,12 +23,15 @@
   release knowledge, fresh readiness, and causal invalidation in one
   deterministic model-free, connector-free, effect-free acceptance scenario;
 - recorded the boundaries, tradeoffs, explicit deferrals, and structural gates
-  in ADR 0007.
+  in ADR 0007;
 - hardened graph admission against causal changes during planning and made
   replay reconstruct capability inputs through the exact planning cut;
 - made agent presence expire, kept unresolved evidence-based competence out of
   v0.5 routing, and based lease completion legality on control-plane acceptance
-  time rather than a worker-reported finish time.
+  time rather than a worker-reported finish time;
+- added atomic expected-head event append across embedded and PostgreSQL stores,
+  preserved transactional outbox semantics, and closed the final graph
+  validate-to-append race with deterministic revalidation.
 
 ## 0.4.0 — 2026-08-30
 
