@@ -183,6 +183,91 @@ class PersistentCognitiveMemoryTests(unittest.TestCase):
             1,
         )
 
+    def test_ambiguous_valid_time_has_no_supersession_predecessor(self) -> None:
+        projection = MemoryProjection()
+        for index, (source_id, value) in enumerate(
+            (("source-a", "open"), ("source-b", "blocked"))
+        ):
+            event = Event(
+                "pull_request.reported",
+                source_id,
+                {"status": value},
+                id=f"ambiguous-{source_id}",
+                subject="pr:42",
+                timestamp=FRIDAY,
+            )
+            projection.apply(event)
+            derived = projection.apply(
+                observed_assertion(
+                    subject="pr:42",
+                    predicate="status",
+                    value=value,
+                    valid_from=FRIDAY,
+                    recorded_at=FRIDAY,
+                    evidence_ref=f"event:{event.id}",
+                    fresh_until=MONDAY + timedelta(days=1),
+                ).to_event(source="test"),
+                derived_source="memory:test-projector",
+            )
+            self.assertEqual(len(derived), index)
+            for derived_event in derived:
+                projection.apply(derived_event)
+
+        neighbors = projection.temporal_neighbors(
+            "pr:42",
+            "status",
+            valid_at=FRIDAY + timedelta(hours=2),
+            known_at=MONDAY,
+        )
+
+        self.assertTrue(neighbors.ambiguous_at_valid_time)
+        self.assertIsNone(neighbors.predecessor)
+
+        late_event = Event(
+            "pull_request.reported",
+            "source-c",
+            {"status": "merged"},
+            id="ambiguous-source-c",
+            subject="pr:42",
+            timestamp=MONDAY,
+        )
+        projection.apply(late_event)
+        late_assertion = observed_assertion(
+            subject="pr:42",
+            predicate="status",
+            value="merged",
+            valid_from=FRIDAY + timedelta(hours=2),
+            recorded_at=MONDAY,
+            evidence_ref=f"event:{late_event.id}",
+            fresh_until=MONDAY + timedelta(days=1),
+            supersedes=(
+                neighbors.predecessor.assertion_id
+                if neighbors.predecessor is not None
+                and not neighbors.ambiguous_at_valid_time
+                else None
+            ),
+        )
+        derived = projection.apply(
+            late_assertion.to_event(source="test"),
+            derived_source="memory:test-projector",
+        )
+        for derived_event in derived:
+            projection.apply(derived_event)
+
+        self.assertIsNone(late_assertion.supersedes)
+        self.assertEqual(len(derived), 2)
+        self.assertEqual(len(projection.unresolved_contradictions(known_at=MONDAY)), 3)
+        self.assertEqual(
+            projection.belief(
+                "pr:42",
+                "status",
+                valid_at=FRIDAY + timedelta(hours=3),
+                known_at=MONDAY,
+                include_stale=True,
+            ).disposition,
+            BeliefDisposition.UNCERTAIN,
+        )
+
     def test_epistemic_invariants_and_simulation_provenance_survive_round_trip(self) -> None:
         simulated = SemanticAssertion.create(
             subject="deployment:production",

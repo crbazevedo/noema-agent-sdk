@@ -5,11 +5,14 @@ from datetime import UTC, datetime, timedelta
 
 from noema import (
     ActionPrerequisite,
+    AwarenessDemand,
     ContinuityProjection,
     EpistemicType,
     Event,
     FakeObservation,
     FakeSource,
+    InMemoryTelemetry,
+    MemoryProjection,
     MemoryProjector,
     NoemaKernel,
     ObservationBudget,
@@ -24,6 +27,17 @@ from noema import (
 
 FRIDAY = datetime(2026, 8, 28, 18, 0, tzinfo=UTC)
 MONDAY = FRIDAY + timedelta(hours=65)
+
+
+def awareness_demand(source_id: str) -> AwarenessDemand:
+    return AwarenessDemand(
+        source_id=source_id,
+        governing_goal_refs=("goal:release-review",),
+        relevance=1.0,
+        decision_sensitivity=1.0,
+        required_freshness=0.8,
+        required_confidence=0.8,
+    )
 
 
 def observation(
@@ -90,6 +104,42 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
         await self.kernel.emit(assertion.to_event(source="test:friday-baseline"))
         return assertion
 
+    async def _record_assertion(
+        self,
+        *,
+        subject: str,
+        predicate: str,
+        value: str,
+        valid_from: datetime,
+        recorded_at: datetime,
+        supersedes: str | None = None,
+    ) -> SemanticAssertion:
+        source_event = await self.kernel.emit(
+            Event(
+                "external.source_observed",
+                "test:historical-state",
+                {"value": value, "occurred_at": valid_from.isoformat()},
+                id=f"history:{subject}:{predicate}:{value}",
+                subject=subject,
+                timestamp=recorded_at,
+            )
+        )
+        assertion = SemanticAssertion.create(
+            subject=subject,
+            predicate=predicate,
+            value=value,
+            epistemic_type=EpistemicType.OBSERVED,
+            confidence=0.99,
+            valid_from=valid_from,
+            recorded_at=recorded_at,
+            source_refs=(f"event:{source_event.id}",),
+            fresh_until=MONDAY + timedelta(days=1),
+            supersedes=supersedes,
+            mutable_world=True,
+        )
+        await self.kernel.emit(assertion.to_event(source="test:historical-state"))
+        return assertion
+
     async def test_sixty_five_hour_wake_selectively_reconstructs_changed_world(self) -> None:
         changes = {
             "repo": observation(
@@ -148,17 +198,17 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
             for source_id, hazard in hazards.items()
         }
         monotonic_values = iter((100.0, 100.25))
+        telemetry = InMemoryTelemetry()
         worker = SituatedContinuityWorker(
             self.kernel,
-            self.memory_worker.projection,
             sources=sources,
             temporal=TemporalService(
                 wall_clock=lambda: MONDAY,
                 monotonic_clock=lambda: next(monotonic_values),
             ),
+            telemetry=telemetry,
         )
         for source_id, hazard in hazards.items():
-            relevant = source_id in changes
             await worker.record_source_state(
                 SourceState(
                     source_id=source_id,
@@ -166,10 +216,7 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
                     last_observed_at=FRIDAY,
                     last_cursor="friday",
                     change_hazard=hazard,
-                    current_freshness=1.0,
                     confidence=1.0,
-                    goal_relevance=1.0 if relevant else 0.1,
-                    decision_sensitivity=1.0 if relevant else 0.1,
                     refresh_cost=1.0,
                     captured_at=FRIDAY,
                 )
@@ -185,6 +232,7 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
         await self.kernel.bus.drain()
 
         report = await worker.wake(
+            demands=tuple(awareness_demand(source_id) for source_id in changes),
             previous_active_at=FRIDAY,
             budget=ObservationBudget(max_cost=4.0, max_sources=4),
         )
@@ -200,7 +248,13 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("preferences", report.refreshed_source_ids)
         self.assertEqual(report.metrics.events_fetched, 4)
         self.assertEqual(report.metrics.beliefs_updated, 4)
-        self.assertEqual(report.metrics.orientation_latency_seconds, 0.25)
+        latency = next(
+            metric
+            for metric in telemetry.metrics
+            if metric.name == "continuity.orientation_latency_seconds"
+        )
+        self.assertEqual(latency.value, 0.25)
+        self.assertNotIn("orientation_latency_seconds", report.metrics.to_dict())
         self.assertIsNotNone(report.highest_value_issue)
         assert report.highest_value_issue is not None
         self.assertEqual(report.highest_value_issue.source_id, "dependency")
@@ -249,7 +303,6 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
         monotonic_values = iter((20.0, 20.01))
         worker = SituatedContinuityWorker(
             self.kernel,
-            self.memory_worker.projection,
             sources={"preferences": source},
             temporal=TemporalService(
                 wall_clock=lambda: woke_at,
@@ -263,16 +316,16 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
                 last_observed_at=FRIDAY,
                 last_cursor="friday",
                 change_hazard=0.01,
-                current_freshness=1.0,
                 confidence=1.0,
-                goal_relevance=1.0,
-                decision_sensitivity=1.0,
                 refresh_cost=1.0,
                 captured_at=FRIDAY,
             )
         )
 
-        report = await worker.wake(previous_active_at=FRIDAY)
+        report = await worker.wake(
+            demands=(awareness_demand("preferences"),),
+            previous_active_at=FRIDAY,
+        )
 
         self.assertEqual(report.status, OrientationStatus.ORIENTED)
         self.assertEqual(report.refreshed_source_ids, ())
@@ -299,7 +352,6 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
         monotonic_values = iter((30.0, 30.1))
         worker = SituatedContinuityWorker(
             self.kernel,
-            self.memory_worker.projection,
             sources={"calendar": source},
             temporal=TemporalService(
                 wall_clock=lambda: MONDAY,
@@ -313,16 +365,16 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
                 last_observed_at=FRIDAY,
                 last_cursor="friday",
                 change_hazard=2.0,
-                current_freshness=1.0,
                 confidence=1.0,
-                goal_relevance=1.0,
-                decision_sensitivity=1.0,
                 refresh_cost=1.0,
                 captured_at=FRIDAY,
             )
         )
 
-        report = await worker.wake(previous_active_at=FRIDAY)
+        report = await worker.wake(
+            demands=(awareness_demand("calendar"),),
+            previous_active_at=FRIDAY,
+        )
 
         self.assertEqual(report.status, OrientationStatus.INCOMPLETE)
         self.assertEqual(report.unavailable_source_ids, ("calendar",))
@@ -341,6 +393,162 @@ class SituatedContinuityWorkerTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(barrier.shadow)
         self.assertTrue(barrier.would_block)
+
+    async def test_late_observation_inserts_between_valid_time_neighbors(self) -> None:
+        await self.memory_worker.stop()
+        merged_at = FRIDAY + timedelta(hours=2)
+        closed_at = FRIDAY + timedelta(hours=18)
+        open_assertion = await self._record_assertion(
+            subject="pull-request:42",
+            predicate="status",
+            value="open",
+            valid_from=FRIDAY,
+            recorded_at=FRIDAY,
+        )
+        closed_assertion = await self._record_assertion(
+            subject="pull-request:42",
+            predicate="status",
+            value="closed",
+            valid_from=closed_at,
+            recorded_at=closed_at,
+            supersedes=open_assertion.assertion_id,
+        )
+        source = FakeSource(
+            "repo",
+            hazard=1.0,
+            cursor="saturday",
+            observations=(
+                observation(
+                    "late-merge",
+                    merged_at,
+                    "pull-request:42",
+                    "status",
+                    "merged",
+                    "The merge was reported after a later state was already known",
+                    0.8,
+                ),
+            ),
+            refresh_cost=1.0,
+        )
+        monotonic_values = iter((40.0, 40.2))
+        worker = SituatedContinuityWorker(
+            self.kernel,
+            sources={"repo": source},
+            temporal=TemporalService(
+                wall_clock=lambda: MONDAY,
+                monotonic_clock=lambda: next(monotonic_values),
+            ),
+        )
+        await worker.record_source_state(
+            SourceState(
+                source_id="repo",
+                domain="repository",
+                last_observed_at=closed_at,
+                last_cursor="saturday",
+                change_hazard=1.0,
+                confidence=1.0,
+                refresh_cost=1.0,
+                captured_at=closed_at,
+            )
+        )
+
+        report = await worker.wake(
+            demands=(awareness_demand("repo"),),
+            previous_active_at=FRIDAY,
+        )
+
+        self.assertEqual(report.status, OrientationStatus.ORIENTED)
+        self.assertEqual(self.memory_worker.projection.assertions, ())
+        memory = MemoryProjection()
+        memory.rebuild(await self.kernel.history())
+        merged_assertion = next(
+            assertion for assertion in memory.assertions if assertion.value == "merged"
+        )
+        self.assertEqual(merged_assertion.supersedes, open_assertion.assertion_id)
+        self.assertEqual(merged_assertion.valid_to, closed_assertion.valid_from)
+        self.assertEqual(
+            memory.belief(
+                "pull-request:42",
+                "status",
+                valid_at=FRIDAY + timedelta(hours=1),
+                known_at=MONDAY,
+                include_stale=True,
+            ).value,
+            "open",
+        )
+        self.assertEqual(
+            memory.belief(
+                "pull-request:42",
+                "status",
+                valid_at=FRIDAY + timedelta(hours=3),
+                known_at=MONDAY,
+                include_stale=True,
+            ).value,
+            "merged",
+        )
+        self.assertEqual(
+            memory.belief(
+                "pull-request:42",
+                "status",
+                valid_at=FRIDAY + timedelta(hours=42),
+                known_at=MONDAY,
+                include_stale=True,
+            ).value,
+            "closed",
+        )
+
+    async def test_runtime_latency_does_not_change_semantic_report_identity(self) -> None:
+        async def run(duration: float) -> tuple[str, float]:
+            kernel = NoemaKernel()
+            await kernel.start()
+            telemetry = InMemoryTelemetry()
+            monotonic_values = iter((10.0, 10.0 + duration))
+            worker = SituatedContinuityWorker(
+                kernel,
+                sources={
+                    "preferences": FakeSource(
+                        "preferences",
+                        hazard=0.01,
+                        cursor="baseline",
+                        refresh_cost=1.0,
+                    )
+                },
+                temporal=TemporalService(
+                    wall_clock=lambda: FRIDAY + timedelta(hours=8),
+                    monotonic_clock=lambda: next(monotonic_values),
+                ),
+                telemetry=telemetry,
+            )
+            await worker.record_source_state(
+                SourceState(
+                    source_id="preferences",
+                    domain="preferences",
+                    last_observed_at=FRIDAY,
+                    last_cursor="baseline",
+                    change_hazard=0.01,
+                    confidence=1.0,
+                    refresh_cost=1.0,
+                    captured_at=FRIDAY,
+                )
+            )
+            report = await worker.wake(
+                demands=(awareness_demand("preferences"),),
+                previous_active_at=FRIDAY,
+            )
+            latency = next(
+                metric.value
+                for metric in telemetry.metrics
+                if metric.name == "continuity.orientation_latency_seconds"
+            )
+            await kernel.stop()
+            return report.report_id, latency
+
+        fast_id, fast_latency = await run(0.1)
+        slow_id, slow_latency = await run(4.7)
+
+        self.assertEqual(fast_id, slow_id)
+        self.assertEqual(fast_latency, 0.1)
+        self.assertEqual(slow_latency, 4.7)
 
 
 if __name__ == "__main__":

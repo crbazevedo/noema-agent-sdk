@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from .models import (
     AwarenessCoverage,
+    AwarenessDemand,
     ObservationBudget,
     ReconciliationDecision,
     ReconciliationDisposition,
@@ -23,38 +25,61 @@ class WakeReconciler:
     def __init__(
         self,
         *,
-        desired_freshness: float = 0.9,
         relevance_floor: float = 0.15,
     ) -> None:
-        if not 0.0 < desired_freshness <= 1.0:
-            raise ValueError("desired freshness must be in (0, 1]")
         if not 0.0 <= relevance_floor <= 1.0:
             raise ValueError("relevance floor must be between zero and one")
-        self.desired_freshness = desired_freshness
         self.relevance_floor = relevance_floor
 
     def plan(
         self,
         states: tuple[SourceState, ...],
+        demands: tuple[AwarenessDemand, ...],
         *,
-        elapsed_wall_time: timedelta,
+        freshness_by_source: Mapping[str, float],
         budget: ObservationBudget,
         created_at: datetime,
     ) -> ReconciliationPlan:
-        if elapsed_wall_time < timedelta(0):
-            raise ValueError("wake reconciliation elapsed time cannot be negative")
         if created_at.tzinfo is None:
             raise ValueError("wake reconciliation time must be timezone-aware")
         unique_ids = {state.source_id for state in states}
         if len(unique_ids) != len(states):
             raise ValueError("wake reconciliation source ids must be unique")
+        demand_by_id = {demand.source_id: demand for demand in demands}
+        if len(demand_by_id) != len(demands):
+            raise ValueError("wake reconciliation demand source ids must be unique")
+        unknown_demands = set(demand_by_id) - unique_ids
+        if unknown_demands:
+            raise ValueError(
+                f"wake reconciliation demands reference unknown sources: {sorted(unknown_demands)}"
+            )
+        missing_freshness = set(demand_by_id) - set(freshness_by_source)
+        if missing_freshness:
+            raise ValueError(
+                f"wake reconciliation demands lack freshness estimates: {sorted(missing_freshness)}"
+            )
 
-        needs = {state.source_id: self.refresh_need(state, elapsed_wall_time) for state in states}
+        needs = {
+            state.source_id: (
+                self.refresh_need(
+                    state,
+                    demand_by_id[state.source_id],
+                    current_freshness=freshness_by_source[state.source_id],
+                )
+                if state.source_id in demand_by_id
+                else 0.0
+            )
+            for state in states
+        }
         candidates = [
             state
             for state in states
-            if state.goal_relevance * state.decision_sensitivity >= self.relevance_floor
-            and state.current_freshness < self.desired_freshness
+            if (demand := demand_by_id.get(state.source_id)) is not None
+            and demand.importance >= self.relevance_floor
+            and (
+                freshness_by_source[state.source_id] < demand.required_freshness
+                or state.confidence < demand.required_confidence
+            )
         ]
         candidates.sort(
             key=lambda state: (
@@ -75,13 +100,16 @@ class WakeReconciler:
 
         decisions: list[ReconciliationDecision] = []
         for state in sorted(states, key=lambda item: item.source_id):
-            importance = state.goal_relevance * state.decision_sensitivity
+            demand = demand_by_id.get(state.source_id)
             need = needs[state.source_id]
             if state.source_id in selected:
+                if demand is None:
+                    raise AssertionError("selected refresh source requires awareness demand")
                 request = RefreshRequest.create(
                     source_id=state.source_id,
-                    reason="stale decision-relevant prerequisite",
-                    desired_freshness=self.desired_freshness,
+                    reason="insufficient decision-relevant freshness or confidence",
+                    desired_freshness=demand.required_freshness,
+                    desired_confidence=demand.required_confidence,
                     priority=need,
                     max_cost=state.refresh_cost,
                     created_at=created_at,
@@ -91,11 +119,11 @@ class WakeReconciler:
                         source_id=state.source_id,
                         disposition=ReconciliationDisposition.REFRESH,
                         refresh_need=need,
-                        reason="freshness below the decision threshold",
+                        reason="epistemic coverage is below the decision threshold",
                         request=request,
                     )
                 )
-            elif importance < self.relevance_floor:
+            elif demand is None or demand.importance < self.relevance_floor:
                 decisions.append(
                     ReconciliationDecision(
                         source_id=state.source_id,
@@ -104,7 +132,10 @@ class WakeReconciler:
                         reason="source is not relevant to the current decision",
                     )
                 )
-            elif state.current_freshness >= self.desired_freshness:
+            elif (
+                freshness_by_source[state.source_id] >= demand.required_freshness
+                and state.confidence >= demand.required_confidence
+            ):
                 decisions.append(
                     ReconciliationDecision(
                         source_id=state.source_id,
@@ -128,12 +159,25 @@ class WakeReconciler:
         )
 
     @staticmethod
-    def refresh_need(state: SourceState, elapsed_wall_time: timedelta) -> float:
-        elapsed_days = elapsed_wall_time / timedelta(days=1)
-        raw_need = (
-            state.change_hazard * elapsed_days * state.goal_relevance * state.decision_sensitivity
+    def refresh_need(
+        state: SourceState,
+        demand: AwarenessDemand,
+        *,
+        current_freshness: float,
+    ) -> float:
+        if state.source_id != demand.source_id:
+            raise ValueError("refresh-need source and demand ids must match")
+        if not math.isfinite(current_freshness) or not 0.0 <= current_freshness <= 1.0:
+            raise ValueError("current freshness must be between zero and one")
+        freshness_gap = max(
+            0.0,
+            1.0 - current_freshness / demand.required_freshness,
         )
-        return 1.0 - math.exp(-raw_need)
+        confidence_gap = max(
+            0.0,
+            1.0 - state.confidence / demand.required_confidence,
+        )
+        return demand.importance * (1.0 - (1.0 - freshness_gap) * (1.0 - confidence_gap))
 
     @staticmethod
     def mark_unavailable(decision: ReconciliationDecision) -> ReconciliationDecision:

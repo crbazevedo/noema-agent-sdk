@@ -23,6 +23,7 @@ from .projection import (
     EpisodicMemory,
     EvidenceObject,
     MemoryProjection,
+    TemporalNeighbors,
 )
 from .retrieval import (
     LexicalMemoryIndex,
@@ -54,6 +55,7 @@ __all__ = [
     "MemoryProjection",
     "MemoryQuery",
     "MemoryRetriever",
+    "TemporalNeighbors",
     "RetrievalComponents",
     "RetrievalWeights",
     "RetrievedMemory",

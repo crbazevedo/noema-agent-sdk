@@ -94,18 +94,22 @@ canonical replay → freshness decay → awareness gaps → budgeted refresh
 ```
 
 `AwakeEpoch` records the sleep interval, canonical cursors, and orientation
-status. Provider-neutral `SourceState` values expose source cursor, hazard,
-confidence, goal relevance, decision sensitivity, and observation cost.
-`WakeReconciler` is a pure planner over those inputs; `FakeSource` is the only
-v0.4 observation adapter. The orientation barrier is shadow-only and cannot
-reach models, authority, capabilities, or effects.
+status. Provider-neutral `SourceState` values expose durable source cursor,
+hazard, confidence, and observation cost. Per-wake `AwarenessDemand` values
+carry governing goals, relevance, decision sensitivity, and required
+freshness/confidence. `WakeReconciler` is a pure planner over current requirement
+gaps; `FakeSource` is the only v0.4 observation adapter. The orientation barrier
+is shadow-only and cannot reach models, authority, capabilities, or effects.
 
 Delayed observations retain the existing event-envelope contract: the event
 timestamp is when Noema observed the report, while `payload.occurred_at` is the
 source-reported world time. Memory maps them to assertion knowledge time and
-valid time. Source states, wake epochs, observations, assertions, and reports
-are canonical events; freshness, coverage, plans, and barrier decisions are
-rebuildable projections. See
+valid time. Late observations use valid-time neighbors rather than latest
+recording time. Each wake rebuilds continuity and memory from one canonical
+history cut, independently of external projector lag. Source states, wake
+epochs, observations, assertions, and reports are canonical events; freshness,
+coverage, plans, and barrier decisions are rebuildable projections. Runtime
+latency is telemetry, not canonical report identity. See
 [ADR 0006](adr/0006-situated-continuity-foundation.md).
 
 ## Portable durability
@@ -247,7 +251,7 @@ Coordination occurs through events, not direct hidden calls.
 | Decision-relevant retrieval | `MemoryRetriever` / disposable index adapters |
 | Durable memory projection | `MemoryProjector` |
 | Wake-time temporal semantics | `TemporalService` / `AwakeEpoch` |
-| Selective source refresh | `SourceState` / `WakeReconciler` / `RefreshRequest` |
+| Selective source refresh | `SourceState` / `AwarenessDemand` / `WakeReconciler` / `RefreshRequest` |
 | Situated orientation | `AwarenessCoverage` / `OrientationReport` / `OrientationBarrier` |
 | Endogenous cognition (planned) | durable `Inquiry` / `IntrinsicActivity` contracts |
 

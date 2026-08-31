@@ -55,6 +55,15 @@ class BeliefState:
 
 
 @dataclass(frozen=True, slots=True)
+class TemporalNeighbors:
+    """Assertions immediately around a valid-time insertion point."""
+
+    predecessor: SemanticAssertion | None
+    successor: SemanticAssertion | None
+    ambiguous_at_valid_time: bool
+
+
+@dataclass(frozen=True, slots=True)
 class EvidenceObject:
     """A provenance reference resolved against canonical memory state."""
 
@@ -164,14 +173,13 @@ class MemoryProjection:
             existing_assertion = self._assertions.get(assertion.assertion_id)
             if existing_assertion is not None and existing_assertion != assertion:
                 raise ValueError(f"conflicting assertion identity: {assertion.assertion_id}")
-            if derived_source is not None:
-                if assertion.supersedes is not None:
-                    prior = self._require_assertion(assertion.supersedes)
-                    if (prior.subject, prior.predicate) != (
-                        assertion.subject,
-                        assertion.predicate,
-                    ):
-                        raise ValueError("an assertion may only supersede the same semantic key")
+            if assertion.supersedes is not None:
+                prior = self._require_assertion(assertion.supersedes)
+                if (prior.subject, prior.predicate) != (
+                    assertion.subject,
+                    assertion.predicate,
+                ):
+                    raise ValueError("an assertion may only supersede the same semantic key")
             self._assertions[assertion.assertion_id] = assertion
             try:
                 if (
@@ -422,6 +430,79 @@ class MemoryProjection:
             if assertion.status is AssertionStatus.HYPOTHESIS
         )
 
+    def temporal_neighbors(
+        self,
+        subject: str,
+        predicate: str,
+        *,
+        valid_at: datetime,
+        known_at: datetime,
+    ) -> TemporalNeighbors:
+        """Find a safe predecessor and successor for a valid-time insertion.
+
+        Staleness is ignored because this is historical topology, not a claim
+        that the values remain fresh. Ambiguous history never yields a
+        predecessor suitable for manufactured supersession.
+        """
+
+        if not subject.strip() or not predicate.strip():
+            raise ValueError("temporal-neighbor semantic key must be non-empty")
+        self._validate_query_times(valid_at, known_at)
+        assertions = tuple(
+            assertion
+            for assertion in self._assertions.values()
+            if assertion.subject == subject
+            and assertion.predicate == predicate
+            and assertion.status is AssertionStatus.ACTIVE
+            and assertion.recorded_at <= known_at
+        )
+        visible_at = tuple(
+            assertion
+            for assertion in assertions
+            if self._is_visible(
+                assertion,
+                valid_at=valid_at,
+                known_at=known_at,
+                include_stale=True,
+            )
+        )
+        predecessors = tuple(
+            assertion
+            for assertion in assertions
+            if assertion.valid_from < valid_at
+            and (
+                (boundary := self.effective_valid_to(assertion, known_at=known_at)) is None
+                or boundary >= valid_at
+            )
+        )
+        ambiguous = len(visible_at) > 1 or len(predecessors) > 1
+        predecessor = predecessors[0] if len(predecessors) == 1 and not ambiguous else None
+
+        future = tuple(
+            assertion
+            for assertion in assertions
+            if assertion.valid_from > valid_at
+            and self._is_visible(
+                assertion,
+                valid_at=assertion.valid_from,
+                known_at=known_at,
+                include_stale=True,
+            )
+        )
+        successor: SemanticAssertion | None = None
+        if future:
+            earliest = min(assertion.valid_from for assertion in future)
+            earliest_assertions = tuple(
+                assertion for assertion in future if assertion.valid_from == earliest
+            )
+            if len(earliest_assertions) == 1:
+                successor = earliest_assertions[0]
+        return TemporalNeighbors(
+            predecessor=predecessor,
+            successor=successor,
+            ambiguous_at_valid_time=ambiguous,
+        )
+
     def unresolved_contradictions(
         self,
         *,
@@ -443,6 +524,17 @@ class MemoryProjection:
             closure.valid_to
             for closure in self._closures.values()
             if closure.assertion_ref == assertion.assertion_id and closure.recorded_at <= known_at
+        )
+        boundaries.extend(
+            transition.effective_at
+            for transition in self._supersessions.values()
+            if transition.prior_assertion_ref == assertion.assertion_id
+            and transition.recorded_at <= known_at
+        )
+        boundaries.extend(
+            candidate.valid_from
+            for candidate in self._assertions.values()
+            if candidate.supersedes == assertion.assertion_id and candidate.recorded_at <= known_at
         )
         return min(boundaries) if boundaries else None
 
@@ -497,6 +589,11 @@ class MemoryProjection:
             and transition.recorded_at <= known_at
             and transition.effective_at <= valid_at
             for transition in self._supersessions.values()
+        ) and not any(
+            candidate.supersedes == assertion.assertion_id
+            and candidate.recorded_at <= known_at
+            and candidate.valid_from <= valid_at
+            for candidate in self._assertions.values()
         )
 
     def _new_contradiction_events(

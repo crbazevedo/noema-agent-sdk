@@ -64,6 +64,7 @@ from .continuity import (
     ActionPrerequisite,
     AwakeEpoch,
     AwarenessCoverage,
+    AwarenessDemand,
     ContinuityProjection,
     CoverageEntry,
     FakeObservation,
@@ -133,6 +134,7 @@ from .memory import (
     RetrievalWeights,
     RetrievedMemory,
     SemanticAssertion,
+    TemporalNeighbors,
     ValidityClosure,
 )
 from .memory_worker import MemoryProjector
@@ -206,6 +208,7 @@ __all__ = [
     "AttentionAllocator",
     "AttentionWeights",
     "AwakeEpoch",
+    "AwarenessDemand",
     "AwarenessCoverage",
     "AssertionStatus",
     "AssertionSupersession",
@@ -356,6 +359,7 @@ __all__ = [
     "SourceState",
     "StructuredModelReasoner",
     "TelemetrySink",
+    "TemporalNeighbors",
     "TemporalService",
     "TemporalSpec",
     "Tracer",

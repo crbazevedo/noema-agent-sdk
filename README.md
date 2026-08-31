@@ -36,11 +36,12 @@ disposable accelerators rather than memory authority. Its projector reuses
 
 The [Situated Continuity](docs/SITUATED_CONTINUITY.md) foundation makes wake a
 selective epistemic reconstruction rather than a prompt resume. It separates
-wall, monotonic, and source-reported world time; decays source-specific
-freshness; computes decision-relevant awareness gaps; and plans minimum
-sufficient refreshes under an observation budget. A deterministic fake ecology
-updates bitemporal memory and produces orientation reports without connectors,
-models, or effects. Its orientation barrier is shadow-only.
+durable source facts from per-wake awareness demands, derives current freshness,
+and plans from decision-relevant freshness/confidence gaps under an observation
+budget. A deterministic fake ecology rebuilds continuity and memory from one
+canonical cut, inserts delayed observations by valid time, and produces
+orientation reports without connectors, models, or effects. Its orientation
+barrier is shadow-only.
 
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture for bounded inquiry, calibration, consolidation,
@@ -322,16 +323,19 @@ PYTHONPATH=src python -m unittest tests.test_autonomic tests.test_shadow tests.t
 
 ### Situated Continuity Foundation
 
-`TemporalService`, `AwakeEpoch`, `SourceState`, `FreshnessModel`,
-`AwarenessCoverage`, and `WakeReconciler` form an effect-free wake planner.
+`TemporalService`, `AwakeEpoch`, `SourceState`, `AwarenessDemand`,
+`FreshnessModel`, `AwarenessCoverage`, and `WakeReconciler` form an effect-free
+wake planner.
 `SituatedContinuityWorker` rebuilds source state from canonical events, decays
 freshness, requests only decision-relevant observations from deterministic
-`FakeSource` adapters, updates semantic memory, and emits an
-`OrientationReport` plus a generic durable checkpoint.
+`FakeSource` adapters, updates semantic memory from the same canonical causal
+cut, and emits an `OrientationReport` plus a generic durable checkpoint.
 
 Delayed observations keep `Event.timestamp` as observation time and carry
 source world time in `payload.occurred_at`; semantic assertions preserve the
-distinction through `recorded_at` and `valid_from`. `OrientationBarrier`
+distinction through `recorded_at` and `valid_from`. Late reports are inserted
+between their valid-time neighbors. Runtime latency remains telemetry and does
+not affect content-addressed report identity. `OrientationBarrier`
 evaluates action-specific freshness/confidence prerequisites in shadow mode and
 cannot authorize or execute an effect.
 

@@ -89,6 +89,12 @@ pull request merged Friday while being recorded Monday. Monday's query about
 Friday can return `merged`; Friday's own knowledge-time query still returns
 `open`.
 
+When delayed evidence lands between already-known world states,
+`MemoryProjection.temporal_neighbors()` finds the unique valid-time predecessor
+and earliest successor. The inserted assertion supersedes only an unambiguous
+predecessor and ends at the successor boundary; ambiguity remains explicit
+instead of being collapsed by recording order.
+
 Validity closure and supersession are separate immutable events. No assertion
 row is edited. A current belief is always a projection over the versions visible
 at the requested pair of times. Known-expired or stale mutable assertions are

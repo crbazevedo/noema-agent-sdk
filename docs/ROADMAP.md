@@ -114,13 +114,15 @@ Implemented:
 - explicit wall, monotonic, world/occurrence, and knowledge-time distinctions;
 - durable `AwakeEpoch` records with canonical cursors and optional evaluation
   epoch identity;
-- provider-neutral source state, hazard-based freshness, awareness coverage,
-  refresh requests, and observation budgets;
+- provider-neutral durable source state, per-wake awareness demand,
+  hazard-based freshness, awareness coverage, refresh requests, and observation
+  budgets;
 - a pure selective `WakeReconciler` and shadow-only orientation barrier;
 - deterministic fake-source ecology and effect-free wake worker;
-- bitemporal delayed-observation mapping without changing `Event.timestamp`;
+- single-cut continuity/memory reconstruction and valid-time insertion of
+  delayed observations without changing `Event.timestamp`;
 - canonical orientation reports, generic consumer checkpoints, and orientation
-  efficiency/quality metrics;
+  efficiency/quality metrics, with runtime latency kept in telemetry;
 - structural isolation from model, authority, capability, reasoning, and effect
   paths.
 

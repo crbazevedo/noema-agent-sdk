@@ -210,10 +210,7 @@ class SourceState:
     last_observed_at: datetime
     last_cursor: str | None
     change_hazard: float
-    current_freshness: float
     confidence: float
-    goal_relevance: float
-    decision_sensitivity: float
     refresh_cost: float
     captured_at: datetime
 
@@ -228,15 +225,9 @@ class SourceState:
             raise ValueError("source cursor must be non-empty when supplied")
         if not math.isfinite(self.change_hazard) or self.change_hazard < 0.0:
             raise ValueError("source change hazard cannot be negative")
-        _bounded(self.current_freshness, "current_freshness")
         _bounded(self.confidence, "confidence")
-        _bounded(self.goal_relevance, "goal_relevance")
-        _bounded(self.decision_sensitivity, "decision_sensitivity")
         if not math.isfinite(self.refresh_cost) or self.refresh_cost < 0.0:
             raise ValueError("source refresh cost cannot be negative")
-
-    def with_freshness(self, freshness: float, *, captured_at: datetime) -> SourceState:
-        return replace(self, current_freshness=freshness, captured_at=captured_at)
 
     def refreshed(
         self,
@@ -249,7 +240,6 @@ class SourceState:
             self,
             last_observed_at=observed_at,
             last_cursor=cursor,
-            current_freshness=1.0,
             confidence=confidence,
             captured_at=observed_at,
         )
@@ -261,10 +251,7 @@ class SourceState:
             "last_observed_at": self.last_observed_at.isoformat(),
             "last_cursor": self.last_cursor,
             "change_hazard": self.change_hazard,
-            "current_freshness": self.current_freshness,
             "confidence": self.confidence,
-            "goal_relevance": self.goal_relevance,
-            "decision_sensitivity": self.decision_sensitivity,
             "refresh_cost": self.refresh_cost,
             "captured_at": self.captured_at.isoformat(),
         }
@@ -292,10 +279,7 @@ class SourceState:
             last_observed_at=_datetime(data, "last_observed_at"),
             last_cursor=(str(data["last_cursor"]) if data.get("last_cursor") else None),
             change_hazard=float(cast(float, data["change_hazard"])),
-            current_freshness=float(cast(float, data["current_freshness"])),
             confidence=float(cast(float, data["confidence"])),
-            goal_relevance=float(cast(float, data["goal_relevance"])),
-            decision_sensitivity=float(cast(float, data["decision_sensitivity"])),
             refresh_cost=float(cast(float, data["refresh_cost"])),
             captured_at=_datetime(data, "captured_at"),
         )
@@ -305,26 +289,107 @@ class SourceState:
 
 
 @dataclass(frozen=True, slots=True)
-class CoverageEntry:
+class AwarenessDemand:
     source_id: str
-    domain: str
-    confidence: float
-    freshness: float
-    importance: float
+    governing_goal_refs: tuple[str, ...]
+    relevance: float
+    decision_sensitivity: float
     required_freshness: float = 0.8
     required_confidence: float = 0.8
 
     def __post_init__(self) -> None:
-        if not self.source_id.strip() or not self.domain.strip():
-            raise ValueError("coverage source id and domain must be non-empty")
+        if not self.source_id.strip():
+            raise ValueError("awareness demand source id must be non-empty")
+        if any(not ref.strip() for ref in self.governing_goal_refs):
+            raise ValueError("awareness demand goal refs must be non-empty")
+        if len(set(self.governing_goal_refs)) != len(self.governing_goal_refs):
+            raise ValueError("awareness demand goal refs must be unique")
         for value, name in (
-            (self.confidence, "confidence"),
-            (self.freshness, "freshness"),
-            (self.importance, "importance"),
+            (self.relevance, "relevance"),
+            (self.decision_sensitivity, "decision_sensitivity"),
             (self.required_freshness, "required_freshness"),
             (self.required_confidence, "required_confidence"),
         ):
             _bounded(value, name)
+        if self.required_freshness == 0.0 or self.required_confidence == 0.0:
+            raise ValueError("awareness demand requirements must be greater than zero")
+
+    @property
+    def importance(self) -> float:
+        return self.relevance * self.decision_sensitivity
+
+    def to_dict(self) -> JSONObject:
+        return {
+            "source_id": self.source_id,
+            "governing_goal_refs": list(self.governing_goal_refs),
+            "relevance": self.relevance,
+            "decision_sensitivity": self.decision_sensitivity,
+            "required_freshness": self.required_freshness,
+            "required_confidence": self.required_confidence,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> AwarenessDemand:
+        refs = cast(
+            list[object] | tuple[object, ...],
+            data.get("governing_goal_refs", ()),
+        )
+        return cls(
+            source_id=str(data["source_id"]),
+            governing_goal_refs=tuple(str(value) for value in refs),
+            relevance=float(cast(float, data["relevance"])),
+            decision_sensitivity=float(cast(float, data["decision_sensitivity"])),
+            required_freshness=float(cast(float, data["required_freshness"])),
+            required_confidence=float(cast(float, data["required_confidence"])),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CoverageEntry:
+    source_id: str
+    domain: str
+    governing_goal_refs: tuple[str, ...]
+    confidence: float
+    freshness: float
+    relevance: float
+    decision_sensitivity: float
+    required_freshness: float
+    required_confidence: float
+
+    def __post_init__(self) -> None:
+        if not self.source_id.strip() or not self.domain.strip():
+            raise ValueError("coverage source id and domain must be non-empty")
+        if any(not ref.strip() for ref in self.governing_goal_refs):
+            raise ValueError("coverage goal refs must be non-empty")
+        if len(set(self.governing_goal_refs)) != len(self.governing_goal_refs):
+            raise ValueError("coverage goal refs must be unique")
+        for value, name in (
+            (self.confidence, "confidence"),
+            (self.freshness, "freshness"),
+            (self.relevance, "relevance"),
+            (self.decision_sensitivity, "decision_sensitivity"),
+            (self.required_freshness, "required_freshness"),
+            (self.required_confidence, "required_confidence"),
+        ):
+            _bounded(value, name)
+        if self.required_freshness == 0.0 or self.required_confidence == 0.0:
+            raise ValueError("coverage requirements must be greater than zero")
+
+    @property
+    def importance(self) -> float:
+        return self.relevance * self.decision_sensitivity
+
+    @property
+    def freshness_gap(self) -> float:
+        return max(0.0, 1.0 - self.freshness / self.required_freshness)
+
+    @property
+    def confidence_gap(self) -> float:
+        return max(0.0, 1.0 - self.confidence / self.required_confidence)
+
+    @property
+    def epistemic_gap(self) -> float:
+        return 1.0 - (1.0 - self.freshness_gap) * (1.0 - self.confidence_gap)
 
     @property
     def sufficient(self) -> bool:
@@ -335,14 +400,17 @@ class CoverageEntry:
 
     @property
     def weighted_uncertainty(self) -> float:
-        return self.importance * (1.0 - min(self.freshness, self.confidence))
+        return self.importance * self.epistemic_gap
 
     def to_dict(self) -> JSONObject:
         return {
             "source_id": self.source_id,
             "domain": self.domain,
+            "governing_goal_refs": list(self.governing_goal_refs),
             "confidence": self.confidence,
             "freshness": self.freshness,
+            "relevance": self.relevance,
+            "decision_sensitivity": self.decision_sensitivity,
             "importance": self.importance,
             "required_freshness": self.required_freshness,
             "required_confidence": self.required_confidence,
@@ -354,12 +422,22 @@ class CoverageEntry:
         entry = cls(
             source_id=str(data["source_id"]),
             domain=str(data["domain"]),
+            governing_goal_refs=tuple(
+                str(value)
+                for value in cast(
+                    list[object] | tuple[object, ...],
+                    data.get("governing_goal_refs", ()),
+                )
+            ),
             confidence=float(cast(float, data["confidence"])),
             freshness=float(cast(float, data["freshness"])),
-            importance=float(cast(float, data["importance"])),
+            relevance=float(cast(float, data["relevance"])),
+            decision_sensitivity=float(cast(float, data["decision_sensitivity"])),
             required_freshness=float(cast(float, data["required_freshness"])),
             required_confidence=float(cast(float, data["required_confidence"])),
         )
+        if not math.isclose(float(cast(float, data["importance"])), entry.importance):
+            raise ValueError("coverage importance is inconsistent")
         if bool(data.get("sufficient", entry.sufficient)) is not entry.sufficient:
             raise ValueError("coverage entry sufficiency is inconsistent")
         return entry
@@ -377,25 +455,43 @@ class AwarenessCoverage:
             raise ValueError("awareness coverage source ids must be unique")
 
     @classmethod
-    def from_states(
+    def from_inputs(
         cls,
         states: Iterable[SourceState],
+        demands: Iterable[AwarenessDemand],
         *,
-        required_freshness: float = 0.8,
-        required_confidence: float = 0.8,
+        freshness_by_source: Mapping[str, float],
         relevance_floor: float = 0.15,
     ) -> AwarenessCoverage:
+        state_values = tuple(states)
+        demand_values = tuple(demands)
+        states_by_id = {state.source_id: state for state in state_values}
+        demand_by_id = {demand.source_id: demand for demand in demand_values}
+        if len(states_by_id) != len(state_values):
+            raise ValueError("awareness input source ids must be unique")
+        if len(demand_by_id) != len(demand_values):
+            raise ValueError("awareness demand source ids must be unique")
+        unknown = set(demand_by_id) - set(states_by_id)
+        if unknown:
+            raise ValueError(f"awareness demands reference unknown sources: {sorted(unknown)}")
+        missing_freshness = set(demand_by_id) - set(freshness_by_source)
+        if missing_freshness:
+            raise ValueError(
+                f"awareness demands lack freshness estimates: {sorted(missing_freshness)}"
+            )
         entries = tuple(
             CoverageEntry(
-                source_id=state.source_id,
-                domain=state.domain,
-                confidence=state.confidence,
-                freshness=state.current_freshness,
-                importance=state.goal_relevance * state.decision_sensitivity,
-                required_freshness=required_freshness,
-                required_confidence=required_confidence,
+                source_id=demand.source_id,
+                governing_goal_refs=demand.governing_goal_refs,
+                domain=states_by_id[demand.source_id].domain,
+                confidence=states_by_id[demand.source_id].confidence,
+                freshness=freshness_by_source[demand.source_id],
+                relevance=demand.relevance,
+                decision_sensitivity=demand.decision_sensitivity,
+                required_freshness=demand.required_freshness,
+                required_confidence=demand.required_confidence,
             )
-            for state in sorted(states, key=lambda item: item.source_id)
+            for demand in sorted(demand_by_id.values(), key=lambda item: item.source_id)
         )
         return cls(entries, relevance_floor=relevance_floor)
 
@@ -457,6 +553,7 @@ class RefreshRequest:
     source_id: str
     reason: str
     desired_freshness: float
+    desired_confidence: float
     priority: float
     max_cost: float
     created_at: datetime
@@ -468,6 +565,7 @@ class RefreshRequest:
         source_id: str,
         reason: str,
         desired_freshness: float,
+        desired_confidence: float,
         priority: float,
         max_cost: float,
         created_at: datetime,
@@ -476,6 +574,7 @@ class RefreshRequest:
             "source_id": source_id,
             "reason": reason,
             "desired_freshness": desired_freshness,
+            "desired_confidence": desired_confidence,
             "priority": priority,
             "max_cost": max_cost,
             "created_at": created_at.isoformat(),
@@ -485,6 +584,7 @@ class RefreshRequest:
             source_id=source_id,
             reason=reason,
             desired_freshness=desired_freshness,
+            desired_confidence=desired_confidence,
             priority=priority,
             max_cost=max_cost,
             created_at=created_at,
@@ -494,6 +594,7 @@ class RefreshRequest:
         if not self.request_id.strip() or not self.source_id.strip() or not self.reason.strip():
             raise ValueError("refresh request identity, source, and reason must be non-empty")
         _bounded(self.desired_freshness, "desired_freshness")
+        _bounded(self.desired_confidence, "desired_confidence")
         _bounded(self.priority, "priority")
         if not math.isfinite(self.max_cost) or self.max_cost < 0.0:
             raise ValueError("refresh request max cost cannot be negative")
@@ -505,6 +606,7 @@ class RefreshRequest:
             "source_id": self.source_id,
             "reason": self.reason,
             "desired_freshness": self.desired_freshness,
+            "desired_confidence": self.desired_confidence,
             "priority": self.priority,
             "max_cost": self.max_cost,
             "created_at": self.created_at.isoformat(),
@@ -528,6 +630,7 @@ class RefreshRequest:
             source_id=str(data["source_id"]),
             reason=str(data["reason"]),
             desired_freshness=float(cast(float, data["desired_freshness"])),
+            desired_confidence=float(cast(float, data["desired_confidence"])),
             priority=float(cast(float, data["priority"])),
             max_cost=float(cast(float, data["max_cost"])),
             created_at=_datetime(data, "created_at"),
@@ -536,6 +639,7 @@ class RefreshRequest:
             source_id=request.source_id,
             reason=request.reason,
             desired_freshness=request.desired_freshness,
+            desired_confidence=request.desired_confidence,
             priority=request.priority,
             max_cost=request.max_cost,
             created_at=request.created_at,
@@ -644,7 +748,6 @@ class OrientationMetrics:
     events_fetched: int
     beliefs_updated: int
     stale_beliefs_retained: int
-    orientation_latency_seconds: float
     observation_cost: float
     unnecessary_refresh_rate: float
     missed_change_rate: float
@@ -665,7 +768,6 @@ class OrientationMetrics:
         if self.stale_beliefs_retained > self.sources_considered:
             raise ValueError("retained stale source count cannot exceed considered sources")
         for value, name in (
-            (self.orientation_latency_seconds, "orientation_latency_seconds"),
             (self.observation_cost, "observation_cost"),
             (
                 self.decision_relevant_uncertainty_removed,
@@ -690,7 +792,6 @@ class OrientationMetrics:
             "events_fetched": self.events_fetched,
             "beliefs_updated": self.beliefs_updated,
             "stale_beliefs_retained": self.stale_beliefs_retained,
-            "orientation_latency_seconds": self.orientation_latency_seconds,
             "observation_cost": self.observation_cost,
             "unnecessary_refresh_rate": self.unnecessary_refresh_rate,
             "missed_change_rate": self.missed_change_rate,
@@ -706,7 +807,6 @@ class OrientationMetrics:
             events_fetched=int(cast(int, data["events_fetched"])),
             beliefs_updated=int(cast(int, data["beliefs_updated"])),
             stale_beliefs_retained=int(cast(int, data["stale_beliefs_retained"])),
-            orientation_latency_seconds=float(cast(float, data["orientation_latency_seconds"])),
             observation_cost=float(cast(float, data["observation_cost"])),
             unnecessary_refresh_rate=float(cast(float, data["unnecessary_refresh_rate"])),
             missed_change_rate=float(cast(float, data["missed_change_rate"])),
@@ -805,10 +905,10 @@ class OrientationReport:
             raise ValueError("orientation report refresh count is inconsistent")
         coverage_ids = {entry.source_id for entry in self.coverage.entries}
         decision_ids = {decision.source_id for decision in self.decisions}
-        if self.metrics.sources_considered != len(coverage_ids):
+        if self.metrics.sources_considered != len(decision_ids):
             raise ValueError("orientation report considered-source count is inconsistent")
-        if decision_ids != coverage_ids or len(self.decisions) != len(decision_ids):
-            raise ValueError("orientation report requires one decision per covered source")
+        if not coverage_ids.issubset(decision_ids) or len(self.decisions) != len(decision_ids):
+            raise ValueError("orientation report requires one decision per considered source")
         if not (
             set(self.refreshed_source_ids)
             | set(self.unavailable_source_ids)

@@ -10,6 +10,8 @@
   durations, time zones, deadlines, and sleep intervals;
 - added durable `AwakeEpoch` and provider-neutral `SourceState` event contracts
   plus exponential domain-sensitive freshness decay;
+- separated durable `SourceState` facts from per-wake `AwarenessDemand` goal,
+  relevance, sensitivity, and sufficiency requirements;
 - added decision-relevant `AwarenessCoverage`, effect-free `RefreshRequest`
   proposals, explicit observation budgets, and a pure selective
   `WakeReconciler`;
@@ -23,9 +25,18 @@
 - preserved the existing event envelope for delayed observations: observation
   time remains `Event.timestamp`, source world time is `payload.occurred_at`,
   and memory maps those to assertion knowledge and valid time;
-- added canonical orientation reports and telemetry for orientation efficiency,
-  sources considered/refreshed, fetched events, updated beliefs, retained
-  staleness, latency/cost, unnecessary refreshes, and missed changes;
+- inserted late observations through unambiguous valid-time predecessor and
+  successor boundaries instead of latest recording time, preserving ambiguous
+  histories without synthetic supersession;
+- made refresh priority depend on current freshness/confidence gaps and demand
+  importance, without applying sleep elapsed time or change hazard twice;
+- rebuilt continuity and memory from the same captured canonical history cut on
+  every wake, independent of external projector lag;
+- added canonical orientation reports for semantic efficiency, sources
+  considered/refreshed, fetched events, updated beliefs, retained staleness,
+  cost, unnecessary refreshes, and missed changes;
+- kept monotonic runtime latency exclusively in telemetry so equivalent
+  semantic outcomes retain the same content-addressed report identity;
 - demonstrated the 65-hour selective wake, silent no-change wake, delayed
   knowledge, unavailable critical source, and four-of-one-hundred selective
   freshness acceptances with no consequential effect;

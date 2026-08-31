@@ -11,6 +11,7 @@ from .continuity import (
     SOURCE_REFRESHED_EVENT,
     AwakeEpoch,
     AwarenessCoverage,
+    AwarenessDemand,
     ContinuityProjection,
     FakeObservation,
     FakeSource,
@@ -38,7 +39,6 @@ class SituatedContinuityWorker:
     def __init__(
         self,
         kernel: NoemaKernel,
-        memory: MemoryProjection,
         *,
         sources: Mapping[str, FakeSource],
         temporal: TemporalService | None = None,
@@ -53,7 +53,6 @@ class SituatedContinuityWorker:
         if len(set(sources)) != len(sources):
             raise ValueError("continuity fake source ids must be unique")
         self.kernel = kernel
-        self.memory = memory
         self.sources = dict(sources)
         self.temporal = temporal or TemporalService()
         self.freshness = freshness or FreshnessModel()
@@ -74,6 +73,7 @@ class SituatedContinuityWorker:
     async def wake(
         self,
         *,
+        demands: tuple[AwarenessDemand, ...],
         previous_active_at: datetime | None = None,
         budget: ObservationBudget | None = None,
         active_evaluation_epoch_id: str | None = None,
@@ -85,13 +85,18 @@ class SituatedContinuityWorker:
         started_monotonic = self.temporal.monotonic_now()
         woke_at = self.temporal.wall_now()
         history = await self.kernel.history()
+        cursor_after_replay = max(
+            (event.sequence or 0 for event in history),
+            default=0,
+        )
         continuity = ContinuityProjection()
         continuity.rebuild(history)
+        memory = MemoryProjection()
+        memory.rebuild(history, through_sequence=cursor_after_replay)
         checkpoints = ConsumerCheckpointProjection()
         checkpoints.rebuild(history)
         checkpoint = checkpoints.get(self.consumer_id)
         cursor_before = checkpoint.last_completed_sequence if checkpoint else 0
-        cursor_after_replay = await self.kernel.store.latest_sequence()
         previous = self._resolve_previous_active(
             previous_active_at,
             continuity=continuity,
@@ -107,24 +112,24 @@ class SituatedContinuityWorker:
         epoch_event = await self.kernel.emit(epoch.to_event(source=self.source))
 
         initial_states = continuity.source_states
-        decayed_states = tuple(
-            state.with_freshness(
-                self.freshness.source_freshness(state, at=woke_at),
-                captured_at=woke_at,
-            )
+        freshness_by_source = {
+            state.source_id: self.freshness.source_freshness(state, at=woke_at)
             for state in initial_states
-        )
-        before_coverage = AwarenessCoverage.from_states(
-            decayed_states,
+        }
+        before_coverage = AwarenessCoverage.from_inputs(
+            initial_states,
+            demands,
+            freshness_by_source=freshness_by_source,
             relevance_floor=self.reconciler.relevance_floor,
         )
         observation_budget = budget or ObservationBudget(
-            max_cost=sum(state.refresh_cost for state in decayed_states),
-            max_sources=len(decayed_states),
+            max_cost=sum(state.refresh_cost for state in initial_states),
+            max_sources=len(initial_states),
         )
         plan = self.reconciler.plan(
-            decayed_states,
-            elapsed_wall_time=epoch.elapsed_wall_time,
+            initial_states,
+            demands,
+            freshness_by_source=freshness_by_source,
             budget=observation_budget,
             created_at=woke_at,
         )
@@ -133,8 +138,7 @@ class SituatedContinuityWorker:
                 request.to_event(source=self.source, causation_id=epoch_event.id)
             )
 
-        states_by_id = {state.source_id: state for state in decayed_states}
-        latest_assertions = self._latest_assertions()
+        states_by_id = {state.source_id: state for state in initial_states}
         refreshed: list[str] = []
         changed: list[str] = []
         unavailable: list[str] = []
@@ -205,8 +209,13 @@ class SituatedContinuityWorker:
                     woke_at=woke_at,
                     epoch_event_id=epoch_event.id,
                 )
-                key = (observation.subject, observation.predicate)
-                previous_assertion = latest_assertions.get(key)
+                memory.apply(source_event)
+                neighbors = memory.temporal_neighbors(
+                    observation.subject,
+                    observation.predicate,
+                    valid_at=observation.occurred_at,
+                    known_at=woke_at,
+                )
                 assertion = SemanticAssertion.create(
                     subject=observation.subject,
                     predicate=observation.predicate,
@@ -214,6 +223,9 @@ class SituatedContinuityWorker:
                     epistemic_type=EpistemicType.OBSERVED,
                     confidence=observation.confidence,
                     valid_from=observation.occurred_at,
+                    valid_to=(
+                        neighbors.successor.valid_from if neighbors.successor is not None else None
+                    ),
                     recorded_at=woke_at,
                     source_refs=(f"event:{source_event.id}",),
                     fresh_until=self.freshness.fresh_until(
@@ -221,12 +233,15 @@ class SituatedContinuityWorker:
                         change_hazard=state.change_hazard,
                     ),
                     supersedes=(
-                        previous_assertion.assertion_id if previous_assertion is not None else None
+                        neighbors.predecessor.assertion_id
+                        if neighbors.predecessor is not None
+                        and not neighbors.ambiguous_at_valid_time
+                        else None
                     ),
                     mutable_world=True,
                 )
-                await self.kernel.emit(assertion.to_event(source=self.source))
-                latest_assertions[key] = assertion
+                assertion_event = await self.kernel.emit(assertion.to_event(source=self.source))
+                memory.apply(assertion_event)
                 events_fetched += 1
                 beliefs_updated += 1
                 if observation.issue_priority > 0.0:
@@ -243,6 +258,7 @@ class SituatedContinuityWorker:
                 cursor=result.cursor,
             )
             states_by_id[state.source_id] = refreshed_state
+            freshness_by_source[state.source_id] = 1.0
             await self.kernel.emit(
                 refreshed_state.to_event(
                     source=self.source,
@@ -252,8 +268,10 @@ class SituatedContinuityWorker:
 
         await self.kernel.bus.drain()
         final_states = tuple(states_by_id[key] for key in sorted(states_by_id))
-        coverage = AwarenessCoverage.from_states(
+        coverage = AwarenessCoverage.from_inputs(
             final_states,
+            demands,
+            freshness_by_source=freshness_by_source,
             relevance_floor=self.reconciler.relevance_floor,
         )
         status = OrientationStatus.ORIENTED if coverage.sufficient else OrientationStatus.INCOMPLETE
@@ -267,7 +285,8 @@ class SituatedContinuityWorker:
         issues.sort(key=lambda issue: (-issue.priority, issue.source_id, issue.summary))
         highest_issue = issues[0] if issues else None
         relevant_unseen, relevant_changes = self._relevant_missed_changes(
-            initial_states=decayed_states,
+            initial_states=initial_states,
+            demands=demands,
             refreshed_source_ids=set(refreshed),
             at=woke_at,
         )
@@ -286,7 +305,6 @@ class SituatedContinuityWorker:
             events_fetched=events_fetched,
             beliefs_updated=beliefs_updated,
             stale_beliefs_retained=len(coverage.gaps),
-            orientation_latency_seconds=latency,
             observation_cost=observation_cost,
             unnecessary_refresh_rate=(empty_refreshes / len(refreshed) if refreshed else 0.0),
             missed_change_rate=(relevant_unseen / relevant_changes if relevant_changes else 0.0),
@@ -312,7 +330,7 @@ class SituatedContinuityWorker:
             causation_id=completed_event.id,
             timestamp=woke_at,
         )
-        await self._record_metrics(report)
+        await self._record_metrics(report, orientation_latency_seconds=latency)
         return report
 
     async def _record_observation(
@@ -395,7 +413,12 @@ class SituatedContinuityWorker:
         )
         return ConsumerCheckpoint.from_event(stored)
 
-    async def _record_metrics(self, report: OrientationReport) -> None:
+    async def _record_metrics(
+        self,
+        report: OrientationReport,
+        *,
+        orientation_latency_seconds: float,
+    ) -> None:
         values = report.metrics.to_dict()
         for name, value in values.items():
             if isinstance(value, (int, float)):
@@ -406,30 +429,28 @@ class SituatedContinuityWorker:
                         {"epoch": report.epoch.epoch_id},
                     )
                 )
-
-    def _latest_assertions(self) -> dict[tuple[str, str], SemanticAssertion]:
-        latest: dict[tuple[str, str], SemanticAssertion] = {}
-        for assertion in self.memory.assertions:
-            key = (assertion.subject, assertion.predicate)
-            current = latest.get(key)
-            if current is None or (
-                assertion.recorded_at,
-                assertion.assertion_id,
-            ) > (current.recorded_at, current.assertion_id):
-                latest[key] = assertion
-        return latest
+        await self.telemetry.record(
+            Metric(
+                "continuity.orientation_latency_seconds",
+                orientation_latency_seconds,
+                {"epoch": report.epoch.epoch_id},
+            )
+        )
 
     def _relevant_missed_changes(
         self,
         *,
         initial_states: tuple[SourceState, ...],
+        demands: tuple[AwarenessDemand, ...],
         refreshed_source_ids: set[str],
         at: datetime,
     ) -> tuple[int, int]:
         missed = 0
         total = 0
+        demand_by_id = {demand.source_id: demand for demand in demands}
         for state in initial_states:
-            if state.goal_relevance * state.decision_sensitivity < self.reconciler.relevance_floor:
+            demand = demand_by_id.get(state.source_id)
+            if demand is None or demand.importance < self.reconciler.relevance_floor:
                 continue
             adapter = self.sources.get(state.source_id)
             if adapter is None:

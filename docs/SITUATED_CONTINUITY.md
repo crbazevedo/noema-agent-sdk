@@ -27,9 +27,11 @@ The foundation is deterministic and connector-free:
 - `AwakeEpoch` durably records prior activity, elapsed wall time, canonical log
   cursors, an optional autonomic evaluation-epoch pin, and terminal orientation
   status.
-- `SourceState` records a mutable domain's observation time, source cursor,
-  change hazard, point-in-time freshness/confidence, current goal relevance,
-  decision sensitivity, and refresh cost.
+- `SourceState` records durable source facts: domain, observation time, cursor,
+  change hazard, confidence, and refresh cost. It does not retain wake-specific
+  goal policy or a decayed freshness snapshot.
+- `AwarenessDemand` supplies the per-wake goal references, relevance, decision
+  sensitivity, and required freshness/confidence for one source.
 - `FreshnessModel` applies domain-sensitive exponential decay,
   `exp(-hazard * elapsed)`.
 - `AwarenessCoverage` projects whether decision-relevant domains have enough
@@ -43,9 +45,11 @@ The foundation is deterministic and connector-free:
   prerequisites but cannot authorize, deliberate, dispatch, or execute.
 - `FakeSource` supplies deterministic cursor deltas and failure behavior for
   executable sleep/wake scenarios.
-- `SituatedContinuityWorker` replays canonical history, performs the plan over
-  fake sources, updates bitemporal memory, emits an `OrientationReport`, and
-  advances a generic `ConsumerCheckpoint`.
+- `SituatedContinuityWorker` captures one canonical history cut `N`, rebuilds
+  both continuity and memory through that same cut, performs the plan over fake
+  sources, updates bitemporal memory, emits an `OrientationReport`, and advances
+  a generic `ConsumerCheckpoint`. A lagging external memory projector is never
+  wake-time truth.
 
 The canonical event log remains the only durable authority. Source states,
 awake epochs, refresh requests/results, observations, semantic assertions, and
@@ -70,22 +74,37 @@ Noema knew at a knowledge time without an event-envelope migration. A future
 schema version may promote additional temporal coordinates through deterministic
 upcasting.
 
+Late observations are inserted by valid time, not recording order.
+`MemoryProjection.temporal_neighbors()` finds the uniquely determined assertion
+valid immediately before the occurrence and the earliest assertion after it.
+The new assertion supersedes only a unique predecessor and ends at the
+successor's `valid_from`. Ambiguous history is preserved without inventing a
+supersession.
+
 Wall and monotonic time are also separate. Wall time survives a restart and
 governs deadlines; monotonic time measures local orientation latency without
-being corrupted by wall-clock adjustment.
+being corrupted by wall-clock adjustment. Runtime latency is operational
+telemetry only and cannot alter canonical report identity.
 
 ## Selective reconciliation
 
-For each source, the planner estimates normalized refresh need from:
+Freshness decay turns durable source state into the current wake's freshness.
+The planner then measures current requirement gaps rather than applying sleep
+elapsed time or hazard a second time:
 
 ```text
-change hazard × elapsed wall time × goal relevance × decision sensitivity
+importance       = relevance × decision sensitivity
+freshness_gap    = max(0, 1 - current_freshness / required_freshness)
+confidence_gap   = max(0, 1 - confidence / required_confidence)
+refresh_need     = importance × [1 - (1 - freshness_gap)(1 - confidence_gap)]
 ```
 
-It ranks useful uncertainty reduction against refresh cost, applies the
-observation budget, and never treats a failed refresh as evidence that the
-world is unchanged. Unavailable critical sources retain degraded freshness,
-become explicit coverage gaps, and leave dependent actions shadow-blocked.
+This lets accumulated staleness outrank mild staleness and lets a fresh but
+low-confidence source request observation. The planner ranks useful uncertainty
+reduction against refresh cost, applies the observation budget, and never
+treats a failed refresh as evidence that the world is unchanged. Unavailable
+critical sources retain degraded freshness, become explicit coverage gaps, and
+leave dependent actions shadow-blocked.
 
 The primary metric is:
 
@@ -93,9 +112,10 @@ The primary metric is:
 orientation efficiency = decision-relevant uncertainty removed / observation cost
 ```
 
-Reports also record sources considered/refreshed, events fetched, beliefs
-updated, stale beliefs retained, latency, observation cost, unnecessary
-refreshes, and missed changes.
+Canonical reports also record sources considered/refreshed, events fetched,
+beliefs updated, stale beliefs retained, observation cost, unnecessary
+refreshes, and missed changes. Runtime latency is recorded separately through
+`TelemetrySink`.
 
 ## Acceptance ecology
 
@@ -113,6 +133,12 @@ Additional executable scenarios prove:
 - a critical unavailable source makes orientation explicitly incomplete;
 - four relevant sources out of one hundred produce four refreshes, not one
   hundred;
+- accumulated current staleness wins a one-source budget, while high freshness
+  with low confidence still requests refresh;
+- a Friday state learned Monday is inserted between the Friday predecessor and
+  Saturday successor, even while the external memory projector is lagging;
+- identical semantic wake outcomes retain the same report identity across
+  different monotonic runtimes;
 - the shadow orientation barrier exposes insufficient action prerequisites;
 - structural fitness gates prevent the continuity core and worker from reaching
   agents, models, authority, capabilities, reasoning, or effect operations.
