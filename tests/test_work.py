@@ -48,8 +48,9 @@ class WorkContractTests(unittest.IsolatedAsyncioTestCase):
 
         completion = lease.completion_event(
             source="test",
-            completed_at=NOW + timedelta(minutes=1),
+            accepted_at=NOW + timedelta(minutes=1),
             artifact_refs=("artifact:implementation",),
+            reported_finished_at=NOW + timedelta(seconds=30),
         )
         expiration = lease.expiration_event(
             source="test",
@@ -125,8 +126,10 @@ class WorkContractTests(unittest.IsolatedAsyncioTestCase):
             proposal,
             order(),
             causal_event_cursor=12,
+            acceptance_event_cursor=12,
             current_graph_version=0,
             available_capability_types=("repo-analysis",),
+            intervening_events=(),
             accepted_at=NOW,
         )
         self.assertNotEqual(proposal.proposal_id, graph.graph_id)
@@ -169,8 +172,10 @@ class WorkContractTests(unittest.IsolatedAsyncioTestCase):
                 proposal,
                 order(),
                 causal_event_cursor=3,
+                acceptance_event_cursor=3,
                 current_graph_version=0,
                 available_capability_types=("repo-analysis", "architecture"),
+                intervening_events=(),
                 accepted_at=NOW,
             )
         with self.assertRaisesRegex(ValueError, "unavailable capability"):
@@ -178,8 +183,10 @@ class WorkContractTests(unittest.IsolatedAsyncioTestCase):
                 proposal,
                 order(),
                 causal_event_cursor=3,
+                acceptance_event_cursor=3,
                 current_graph_version=0,
                 available_capability_types=("repo-analysis",),
+                intervening_events=(),
                 accepted_at=NOW,
             )
 

@@ -23,8 +23,11 @@ principle they change.
 | Work identity is layered | `Goal`, `WorkOrder`, `PlanProposal`, `WorkGraph`, `WorkNode`, and `ActionIntent` cannot substitute for one another. |
 | Planners propose structure | A planner cannot admit a graph, select a worker, grant a lease, authorize, or execute. |
 | Graphs own dependency progress | Ready frontiers derive from accepted dependencies, canonical completions, leases, orientation, and invalidation. |
+| Planning cuts are causal snapshots | Admission and replay use capability inputs through the proposal cursor and reject declared changes during planning. |
 | Capability, competence, and authority differ | Declarations establish feasibility, evidence estimates quality, and policy alone grants authority. |
+| Availability expires | An `AVAILABLE` observation cannot outlive its explicit presence validity horizon. |
 | Work ownership is fenced | Every reassignment increments a node fencing token; stale workers cannot complete newer attempts. |
+| Completion time is control-plane time | Worker-reported finish time is evidence; only coordinator acceptance time determines lease legality. |
 | Epistemic provenance is durable | Observed, inferred, reported, assumed, and simulated claims remain explicitly typed through replay. |
 | Evidence references fail closed | One resolver admits only existing canonical events, assertions, or typed simulation artifacts. |
 | Evidence has one semantic graph | Assertion source anchors establish provenance; only `EvidenceLink` describes how evidence bears on a claim. |

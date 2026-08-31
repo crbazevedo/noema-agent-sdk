@@ -683,12 +683,20 @@ class AgentPresence:
     status: PresenceStatus
     max_concurrency: int
     observed_at: datetime
+    valid_until: datetime
 
     def __post_init__(self) -> None:
         _require_text(self.agent_id, "agent presence id")
         if self.max_concurrency <= 0:
             raise ValueError("agent max concurrency must be positive")
         _require_aware(self.observed_at, "agent presence observed_at")
+        _require_aware(self.valid_until, "agent presence valid_until")
+        if self.valid_until <= self.observed_at:
+            raise ValueError("agent presence validity must end after observation")
+
+    def is_valid_at(self, at: datetime) -> bool:
+        _require_aware(at, "agent presence evaluation time")
+        return self.observed_at <= at < self.valid_until
 
     def to_dict(self) -> JSONObject:
         return {
@@ -696,6 +704,7 @@ class AgentPresence:
             "status": self.status.value,
             "max_concurrency": self.max_concurrency,
             "observed_at": self.observed_at.isoformat(),
+            "valid_until": self.valid_until.isoformat(),
         }
 
     @classmethod
@@ -705,6 +714,7 @@ class AgentPresence:
             status=PresenceStatus(str(data["status"])),
             max_concurrency=int(cast(int, data["max_concurrency"])),
             observed_at=_datetime(data, "observed_at"),
+            valid_until=_datetime(data, "valid_until"),
         )
 
     def to_event(self, *, source: str) -> Event:
@@ -1072,13 +1082,16 @@ class WorkLease:
         self,
         *,
         source: str,
-        completed_at: datetime,
+        accepted_at: datetime,
         artifact_refs: tuple[str, ...],
+        reported_finished_at: datetime | None = None,
         verification_passed: bool | None = None,
     ) -> Event:
-        _require_aware(completed_at, "work completion time")
-        if completed_at < self.granted_at or completed_at >= self.expires_at:
-            raise ValueError("work must complete during its active lease")
+        _require_aware(accepted_at, "work completion acceptance time")
+        if accepted_at < self.granted_at or accepted_at >= self.expires_at:
+            raise ValueError("work completion must be accepted during its active lease")
+        if reported_finished_at is not None:
+            _require_aware(reported_finished_at, "reported work finish time")
         _unique_text(artifact_refs, "work completion artifact refs", required=True)
         payload: JSONObject = {
             "lease_id": self.lease_id,
@@ -1086,7 +1099,12 @@ class WorkLease:
             "node_id": self.node_id,
             "agent_id": self.agent_id,
             "fencing_token": self.fencing_token,
-            "completed_at": completed_at.isoformat(),
+            "accepted_at": accepted_at.isoformat(),
+            "reported_finished_at": (
+                reported_finished_at.isoformat()
+                if reported_finished_at is not None
+                else None
+            ),
             "artifact_refs": list(artifact_refs),
             "verification_passed": verification_passed,
         }
@@ -1095,7 +1113,7 @@ class WorkLease:
             event_type=WORK_NODE_COMPLETED_EVENT,
             source=source,
             subject=self.node_id,
-            timestamp=completed_at,
+            timestamp=accepted_at,
             payload=payload,
             causation_id=f"work-lease-granted:{self.graph_id}:{self.node_id}:{self.fencing_token}",
         )

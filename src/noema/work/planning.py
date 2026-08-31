@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, cast
 
+from ..events import Event
 from ..types import utc_now
 from .models import (
     PlanProposal,
@@ -94,8 +95,10 @@ class PlanValidator:
         work_order: WorkOrder,
         *,
         causal_event_cursor: int,
+        acceptance_event_cursor: int,
         current_graph_version: int,
         available_capability_types: tuple[str, ...],
+        intervening_events: tuple[Event, ...],
         accepted_at: datetime,
     ) -> WorkGraph:
         if accepted_at.tzinfo is None:
@@ -108,8 +111,37 @@ class PlanValidator:
             raise ValueError("plan acceptance cannot precede its proposal")
         if proposal.based_on_event_cursor != causal_event_cursor:
             raise ValueError("plan proposal does not match the captured causal event cursor")
+        if acceptance_event_cursor < causal_event_cursor:
+            raise ValueError("plan acceptance head cannot precede the planning cut")
+        intervening_sequences = tuple(event.sequence for event in intervening_events)
+        if any(sequence is None for sequence in intervening_sequences):
+            raise ValueError("plan admission requires canonical intervening events")
+        canonical_sequences = tuple(cast(int, sequence) for sequence in intervening_sequences)
+        if canonical_sequences != tuple(sorted(set(canonical_sequences))):
+            raise ValueError("plan admission events must be unique and canonically ordered")
+        if any(
+            sequence <= causal_event_cursor or sequence > acceptance_event_cursor
+            for sequence in canonical_sequences
+        ):
+            raise ValueError("plan admission events fall outside the planning window")
+        observed_head = (
+            canonical_sequences[-1] if canonical_sequences else causal_event_cursor
+        )
+        if observed_head != acceptance_event_cursor:
+            raise ValueError("plan admission events do not reach the acceptance head")
         if proposal.based_on_graph_version != current_graph_version:
             raise ValueError("plan proposal does not match the current graph version")
+        stale_events = tuple(
+            event
+            for event in intervening_events
+            if event.type in proposal.replan_event_types
+            and int(event.sequence or 0) > proposal.based_on_event_cursor
+        )
+        if stale_events:
+            raise ValueError(
+                "plan proposal is stale at admission due to intervening events: "
+                f"{[event.id for event in stale_events]}"
+            )
         if not set(work_order.success_criteria).issubset(proposal.done_conditions):
             raise ValueError("plan done conditions do not cover work-order success criteria")
 

@@ -47,14 +47,14 @@ The slice contains:
   contracts;
 - an asynchronous provider-neutral `Planner` protocol and deterministic
   `FakePlanner`;
-- `PlanProposal` values pinned to both canonical event cursor and prior graph
-  version;
+- `PlanProposal` values pinned to both a canonical planning snapshot and prior
+  graph version;
 - deterministic `PlanValidator` gates for identity, success coverage,
   capability-type availability, dependency references, acyclicity, and
   verification ancestry;
-- durable `AgentPresence` and `CapabilityManifest` facts;
-- seeded or evidence-backed `CompetenceEstimate` values with separate evidence
-  confidence;
+- expiring `AgentPresence` facts and durable `CapabilityManifest` facts;
+- seeded or evidence-ready `CompetenceEstimate` values with separate evidence
+  confidence; only seeded estimates participate in v0.5 matching;
 - a derived `ReadyFrontier` over completed dependencies, active leases, graph
   validity, and orientation prerequisites;
 - a deterministic `WorkerMatcher` that considers availability, capacity,
@@ -99,14 +99,19 @@ audit-stable traversal of the feasible frontier.
 ## Matching boundaries
 
 `CapabilityManifest` answers whether an agent declares a capability type.
-`CompetenceEstimate` supplies a separate seeded/evidence-ready estimate. The
-initial match score is the minimum across required capabilities of:
+`CompetenceEstimate` supplies a separate seeded/evidence-ready estimate. Only
+`SEEDED` estimates are operational in v0.5. The type remains evidence-ready,
+but the coordinator and projection reject `EVIDENCE` estimates until their
+references can be resolved against calibrated outcome evidence. The initial
+seeded match score is the minimum across required capabilities of:
 
 ```text
 competence score × evidence confidence
 ```
 
-The best feasible score wins with agent ID as a deterministic tie-break.
+The best feasible score wins with agent ID as a deterministic tie-break. An
+`AVAILABLE` presence is eligible only from `observed_at` through its exclusive
+`valid_until` horizon; silence therefore cannot preserve availability forever.
 Matching never grants authority. Authority remains on the work-order ceiling
 and, for an actual effect, in the existing policy/capability path.
 
@@ -119,9 +124,11 @@ completion workers from matching.
 A lease is a renewable ownership claim only in the conceptual architecture;
 the first slice implements grant, successful completion, and deadline expiry.
 Each node attempt receives a monotonically increasing fencing token. Completion
-must reference the active lease and token and occur before expiry. Expiry and
-completion use one terminal event ID per lease, so only one terminal fact can
-win canonical event-ID uniqueness.
+must reference the active lease and token. A worker may report
+`reported_finished_at` as informational evidence, but legality depends only on
+the coordinator clock's `accepted_at`, which must precede lease expiry. Expiry
+and completion use one terminal event ID per lease, so only one terminal fact
+can win canonical event-ID uniqueness.
 
 The coordinator is a command facade, not a private database or long-running
 scheduler. It rebuilds `WorkProjection` from history before each transition.
@@ -131,9 +138,13 @@ preserve prior artifacts, and grant a new fenced attempt.
 ## Causal invalidation and orientation
 
 Every proposal records `based_on_event_cursor` and declared replan event types.
-When a matching canonical event occurs after that cut, the active graph is
-invalidated. Completed artifacts remain present, but the frontier becomes empty
-until a later plan version is accepted.
+The cut is a causal planning snapshot: capability types used for both original
+admission and replay are reconstructed through that exact cursor. Before graph
+admission, the validator inspects the canonical planning window; a declared
+replan event after the cut rejects the proposal as stale rather than accepting
+then invalidating it. A later matching event invalidates an already active
+graph. Completed artifacts remain present, but the frontier becomes empty until
+a later plan version is accepted.
 
 Work-node source prerequisites reuse Situated Continuity's
 freshness/confidence requirements. Insufficient coverage keeps the node outside
@@ -153,6 +164,12 @@ The deterministic release scenario proves:
 - a later release-constraint event invalidates the plan before `G` is leased;
 - replay reconstructs orders, graph, ecology, leases, completions, workers, and
   invalidation without an action or capability event.
+
+Focused hardening regressions additionally prove that a blocking planner cannot
+admit a proposal after a declared causal change, replay uses capability inputs
+from the exact planning cut, expired presence cannot receive a lease, a worker
+cannot backdate completion acceptance, and unresolved evidence-based competence
+cannot affect v0.5 routing.
 
 ## Explicit deferrals
 

@@ -37,6 +37,14 @@ external connector, optimizer, learned score, or second state store.
    accepted graph is invalidated and cannot advance further.
 7. Replaying the same canonical history reconstructs byte-equivalent durable
    work state and performs no model, authorization, capability, or effect call.
+8. If a declared replan event arrives while a planner is suspended, admission
+   rejects the returned proposal before any graph becomes canonical.
+9. If capability manifests change during planning, original validation and
+   replay both use the manifest projection through the proposal's exact causal
+   cut.
+10. An `AVAILABLE` observation beyond its validity horizon cannot receive work.
+11. A completion reported after lease expiry cannot become canonical by
+    claiming an earlier worker finish time.
 
 ## Decision
 
@@ -55,12 +63,16 @@ external connector, optimizer, learned score, or second state store.
    but no agent identities, competence estimates, credentials, load, or
    authority policy. Implement only deterministic `FakePlanner` in v0.5.
 4. Make `PlanProposal` immutable and content-addressed. Pin it to
-   `based_on_event_cursor` and `based_on_graph_version`; proposed structure
-   cannot mutate accepted state.
+   `based_on_event_cursor` and `based_on_graph_version`; the cursor identifies a
+   causal planning snapshot whose capability inputs can be reconstructed
+   exactly during admission and replay. Proposed structure cannot mutate
+   accepted state.
 5. Give `PlanValidator` exclusive admission authority for `WorkGraph`. It
    validates identity, work-order success coverage, known capability types,
-   dependency references, DAG acyclicity, monotonic graph version, and
-   verification ancestry. It does not optimize or execute.
+   dependency references, DAG acyclicity, monotonic graph version, verification
+   ancestry, and planning-window freshness. A declared replan event between
+   the planning cut and admission rejects the proposal as stale. It does not
+   optimize or execute.
 6. Derive `ReadyFrontier` from the accepted graph plus canonical lifecycle
    projection and current awareness coverage. Dependency waves are projections,
    never planner instructions or stored counters.
@@ -68,9 +80,12 @@ external connector, optimizer, learned score, or second state store.
    frontier in deterministic node order; it implements no scheduling objective,
    makespan solver, MDP, or oversight allocator.
 8. Represent ecology through durable `AgentPresence`, `CapabilityManifest`, and
-   `CompetenceEstimate` facts. Seeded estimates are explicit; evidence-backed
-   estimates require evidence references. Matching uses declared capability,
-   availability/capacity, competence, and evidence confidence only.
+   `CompetenceEstimate` facts. Presence has an explicit exclusive validity
+   horizon. Seeded estimates are explicit; evidence-based estimates remain
+   representable but are rejected by the coordinator and work projection in
+   v0.5 until references can be resolved against calibrated canonical outcomes.
+   Matching uses declared capability, fresh availability/capacity, seeded
+   competence, and evidence confidence only.
 9. Keep authority outside `WorkerMatcher`. A lease means responsibility for a
    work node, not permission to execute an external effect. Any later effect
    still requires `ActionIntent`, policy authorization, and a typed capability.
@@ -78,9 +93,10 @@ external connector, optimizer, learned score, or second state store.
     downstream of their targets, and matching excludes the workers recorded as
     completing those targets.
 11. Use immutable fenced `WorkLease` grants. Fencing tokens increase per graph
-    node. Completion requires the active token and a time within the lease.
-    Completion and expiry share one terminal event identity so canonical event
-    uniqueness admits only one terminal outcome.
+    node. Completion requires the active token and a control-plane-owned
+    `accepted_at` within the lease. A worker's `reported_finished_at` is
+    informational only. Completion and expiry share one terminal event identity
+    so canonical event uniqueness admits only one terminal outcome.
 12. Invalidate an active graph when a declared replan event occurs after its
     proposal causal cut. Preserve completed artifacts but expose no further
     ready nodes until a later graph version is validated.
@@ -107,7 +123,9 @@ external connector, optimizer, learned score, or second state store.
 - The slice assumes serialized work-control commands. Stable lease claim IDs and
   shared terminal IDs close the demonstrated claim/terminal races, but a
   distributed multi-writer compare-and-append transaction remains deferred.
-- Presence is an observed lease-feasibility fact, not a liveness guarantee.
+- Presence is an expiring lease-feasibility fact, not a liveness guarantee.
+- Evidence-based competence is typed but cannot enter the v0.5 canonical work
+  projection. Empirical calibration and evidence resolution remain deferred.
 - Source-level orientation prerequisites are supported. Belief-level
   confidence prerequisites remain a later perception/work-control hardening
   decision.
@@ -142,7 +160,14 @@ external connector, optimizer, learned score, or second state store.
   scheduler, delivery, or external-adapter modules and cannot call effect-plane
   operations;
 - validation rejects dependency cycles, unknown capability types, stale causal
-  cuts/graph versions, and verification nodes not downstream of their targets;
+  cuts/graph versions, planning-window replan events, and verification nodes not
+  downstream of their targets;
+- admission and replay reconstruct capability inputs through the exact planning
+  cursor rather than from the latest ecology projection;
+- expired presence cannot receive a lease, and evidence-based competence is
+  non-operational in v0.5;
+- completion legality uses coordinator acceptance time, so a claimed earlier
+  worker finish cannot bypass lease expiry;
 - the flagship produces `A,B → C → D,E → F`, with independent verification;
 - an expired lease rejects its stale token and reassigns with the next token
   after coordinator reconstruction;

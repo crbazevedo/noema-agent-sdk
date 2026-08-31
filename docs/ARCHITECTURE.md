@@ -132,17 +132,21 @@ structure only. `PlanValidator` owns DAG legality and graph admission, while
 dependency waves emerge from canonical completions.
 
 Agent ecology is similarly separated. `CapabilityManifest` records declared
-capability types. `CompetenceEstimate` records seeded or evidence-backed
-quality estimates. `AuthorityLevel` remains a separate governance ceiling and
-is never inferred by `WorkerMatcher`. Independent verification is ordinary
+capability types. `AgentPresence` expires explicitly. `CompetenceEstimate`
+records seeded or evidence-ready quality estimates, but only seeded estimates
+are operational in v0.5. `AuthorityLevel` remains a separate governance ceiling
+and is never inferred by `WorkerMatcher`. Independent verification is ordinary
 work whose matcher excludes the worker recorded as completing its target.
 
 `WorkLease` grants carry monotonically increasing fencing tokens. Grant,
 completion, expiration, and plan invalidation are canonical events;
 `WorkProjection` is rebuildable. Completion and expiration share a terminal
 event identity per lease, preventing two terminal outcomes under event-ID
-uniqueness. A declared causal-state change after the proposal cursor invalidates
-the active graph without erasing completed artifacts.
+uniqueness. Completion legality uses the coordinator's acceptance time; worker
+finish time is informational. Planning capability inputs replay through the
+proposal's exact causal cut, and a declared change during planning rejects graph
+admission. A later declared causal-state change invalidates the active graph
+without erasing completed artifacts.
 
 `ReadyFrontier` also evaluates source freshness/confidence prerequisites through
 Situated Continuity coverage. This controls work readiness but does not

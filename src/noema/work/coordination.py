@@ -25,6 +25,7 @@ from .models import (
     WORK_PLAN_INVALIDATED_EVENT,
     AgentPresence,
     CapabilityManifest,
+    CompetenceBasis,
     CompetenceEstimate,
     PlanProposal,
     PresenceStatus,
@@ -45,7 +46,8 @@ class NodeCompletion:
     agent_id: str
     lease_id: str
     fencing_token: int
-    completed_at: datetime
+    accepted_at: datetime
+    reported_finished_at: datetime | None
     artifact_refs: tuple[str, ...]
     verification_passed: bool | None
 
@@ -84,6 +86,12 @@ class WorkProjection:
     @property
     def orders(self) -> tuple[WorkOrder, ...]:
         return tuple(self._orders[key] for key in sorted(self._orders))
+
+    @property
+    def event_cursor(self) -> int:
+        """Canonical cut through which every projected planning input is known."""
+
+        return self._last_sequence
 
     @property
     def proposals(self) -> tuple[PlanProposal, ...]:
@@ -199,9 +207,41 @@ class WorkProjection:
     def active_lease_count(self, agent_id: str) -> int:
         return sum(value.agent_id == agent_id for value in self.active_leases)
 
-    def available_capability_types(self) -> tuple[str, ...]:
+    def available_capability_types(
+        self,
+        *,
+        through_sequence: int | None = None,
+    ) -> tuple[str, ...]:
+        if through_sequence is None:
+            manifests = self._manifests.values()
+        else:
+            manifests_by_agent: dict[str, CapabilityManifest] = {}
+            for event in self._events.values():
+                if (
+                    event.type == CAPABILITY_MANIFEST_RECORDED_EVENT
+                    and (event.sequence or 0) <= through_sequence
+                ):
+                    manifest = CapabilityManifest.from_event(event)
+                    manifests_by_agent[manifest.agent_id] = manifest
+            manifests = manifests_by_agent.values()
         return tuple(
-            sorted({capability for value in self.manifests for capability in value.capabilities})
+            sorted({capability for value in manifests for capability in value.capabilities})
+        )
+
+    def events_after(
+        self,
+        sequence: int,
+        *,
+        through_sequence: int | None = None,
+    ) -> tuple[Event, ...]:
+        return tuple(
+            event
+            for event in self._events.values()
+            if (event.sequence or 0) > sequence
+            and (
+                through_sequence is None
+                or (event.sequence or 0) <= through_sequence
+            )
         )
 
     def apply(self, event: Event) -> bool:
@@ -247,8 +287,15 @@ class WorkProjection:
                 graph_proposal,
                 self._orders[graph.work_order_id],
                 causal_event_cursor=graph_proposal.based_on_event_cursor,
+                acceptance_event_cursor=self.event_cursor,
                 current_graph_version=current_version,
-                available_capability_types=self.available_capability_types(),
+                available_capability_types=self.available_capability_types(
+                    through_sequence=graph_proposal.based_on_event_cursor
+                ),
+                intervening_events=self.events_after(
+                    graph_proposal.based_on_event_cursor,
+                    through_sequence=event.sequence - 1,
+                ),
                 accepted_at=graph.accepted_at,
             )
             if graph != expected:
@@ -278,6 +325,10 @@ class WorkProjection:
             handled = True
         elif event.type == COMPETENCE_ESTIMATE_RECORDED_EVENT:
             estimate = CompetenceEstimate.from_event(event)
+            if estimate.basis is not CompetenceBasis.SEEDED:
+                raise ValueError(
+                    "evidence-based competence is non-operational in v0.5"
+                )
             key = (estimate.agent_id, estimate.capability)
             current_estimate = self._competence.get(key)
             if (
@@ -341,7 +392,11 @@ class WorkProjection:
             raise ValueError("work lease fencing token is not the next token")
 
         presence = self._presence.get(lease.agent_id)
-        if presence is None or presence.status is not PresenceStatus.AVAILABLE:
+        if (
+            presence is None
+            or presence.status is not PresenceStatus.AVAILABLE
+            or not presence.is_valid_at(lease.granted_at)
+        ):
             raise ValueError("work lease requires an available agent")
         if self.active_lease_count(lease.agent_id) >= presence.max_concurrency:
             raise ValueError("work lease exceeds agent concurrency capacity")
@@ -357,6 +412,8 @@ class WorkProjection:
         if any(value is None for value in estimates):
             raise ValueError("work lease requires competence estimates for every capability")
         typed_estimates = cast(tuple[CompetenceEstimate, ...], estimates)
+        if any(value.basis is not CompetenceBasis.SEEDED for value in typed_estimates):
+            raise ValueError("v0.5 work leases require seeded competence estimates")
         expected_refs = tuple(value.estimate_id for value in typed_estimates)
         if lease.competence_estimate_refs != expected_refs:
             raise ValueError("work lease competence evidence is not the current estimate set")
@@ -416,14 +473,17 @@ class WorkProjection:
         for key in ("graph_id", "node_id", "agent_id", "fencing_token"):
             if event.payload.get(key) != lease.to_dict()[key]:
                 raise ValueError("work completion does not match its fenced lease")
-        completed_at = parse_datetime(cast(str | None, event.payload.get("completed_at")))
+        accepted_at = parse_datetime(cast(str | None, event.payload.get("accepted_at")))
         if (
-            completed_at is None
-            or event.timestamp != completed_at
-            or completed_at < lease.granted_at
-            or completed_at >= lease.expires_at
+            accepted_at is None
+            or event.timestamp != accepted_at
+            or accepted_at < lease.granted_at
+            or accepted_at >= lease.expires_at
         ):
-            raise ValueError("work completion time is outside the active lease")
+            raise ValueError("work completion acceptance time is outside the active lease")
+        reported_finished_at = parse_datetime(
+            cast(str | None, event.payload.get("reported_finished_at"))
+        )
         artifact_values = cast(
             list[object] | tuple[object, ...],
             event.payload.get("artifact_refs", ()),
@@ -450,7 +510,8 @@ class WorkProjection:
             agent_id=lease.agent_id,
             lease_id=lease.lease_id,
             fencing_token=lease.fencing_token,
-            completed_at=completed_at,
+            accepted_at=accepted_at,
+            reported_finished_at=reported_finished_at,
             artifact_refs=artifact_refs,
             verification_passed=verification_passed,
         )
@@ -609,7 +670,11 @@ class WorkerMatcher:
         graph: WorkGraph,
         node: WorkNode,
         projection: WorkProjection,
+        *,
+        at: datetime,
     ) -> WorkerMatch | None:
+        if at.tzinfo is None:
+            raise ValueError("worker matching time must be timezone-aware")
         candidates: list[WorkerMatch] = []
         excluded_workers = {
             worker
@@ -617,7 +682,10 @@ class WorkerMatcher:
             if (worker := projection.worker_for_node(graph.graph_id, target_id)) is not None
         }
         for presence in projection.presences:
-            if presence.status is not PresenceStatus.AVAILABLE:
+            if (
+                presence.status is not PresenceStatus.AVAILABLE
+                or not presence.is_valid_at(at)
+            ):
                 continue
             if presence.agent_id in excluded_workers:
                 continue
@@ -635,6 +703,8 @@ class WorkerMatcher:
             if any(value is None for value in estimates):
                 continue
             typed_estimates = cast(tuple[CompetenceEstimate, ...], estimates)
+            if any(value.basis is not CompetenceBasis.SEEDED for value in typed_estimates):
+                continue
             candidates.append(
                 WorkerMatch(
                     node_id=node.node_id,
@@ -699,6 +769,8 @@ class DurableWorkCoordinator:
     async def record_competence(
         self, estimate: CompetenceEstimate
     ) -> CompetenceEstimate:
+        if estimate.basis is not CompetenceBasis.SEEDED:
+            raise ValueError("evidence-based competence is non-operational in v0.5")
         await self._reload()
         stored = await self._emit(estimate.to_event(source=self.source))
         return CompetenceEstimate.from_event(stored)
@@ -710,7 +782,7 @@ class DurableWorkCoordinator:
             raise KeyError(f"unknown work order: {work_order_id}")
         current = self.projection.latest_graph(work_order_id)
         current_version = current.version if current is not None else 0
-        causal_cursor = await self.kernel.store.latest_sequence()
+        causal_cursor = self.projection.event_cursor
         capability_types = self.projection.available_capability_types()
         proposal = await self.planner.propose(
             order,
@@ -718,18 +790,27 @@ class DurableWorkCoordinator:
             based_on_graph_version=current_version,
             available_capability_types=capability_types,
         )
+        await self._reload()
         proposal_event = await self._emit(
             proposal.to_event(
                 source=self.source,
                 causation_id=f"work-order-recorded:{order.work_order_id}",
             )
         )
+        await self._reload()
+        current = self.projection.latest_graph(work_order_id)
+        acceptance_version = current.version if current is not None else 0
+        acceptance_cursor = self.projection.event_cursor
         graph = self.validator.validate(
             proposal,
             order,
             causal_event_cursor=causal_cursor,
-            current_graph_version=current_version,
-            available_capability_types=capability_types,
+            acceptance_event_cursor=acceptance_cursor,
+            current_graph_version=acceptance_version,
+            available_capability_types=self.projection.available_capability_types(
+                through_sequence=causal_cursor
+            ),
+            intervening_events=self.projection.events_after(causal_cursor),
             accepted_at=self.clock(),
         )
         graph_event = await self._emit(
@@ -754,7 +835,6 @@ class DurableWorkCoordinator:
         work_order_id: str,
         *,
         coverage: AwarenessCoverage | None = None,
-        granted_at: datetime | None = None,
     ) -> tuple[WorkLease, ...]:
         await self._reload()
         graph = self.projection.latest_graph(work_order_id)
@@ -762,9 +842,9 @@ class DurableWorkCoordinator:
             raise KeyError(f"work order has no accepted graph: {work_order_id}")
         frontier = ReadyFrontier.derive(graph, self.projection, coverage=coverage)
         assigned: list[WorkLease] = []
-        at = granted_at or self.clock()
+        at = self.clock()
         for node in frontier.ready:
-            match = self.matcher.match(graph, node, self.projection)
+            match = self.matcher.match(graph, node, self.projection, at=at)
             if match is None:
                 continue
             lease = WorkLease.create(
@@ -792,7 +872,7 @@ class DurableWorkCoordinator:
         *,
         fencing_token: int,
         artifact_refs: tuple[str, ...],
-        completed_at: datetime | None = None,
+        reported_finished_at: datetime | None = None,
         verification_passed: bool | None = None,
     ) -> NodeCompletion:
         await self._reload()
@@ -804,8 +884,9 @@ class DurableWorkCoordinator:
         stored = await self._emit(
             lease.completion_event(
                 source=self.source,
-                completed_at=completed_at or self.clock(),
+                accepted_at=self.clock(),
                 artifact_refs=artifact_refs,
+                reported_finished_at=reported_finished_at,
                 verification_passed=verification_passed,
             )
         )

@@ -175,7 +175,13 @@ class DurableWorkCoordinationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         }
         for agent_id, capabilities in ecology.items():
             await coordinator.record_presence(
-                AgentPresence(agent_id, PresenceStatus.AVAILABLE, 1, START)
+                AgentPresence(
+                    agent_id,
+                    PresenceStatus.AVAILABLE,
+                    1,
+                    START,
+                    START + timedelta(days=1),
+                )
             )
             await coordinator.record_manifest(
                 CapabilityManifest.create(
@@ -206,12 +212,13 @@ class DurableWorkCoordinationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             tuple((lease.node_id, lease.agent_id) for lease in wave_1),
             (("A", "agent-alpha"), ("B", "agent-epsilon")),
         )
+        clock.value = START + timedelta(minutes=2)
         for lease in wave_1:
             await coordinator.complete(
                 lease.lease_id,
                 fencing_token=lease.fencing_token,
                 artifact_refs=(f"artifact:{lease.node_id.lower()}",),
-                completed_at=START + timedelta(minutes=2),
+                reported_finished_at=START + timedelta(minutes=2),
             )
 
         # Wave 2 is the join node.
@@ -221,11 +228,12 @@ class DurableWorkCoordinationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             tuple((lease.node_id, lease.agent_id) for lease in wave_2),
             (("C", "agent-alpha"),),
         )
+        clock.value = START + timedelta(minutes=4)
         await coordinator.complete(
             wave_2[0].lease_id,
             fencing_token=wave_2[0].fencing_token,
             artifact_refs=("artifact:release-design",),
-            completed_at=START + timedelta(minutes=4),
+            reported_finished_at=START + timedelta(minutes=4),
         )
 
         # Wave 3 fans out. The best seeded coder crashes while holding D.
@@ -236,11 +244,12 @@ class DurableWorkCoordinationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             (("D", "agent-beta"), ("E", "agent-delta")),
         )
         d_first = wave_3[0]
+        clock.value = START + timedelta(minutes=6)
         await coordinator.complete(
             wave_3[1].lease_id,
             fencing_token=wave_3[1].fencing_token,
             artifact_refs=("artifact:documentation",),
-            completed_at=START + timedelta(minutes=6),
+            reported_finished_at=START + timedelta(minutes=6),
         )
         await coordinator.record_presence(
             AgentPresence(
@@ -248,6 +257,7 @@ class DurableWorkCoordinationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 PresenceStatus.OFFLINE,
                 1,
                 START + timedelta(minutes=6),
+                START + timedelta(days=1),
             )
         )
 
@@ -266,18 +276,19 @@ class DurableWorkCoordinationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 d_first.lease_id,
                 fencing_token=d_first.fencing_token,
                 artifact_refs=("artifact:stale-completion",),
-                completed_at=clock.value,
+                reported_finished_at=START + timedelta(minutes=14),
             )
-        d_retry = await recovered.assign_ready(order.work_order_id, granted_at=clock.value)
+        d_retry = await recovered.assign_ready(order.work_order_id)
         self.assertEqual(
             tuple((lease.node_id, lease.agent_id, lease.fencing_token) for lease in d_retry),
             (("D", "agent-epsilon", 2),),
         )
+        clock.value = START + timedelta(minutes=17)
         await recovered.complete(
             d_retry[0].lease_id,
             fencing_token=d_retry[0].fencing_token,
             artifact_refs=("artifact:implementation",),
-            completed_at=START + timedelta(minutes=17),
+            reported_finished_at=START + timedelta(minutes=17),
         )
 
         # Verification is ordinary work but cannot be assigned to D's worker.
@@ -288,11 +299,12 @@ class DurableWorkCoordinationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             (("F", "agent-gamma"),),
         )
         self.assertNotEqual(wave_4[0].agent_id, d_retry[0].agent_id)
+        clock.value = START + timedelta(minutes=19)
         await recovered.complete(
             wave_4[0].lease_id,
             fencing_token=wave_4[0].fencing_token,
             artifact_refs=("artifact:independent-verification",),
-            completed_at=START + timedelta(minutes=19),
+            reported_finished_at=START + timedelta(minutes=19),
             verification_passed=True,
         )
 

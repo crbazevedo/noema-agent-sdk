@@ -147,12 +147,15 @@ Implemented:
 - provider-neutral `Planner`, deterministic `FakePlanner`, causal/version-pinned
   `PlanProposal`, and fail-closed `PlanValidator`;
 - provider-neutral presence and capability manifests plus seeded/evidence-ready
-  competence estimates, kept separate from authority;
+  competence estimates, kept separate from authority, with expiring presence
+  and seeded-only v0.5 routing;
 - derived dependency frontiers and deterministic feasibility matching;
 - ordinary independent verification work;
 - fenced lease grant, completion, expiry, stale-token rejection, recovery, and
   reassignment;
 - source-level orientation prerequisites and causal plan invalidation;
+- exact-cut planning replay and stale planning-window admission rejection;
+- control-plane-owned completion acceptance time;
 - canonical replay of the complete implemented work lifecycle;
 - structural isolation from models, effects, external connectors, endogenous
   scheduling, and generalized workflow languages.

@@ -47,9 +47,10 @@ barrier is shadow-only.
 v0.5 work control plane. `FakePlanner` proposes dependency structure;
 `PlanValidator` admits a durable graph; `ReadyFrontier` derives legal work;
 `WorkerMatcher` combines availability, declared capability, and seeded
-competence evidence; and fenced leases recover after worker loss. Planning,
-matching, and work ownership remain distinct from `ActionIntent`, authority,
-and capability execution.
+competence evidence; and fenced leases recover after worker loss. Presence
+expires, planning replays from its exact causal cut, and lease completion uses
+the control-plane clock. Planning, matching, and work ownership remain distinct
+from `ActionIntent`, authority, and capability execution.
 
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture for bounded inquiry, calibration, consolidation,
@@ -363,7 +364,7 @@ recovery, a stale orientation prerequisite, and causal plan invalidation without
 a model, external connector, or effect.
 
 ```bash
-PYTHONPATH=src python -m unittest tests.test_work tests.test_work_coordination -v
+PYTHONPATH=src python -m unittest tests.test_work tests.test_work_coordination tests.test_work_hardening -v
 ```
 
 ### `NoemaSystem`
