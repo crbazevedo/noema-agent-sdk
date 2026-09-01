@@ -280,14 +280,18 @@ outcome ownership, or maximizing agent activity.
 - reactivation from suspension requires a new review/revision event;
 - new roadmaps, commitments, proposals, admissions, and reactivations reject
   stale governing goal or roadmap revisions;
+- new roadmap hypotheses reject terminal governing goals, while commitments,
+  activation, and work require `ACTIVE` or `BLOCKED` governing goals so recovery
+  work remains possible;
 - external roadmap IDs cannot be accepted as Noema work-graph IDs;
 - outcome-role assignments remain independent, and assistance envelopes contain
   references rather than duplicate ownership;
 - human/external execution requires typed proposal intervention/support within
-  the canonical assistance envelope; user identity-bound action cannot be
-  delegated to the agent;
+  the canonical assistance envelope; identity-bound `USER` or `SHARED`
+  execution cannot be replaced by unilateral agent action;
 - commitment coverage exposes required, covered, and uncovered criteria and is
-  `COVERED` only when all outcome criteria have admitted work;
+  `COVERED` only when admitted work from the commitment's current roadmap
+  revision and outcome covers every criterion;
 - model proposals cannot admit goal, roadmap, commitment, work, or effects;
 - initial portfolio code contains no learned optimizer and records every WIP or
   review decision with its inputs;
@@ -314,6 +318,9 @@ roles and assistance; work proposals declare bounded intervention/support;
 coverage is criterion-based; and replay reruns deterministic cross-object
 legality independently of the command facade. Legacy synthetic cursors use the
 actual preceding canonical head even when durable sequences contain gaps.
+The final merge gate additionally excludes terminal-goal strategy, keeps
+blocked-goal recovery live, scopes coverage to the current reactivated outcome,
+and keys identity-bound action to the executor role.
 
 Goal-coverage optimization, learned allocation, model proposal generation, and
 the separate Information Governance runtime remain deferred.

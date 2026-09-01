@@ -46,6 +46,11 @@ from .schemas import is_legacy_intent_event, legacy_context
 
 T = TypeVar("T")
 
+_TERMINAL_GOAL_STATUSES = frozenset(
+    {GoalStatus.COMPLETED, GoalStatus.FAILED, GoalStatus.CANCELLED}
+)
+_LIVE_GOAL_STATUSES = frozenset({GoalStatus.ACTIVE, GoalStatus.BLOCKED})
+
 
 class StrategicProjection:
     """Project immutable strategic history from one canonical event cut."""
@@ -284,6 +289,8 @@ class StrategicProjection:
         admitted_goals = tuple(goal for goal in goals if goal is not None)
         if any(self.current_goal_revision(goal.goal_id) != goal for goal in admitted_goals):
             raise ValueError("roadmap requires current governing goal revisions")
+        if any(goal.status in _TERMINAL_GOAL_STATUSES for goal in admitted_goals):
+            raise ValueError("roadmap requires non-terminal governing goals")
         scoped_goal_ids = set(authority.goal_refs)
         if scoped_goal_ids:
             if any(goal.goal_id not in scoped_goal_ids for goal in admitted_goals):
@@ -373,7 +380,7 @@ class StrategicProjection:
         if value.roadmap_revision_id is None or value.outcome_node_id is None:
             raise ValueError("roadmap-derived commitment requires roadmap outcome provenance")
         roadmap = self._require_current_roadmap(value.roadmap_revision_id)
-        self._require_current_goals(roadmap)
+        self._require_live_goals(roadmap)
         if value.outcome_node_id not in {node.node_id for node in roadmap.outcome_nodes}:
             raise ValueError("commitment references an unknown roadmap outcome")
         expected_goals = {
@@ -465,7 +472,7 @@ class StrategicProjection:
                 else None
             )
             revision = self._require_current_roadmap(revision_id)
-            self._require_current_goals(revision)
+            self._require_live_goals(revision)
             if (
                 prior is None
                 or revision.roadmap_id != prior.roadmap_id
@@ -505,7 +512,7 @@ class StrategicProjection:
             if current.roadmap_revision_id is None:
                 raise ValueError("commitment activation lacks roadmap provenance")
             roadmap = self._require_current_roadmap(current.roadmap_revision_id)
-            self._require_current_goals(roadmap)
+            self._require_live_goals(roadmap)
 
     def validate_external_structure(self, value: ExternalWorkstream) -> None:
         if (
@@ -533,7 +540,7 @@ class StrategicProjection:
         if commitment.outcome_node_id != proposal.outcome_node_id:
             raise ValueError("work proposal outcome provenance differs from commitment")
         roadmap = self._require_current_roadmap(proposal.roadmap_revision_id)
-        self._require_current_goals(roadmap)
+        self._require_live_goals(roadmap)
         if proposal.outcome_node_id not in {node.node_id for node in roadmap.outcome_nodes}:
             raise ValueError("work proposal references an unknown current roadmap outcome")
         eligibility = self.work_eligibility(commitment, at=at)
@@ -563,7 +570,7 @@ class StrategicProjection:
         if commitment is None or commitment.status is not CommitmentStatus.ACTIVE:
             raise ValueError("commitment-derived execution requires ACTIVE commitment")
         roadmap = self._require_current_roadmap(proposal.roadmap_revision_id)
-        self._require_current_goals(roadmap)
+        self._require_live_goals(roadmap)
         self._validate_work_assistance(proposal, commitment)
 
     @staticmethod
@@ -617,9 +624,9 @@ class StrategicProjection:
         if (
             proposal.intervention is InterventionLevel.ACT
             and envelope.identity_bound
-            and roles.outcome_owner.locus is ExecutionLocus.USER
+            and roles.executor.locus in {ExecutionLocus.USER, ExecutionLocus.SHARED}
         ):
-            raise ValueError("agent cannot act on a user-owned identity-bound outcome")
+            raise ValueError("agent cannot act for user or shared identity-bound execution")
 
     def _require_current_roadmap(self, revision_id: str) -> RoadmapRevision:
         revision = self.roadmap_revision(revision_id)
@@ -634,6 +641,13 @@ class StrategicProjection:
             goal = self.goal_revision(revision_id)
             if goal is None or self.current_goal_revision(goal.goal_id) != goal:
                 raise ValueError("strategic reference uses stale governing intent")
+
+    def _require_live_goals(self, revision: RoadmapRevision) -> None:
+        self._require_current_goals(revision)
+        for revision_id in revision.governing_goal_revision_ids:
+            goal = self.goal_revision(revision_id)
+            if goal is None or goal.status not in _LIVE_GOAL_STATUSES:
+                raise ValueError("strategic execution requires ACTIVE or BLOCKED governing goals")
 
     def _resolve_outcome(self, outcome_ref: str) -> None:
         revision_id, separator, node_id = outcome_ref.partition("#")
@@ -1051,19 +1065,21 @@ class StrategicProjection:
         commitment = self._commitments.get(commitment_id)
         if commitment is None:
             raise KeyError(f"unknown commitment: {commitment_id}")
+        scoped_proposals = tuple(
+            value
+            for value in self._work_proposals.values()
+            if value.commitment_id == commitment_id
+            and value.roadmap_revision_id == commitment.roadmap_revision_id
+            and value.outcome_node_id == commitment.outcome_node_id
+        )
         proposals = tuple(
-            sorted(
-                value.proposal_id
-                for value in self._work_proposals.values()
-                if value.commitment_id == commitment_id
-            )
+            sorted(value.proposal_id for value in scoped_proposals)
         )
         admitted = tuple(
             sorted(
                 value.work_order.work_order_id
-                for value in self._work_proposals.values()
-                if value.commitment_id == commitment_id
-                and value.work_order.work_order_id in self._admitted_work_orders
+                for value in scoped_proposals
+                if value.work_order.work_order_id in self._admitted_work_orders
             )
         )
         roadmap = (
@@ -1096,9 +1112,8 @@ class StrategicProjection:
         )
         pending_proposals = tuple(
             value
-            for value in self._work_proposals.values()
-            if value.commitment_id == commitment_id
-            and value.work_order.work_order_id not in self._admitted_work_orders
+            for value in scoped_proposals
+            if value.work_order.work_order_id not in self._admitted_work_orders
         )
         external_support = any(
             value.support_required

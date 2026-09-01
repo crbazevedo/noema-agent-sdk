@@ -929,6 +929,38 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         assert reactivated is not None
         self.assertEqual(reactivated.roadmap_revision_id, roadmap_v2.revision_id)
         self.assertEqual(reactivated.role_assignment_id, support_roles_v2.assignment_id)
+        reactivated_coverage = await steward.coverage(active.id)
+        self.assertIs(reactivated_coverage.disposition, CoverageDisposition.UNCOVERED)
+        self.assertEqual(reactivated_coverage.work_proposal_ids, ())
+        self.assertEqual(reactivated_coverage.admitted_work_order_ids, ())
+        self.assertEqual(
+            reactivated_coverage.uncovered_criteria,
+            (
+                "preparation brief is ready",
+                "evidence references are checked",
+            ),
+        )
+
+        clock.advance()
+        reactivated_proposal = await steward.propose_work_for_commitment(
+            active.id,
+            purpose="establish coverage for the reoriented outcome",
+            desired_outcome="the current roadmap outcome has explicit work coverage",
+            success_criteria=(
+                "preparation brief is ready",
+                "evidence references are checked",
+            ),
+            intervention=InterventionLevel.PREPARE,
+            declared_agent_support=("writing", "verification"),
+            portfolio_signals=signals(wip=1),
+        )
+        await steward.admit_work_order(reactivated_proposal.proposal_id)
+        current_coverage = await steward.coverage(active.id)
+        self.assertIs(current_coverage.disposition, CoverageDisposition.COVERED)
+        self.assertEqual(
+            current_coverage.work_proposal_ids,
+            (reactivated_proposal.proposal_id,),
+        )
 
         history = await kernel.history()
         replayed = StrategicProjection()
@@ -1054,6 +1086,356 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         assert governing is not None
         self.assertIs(governing.kind, GoalKind.USER_AUTHORED)
         self.assertEqual(governing.owner, "user:carlos")
+        await kernel.stop()
+
+    async def test_terminal_goals_block_strategy_while_blocked_goals_allow_recovery(self) -> None:
+        clock = MutableClock(NOW)
+        origin, authority, trust = user_security()
+        kernel = NoemaKernel()
+        steward = IntentStewardCoordinator(
+            kernel,
+            validator=StrategicValidator(trust),
+            clock=clock,
+        )
+        cancelled_v1 = await steward.record_goal_revision(
+            goal_id="goal:cancelled",
+            description="Remain live until the user cancels the direction",
+            priority=1.0,
+            utility=1.0,
+            success_criteria=("the direction remains intentional",),
+            owner="user:carlos",
+            status=GoalStatus.ACTIVE,
+            deadline=None,
+            kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
+            origin=origin,
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="active fixture",
+        )
+        clock.advance()
+        cancelled_roadmap = await steward.record_roadmap_revision(
+            roadmap_id="roadmap:cancelled",
+            governing_goal_revision_ids=(cancelled_v1.revision_id,),
+            outcome_nodes=(OutcomeNode("recover", "Recover direction", ("recovery is complete",)),),
+            assumptions=(),
+            confidence=1.0,
+            success_criteria=("recovery remains intentional",),
+            resource_envelope={},
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="active strategy fixture",
+        )
+        clock.advance()
+        cancelled_roles = OutcomeRoleAssignment.create(
+            outcome_ref=f"{cancelled_roadmap.revision_id}#recover",
+            outcome_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            decision_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            executor=OutcomeActor("agent:noema", ExecutionLocus.AGENT),
+            verifier=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            recorded_at=clock(),
+        )
+        await steward.record_outcome_roles(cancelled_roles)
+        clock.advance()
+        cancelled_commitment = Commitment(
+            id="commitment:cancelled-goal",
+            description="Work only while the governing goal remains live",
+            owner="user:carlos",
+            status=CommitmentStatus.ACTIVE,
+            created_at=clock(),
+            updated_at=clock(),
+            governing_goal_refs=("goal:cancelled",),
+            roadmap_revision_id=cancelled_roadmap.revision_id,
+            outcome_node_id="recover",
+            role_assignment_id=cancelled_roles.assignment_id,
+        )
+        await steward.record_commitment(cancelled_commitment, intent_authority=authority)
+        clock.advance()
+        cancelled_v2 = await steward.record_goal_revision(
+            goal_id="goal:cancelled",
+            description="The user cancelled this direction",
+            priority=0.0,
+            utility=0.0,
+            success_criteria=("no new strategic execution begins",),
+            owner="user:carlos",
+            status=GoalStatus.CANCELLED,
+            deadline=None,
+            kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
+            origin=origin,
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="explicit cancellation",
+        )
+        with self.assertRaisesRegex(ValueError, "non-terminal governing goals"):
+            await steward.record_roadmap_revision(
+                roadmap_id="roadmap:cancelled-current",
+                governing_goal_revision_ids=(cancelled_v2.revision_id,),
+                outcome_nodes=(
+                    OutcomeNode("illegal", "Illegal new strategy", ("must not be admitted",)),
+                ),
+                assumptions=(),
+                confidence=1.0,
+                success_criteria=("must not become canonical",),
+                resource_envelope={},
+                intent_authority=authority,
+                author="user:carlos",
+                revision_reason="terminal-goal bypass attempt",
+            )
+        with self.assertRaisesRegex(ValueError, "stale governing intent"):
+            await steward.propose_work_for_commitment(
+                cancelled_commitment.id,
+                purpose="continue after cancellation",
+                desired_outcome="must not become canonical",
+                success_criteria=("must not become canonical",),
+                intervention=InterventionLevel.PREPARE,
+                declared_agent_support=("research",),
+                portfolio_signals=signals(),
+            )
+
+        for index, terminal_status in enumerate(
+            (GoalStatus.COMPLETED, GoalStatus.FAILED),
+            start=1,
+        ):
+            with self.subTest(status=terminal_status):
+                goal_id = f"goal:{terminal_status.value}"
+                clock.advance()
+                await steward.record_goal_revision(
+                    goal_id=goal_id,
+                    description="Begin as live intent",
+                    priority=0.8,
+                    utility=0.8,
+                    success_criteria=("the terminal boundary is tested",),
+                    owner="user:carlos",
+                    status=GoalStatus.ACTIVE,
+                    deadline=None,
+                    kind=GoalKind.USER_AUTHORED,
+                    governing_goal_refs=(),
+                    origin=origin,
+                    intent_authority=authority,
+                    author="user:carlos",
+                    revision_reason="active terminal fixture",
+                )
+                clock.advance()
+                terminal = await steward.record_goal_revision(
+                    goal_id=goal_id,
+                    description=f"The goal is now {terminal_status.value}",
+                    priority=0.0,
+                    utility=0.0,
+                    success_criteria=("no new strategy is admitted",),
+                    owner="user:carlos",
+                    status=terminal_status,
+                    deadline=None,
+                    kind=GoalKind.USER_AUTHORED,
+                    governing_goal_refs=(),
+                    origin=origin,
+                    intent_authority=authority,
+                    author="user:carlos",
+                    revision_reason="terminal status fixture",
+                )
+                with self.assertRaisesRegex(ValueError, "non-terminal governing goals"):
+                    await steward.record_roadmap_revision(
+                        roadmap_id=f"roadmap:{terminal_status.value}",
+                        governing_goal_revision_ids=(terminal.revision_id,),
+                        outcome_nodes=(
+                            OutcomeNode(
+                                f"illegal-{index}",
+                                "Illegal terminal strategy",
+                                ("must not be admitted",),
+                            ),
+                        ),
+                        assumptions=(),
+                        confidence=1.0,
+                        success_criteria=("must not become canonical",),
+                        resource_envelope={},
+                        intent_authority=authority,
+                        author="user:carlos",
+                        revision_reason="terminal-goal bypass attempt",
+                    )
+
+        clock.advance()
+        blocked = await steward.record_goal_revision(
+            goal_id="goal:blocked",
+            description="Recover a goal whose progress is blocked",
+            priority=0.9,
+            utility=1.0,
+            success_criteria=("the blocker is removed",),
+            owner="user:carlos",
+            status=GoalStatus.BLOCKED,
+            deadline=None,
+            kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
+            origin=origin,
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="blocked recovery fixture",
+        )
+        clock.advance()
+        blocked_roadmap = await steward.record_roadmap_revision(
+            roadmap_id="roadmap:blocked",
+            governing_goal_revision_ids=(blocked.revision_id,),
+            outcome_nodes=(OutcomeNode("unblock", "Remove blocker", ("the blocker is removed",)),),
+            assumptions=(),
+            confidence=0.8,
+            success_criteria=("blocked recovery remains possible",),
+            resource_envelope={},
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="recovery strategy",
+        )
+        clock.advance()
+        blocked_roles = OutcomeRoleAssignment.create(
+            outcome_ref=f"{blocked_roadmap.revision_id}#unblock",
+            outcome_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            decision_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            executor=OutcomeActor("agent:noema", ExecutionLocus.AGENT),
+            verifier=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            recorded_at=clock(),
+        )
+        await steward.record_outcome_roles(blocked_roles)
+        clock.advance()
+        blocked_commitment = Commitment(
+            id="commitment:blocked-recovery",
+            description="Remove the blocker",
+            owner="user:carlos",
+            status=CommitmentStatus.ACTIVE,
+            created_at=clock(),
+            updated_at=clock(),
+            governing_goal_refs=("goal:blocked",),
+            roadmap_revision_id=blocked_roadmap.revision_id,
+            outcome_node_id="unblock",
+            role_assignment_id=blocked_roles.assignment_id,
+        )
+        await steward.record_commitment(blocked_commitment, intent_authority=authority)
+        recovery = await steward.propose_work_for_commitment(
+            blocked_commitment.id,
+            purpose="remove the governing goal blocker",
+            desired_outcome="the blocked goal can progress",
+            success_criteria=("the blocker is removed",),
+            intervention=InterventionLevel.PREPARE,
+            declared_agent_support=("research",),
+            portfolio_signals=signals(),
+        )
+        await steward.admit_work_order(recovery.proposal_id)
+        self.assertIs(
+            (await steward.coverage(blocked_commitment.id)).disposition,
+            CoverageDisposition.COVERED,
+        )
+        await kernel.stop()
+
+    async def test_identity_bound_act_follows_user_or_shared_executor_locus(self) -> None:
+        clock = MutableClock(NOW)
+        origin, authority, trust = user_security()
+        kernel = NoemaKernel()
+        steward = IntentStewardCoordinator(
+            kernel,
+            validator=StrategicValidator(trust),
+            clock=clock,
+        )
+        goal = await steward.record_goal_revision(
+            goal_id="goal:identity-execution",
+            description="Preserve the user's identity-bound execution role",
+            priority=1.0,
+            utility=1.0,
+            success_criteria=("identity-bound execution is not substituted",),
+            owner="user:carlos",
+            status=GoalStatus.ACTIVE,
+            deadline=None,
+            kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
+            origin=origin,
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="identity execution fixture",
+        )
+        clock.advance()
+        roadmap = await steward.record_roadmap_revision(
+            roadmap_id="roadmap:identity-execution",
+            governing_goal_revision_ids=(goal.revision_id,),
+            outcome_nodes=(
+                OutcomeNode(
+                    "identity-act",
+                    "Complete the identity-bound act",
+                    ("the required actor completes the act",),
+                ),
+            ),
+            assumptions=(),
+            confidence=1.0,
+            success_criteria=("identity-bound roles remain intact",),
+            resource_envelope={},
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="identity execution strategy",
+        )
+
+        for index, executor_locus in enumerate(
+            (ExecutionLocus.USER, ExecutionLocus.SHARED),
+            start=1,
+        ):
+            with self.subTest(executor=executor_locus):
+                clock.advance()
+                roles = OutcomeRoleAssignment.create(
+                    outcome_ref=f"{roadmap.revision_id}#identity-act",
+                    outcome_owner=OutcomeActor(
+                        "employer:process",
+                        ExecutionLocus.EXTERNAL_HUMAN,
+                    ),
+                    decision_owner=OutcomeActor(
+                        "employer:panel",
+                        ExecutionLocus.EXTERNAL_HUMAN,
+                    ),
+                    executor=OutcomeActor(f"executor:{index}", executor_locus),
+                    verifier=OutcomeActor(
+                        "employer:panel",
+                        ExecutionLocus.EXTERNAL_HUMAN,
+                    ),
+                    recorded_at=clock(),
+                )
+                await steward.record_outcome_roles(roles)
+                clock.advance()
+                envelope = AssistanceEnvelope.create(
+                    role_assignment_id=roles.assignment_id,
+                    maximum_intervention=InterventionLevel.ACT,
+                    identity_bound=True,
+                    physical_presence_required=False,
+                    relationship_bound=False,
+                    institutional_restrictions=("the executor identity is authenticated",),
+                    user_development_value=1.0,
+                    permitted_agent_support=("participation support",),
+                    required_human_work=("remain the required participant",),
+                    checkpoints=("executor identity is preserved",),
+                    reversible=False,
+                    risk_limit=0.2,
+                    privacy_limit=0.2,
+                    attention_budget=1.0,
+                    recorded_at=clock(),
+                )
+                await steward.record_assistance_envelope(envelope)
+                clock.advance()
+                commitment = Commitment(
+                    id=f"commitment:identity-executor:{index}",
+                    description="Preserve the required executor",
+                    owner="user:carlos",
+                    status=CommitmentStatus.ACTIVE,
+                    created_at=clock(),
+                    updated_at=clock(),
+                    governing_goal_refs=("goal:identity-execution",),
+                    roadmap_revision_id=roadmap.revision_id,
+                    outcome_node_id="identity-act",
+                    role_assignment_id=roles.assignment_id,
+                    assistance_envelope_id=envelope.envelope_id,
+                )
+                await steward.record_commitment(commitment, intent_authority=authority)
+                with self.assertRaisesRegex(ValueError, "identity-bound execution"):
+                    await steward.propose_work_for_commitment(
+                        commitment.id,
+                        purpose="unilaterally substitute for the required executor",
+                        desired_outcome="must not become canonical",
+                        success_criteria=("must not become canonical",),
+                        intervention=InterventionLevel.ACT,
+                        declared_agent_support=("participation support",),
+                        portfolio_signals=signals(),
+                    )
         await kernel.stop()
 
     async def test_replay_rejects_structurally_illegal_native_events(self) -> None:

@@ -53,7 +53,7 @@ does not become canonical merely because an agent serialized the right label.
 values. A revision is a causally pinned hypothesis graph containing outcome
 nodes, assumptions, confidence, approximate dependencies, success criteria,
 and a resource envelope. New revisions require current governing goal
-revisions. It has no dispatch or effect operation.
+revisions whose status is non-terminal. It has no dispatch or effect operation.
 
 The existing `Commitment` contract now separates lifecycle from closure:
 
@@ -95,9 +95,10 @@ v0.5.1 verifies canonical WIP and applies a transparent limit; it does not
 optimize these signals.
 
 `CommitmentCoverage` compares the current outcome node's required success
-criteria with criteria covered by admitted commitment-derived work. It exposes
-required, covered, and uncovered criteria. One partial `WorkOrder` therefore
-cannot make a multi-criterion commitment appear covered.
+criteria with criteria covered by admitted commitment-derived work from that
+same roadmap revision and outcome node. It exposes required, covered, and
+uncovered criteria. One partial or pre-reactivation `WorkOrder` therefore cannot
+make the current commitment outcome appear covered.
 
 ## Canonical events and projections
 
@@ -178,12 +179,14 @@ roadmap-derived proposals. Each proposal declares a typed intervention level
 and concrete agent-support categories. For user, shared, or externally executed
 outcomes, a canonical `AssistanceEnvelope` is mandatory; intervention cannot
 exceed its maximum, support must be explicitly permitted, and an agent cannot
-`ACT` as the user on an identity-bound outcome. The resulting
+unilaterally `ACT` when identity-bound execution belongs to the user or is
+shared. The resulting
 `WorkOrder.created_from` includes the commitment, roadmap revision, and outcome
-node. Proposal and admission both require current goal/roadmap provenance;
-admission additionally requires the commitment to be active and emits the
-unchanged v0.5 `work.order_recorded` event. `FakePlanner`, `PlanValidator`,
-`WorkGraph`, matching, leases, authority, and effects remain unchanged.
+node. Proposal and admission both require current goal/roadmap provenance and
+`ACTIVE` or `BLOCKED` governing goals; admission additionally requires the
+commitment to be active and emits the unchanged v0.5 `work.order_recorded`
+event. `FakePlanner`, `PlanValidator`, `WorkGraph`, matching, leases, authority,
+and effects remain unchanged.
 
 Commitment is not the universal source of work. These origins remain valid
 without manufacturing a roadmap:
@@ -203,8 +206,10 @@ activation-due proposal gating, active coverage, mixed human/agent/external
 roles, assistance boundaries, external support changes, direct work origins,
 goal reprioritization, reactivation through reorientation, v0.5 causal
 invalidation, a post-validation CAS race, criterion-level coverage, delegated
-goal lineage, stale-cut rejection, replay bypass rejection, durable sequence
-gaps, and deterministic replay.
+goal lineage, terminal-goal rejection with blocked-goal recovery,
+revision-scoped reactivation coverage, executor-scoped identity boundaries,
+stale-cut rejection, replay bypass rejection, durable sequence gaps, and
+deterministic replay.
 
 This slice does not implement model-backed roadmap planning, learned goal
 generation, portfolio optimization, RDDL/MDP scheduling, adaptive oversight,

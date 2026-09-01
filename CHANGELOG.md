@@ -35,6 +35,9 @@
   freshness invariants as live command admission;
 - corrected migrated legacy causal cursors to use the actual preceding canonical
   head when durable sequence numbers contain gaps;
+- closed the final intent-stewardship edges by rejecting terminal-goal strategy,
+  scoping coverage to the commitment's current roadmap outcome, and binding
+  identity-bound action to user/shared execution roles;
 
 - reframed the roadmap as a story of increasing agency from v0.1 Agency Kernel
   through v1.0 Durable Cognitive Agency, with explicit outcome thresholds,
