@@ -28,11 +28,42 @@ class GoalStatus(StrEnum):
 
 
 class CommitmentStatus(StrEnum):
+    PROPOSED = "proposed"
+    ACCEPTED = "accepted"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    CLOSED = "closed"
+
+    # Legacy spellings remain parseable while schema-v2 projections migrate
+    # callers to lifecycle state plus an independent closure reason.
     OPEN = "open"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class CommitmentClosureReason(StrEnum):
+    FULFILLED = "fulfilled"
+    CANCELLED = "cancelled"
+    SUPERSEDED = "superseded"
+    FAILED = "failed"
+    BREACHED = "breached"
+
+
+def _optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
+
+
+def _commitment_closure_reason(value: object) -> CommitmentClosureReason | None:
+    if value is None:
+        return None
+    if isinstance(value, CommitmentClosureReason):
+        return value
+    return CommitmentClosureReason(str(value))
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +126,14 @@ class Commitment:
     social_cost_of_failure: float = 0.0
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
+    closure_reason: CommitmentClosureReason | None = None
+    governing_goal_refs: tuple[str, ...] = ()
+    roadmap_revision_id: str | None = None
+    outcome_node_id: str | None = None
+    role_assignment_id: str | None = None
+    assistance_envelope_id: str | None = None
+    activation_due_at: datetime | None = None
+    lead_time_evidence_refs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,7 +194,13 @@ class SituationSnapshot:
         return tuple(
             commitment
             for commitment in self.commitments.values()
-            if commitment.status in {CommitmentStatus.OPEN, CommitmentStatus.IN_PROGRESS}
+            if commitment.status
+            in {
+                CommitmentStatus.ACCEPTED,
+                CommitmentStatus.ACTIVE,
+                CommitmentStatus.OPEN,
+                CommitmentStatus.IN_PROGRESS,
+            }
         )
 
     def active_risks(self) -> tuple[Risk, ...]:
@@ -338,6 +383,25 @@ class SituationModel:
             self._relations.pop(relation_id, None)
             return True
 
+        if event.type == "intent.goal_revision_recorded":
+            goal_id = str(payload["goal_id"])
+            current_goal = self._goals.get(goal_id)
+            self._goals[goal_id] = Goal(
+                id=goal_id,
+                description=str(payload["description"]),
+                priority=float(payload["priority"]),
+                utility=float(payload["utility"]),
+                status=GoalStatus(str(payload["status"])),
+                deadline=current_goal.deadline if current_goal else None,
+                success_criteria=tuple(
+                    str(item) for item in payload.get("success_criteria", ())
+                ),
+                owner=str(payload["owner"]),
+                created_at=current_goal.created_at if current_goal else now,
+                updated_at=now,
+            )
+            return True
+
         if event.type == "goal.created":
             goal_id = str(payload.get("id") or event.subject or event.id)
             self._goals[goal_id] = Goal(
@@ -373,6 +437,54 @@ class SituationModel:
             )
             return True
 
+        if event.type == "intent.commitment_recorded":
+            commitment_id = str(payload["id"])
+            self._commitments[commitment_id] = Commitment(
+                id=commitment_id,
+                description=str(payload["description"]),
+                owner=str(payload["owner"]),
+                priority=float(payload.get("priority", 0.5)),
+                status=CommitmentStatus(str(payload["status"])),
+                deadline=parse_datetime(payload.get("deadline")),
+                terminal=bool(payload.get("terminal", True)),
+                attention_cost=float(payload.get("attention_cost", 1.0)),
+                social_cost_of_failure=float(payload.get("social_cost_of_failure", 0.0)),
+                created_at=parse_datetime(payload.get("created_at")) or now,
+                updated_at=parse_datetime(payload.get("updated_at")) or now,
+                closure_reason=_commitment_closure_reason(payload.get("closure_reason")),
+                governing_goal_refs=tuple(
+                    str(value) for value in payload.get("governing_goal_refs", ())
+                ),
+                roadmap_revision_id=_optional_text(payload.get("roadmap_revision_id")),
+                outcome_node_id=_optional_text(payload.get("outcome_node_id")),
+                role_assignment_id=_optional_text(payload.get("role_assignment_id")),
+                assistance_envelope_id=_optional_text(
+                    payload.get("assistance_envelope_id")
+                ),
+                activation_due_at=parse_datetime(payload.get("activation_due_at")),
+                lead_time_evidence_refs=tuple(
+                    str(value) for value in payload.get("lead_time_evidence_refs", ())
+                ),
+            )
+            return True
+
+        if event.type == "intent.commitment_transitioned":
+            commitment_id = str(payload["commitment_id"])
+            current_commitment = self._commitments.get(commitment_id)
+            if current_commitment is None:
+                return False
+            self._commitments[commitment_id] = replace(
+                current_commitment,
+                status=CommitmentStatus(str(payload["to_state"])),
+                closure_reason=_commitment_closure_reason(payload.get("closure_reason")),
+                roadmap_revision_id=(
+                    _optional_text(payload.get("reactivation_roadmap_revision_id"))
+                    or current_commitment.roadmap_revision_id
+                ),
+                updated_at=now,
+            )
+            return True
+
         if event.type == "commitment.created":
             commitment_id = str(payload.get("id") or event.subject or event.id)
             self._commitments[commitment_id] = Commitment(
@@ -387,6 +499,20 @@ class SituationModel:
                 social_cost_of_failure=float(payload.get("social_cost_of_failure", 0.0)),
                 created_at=now,
                 updated_at=now,
+                closure_reason=_commitment_closure_reason(payload.get("closure_reason")),
+                governing_goal_refs=tuple(
+                    str(value) for value in payload.get("governing_goal_refs", ())
+                ),
+                roadmap_revision_id=_optional_text(payload.get("roadmap_revision_id")),
+                outcome_node_id=_optional_text(payload.get("outcome_node_id")),
+                role_assignment_id=_optional_text(payload.get("role_assignment_id")),
+                assistance_envelope_id=_optional_text(
+                    payload.get("assistance_envelope_id")
+                ),
+                activation_due_at=parse_datetime(payload.get("activation_due_at")),
+                lead_time_evidence_refs=tuple(
+                    str(value) for value in payload.get("lead_time_evidence_refs", ())
+                ),
             )
             return True
 
@@ -413,6 +539,44 @@ class SituationModel:
                     )
                 ),
                 updated_at=now,
+                closure_reason=_commitment_closure_reason(
+                    payload.get("closure_reason", current_commitment.closure_reason)
+                ),
+                governing_goal_refs=tuple(
+                    str(value)
+                    for value in payload.get(
+                        "governing_goal_refs", current_commitment.governing_goal_refs
+                    )
+                ),
+                roadmap_revision_id=_optional_text(
+                    payload.get(
+                        "roadmap_revision_id", current_commitment.roadmap_revision_id
+                    )
+                ),
+                outcome_node_id=_optional_text(
+                    payload.get("outcome_node_id", current_commitment.outcome_node_id)
+                ),
+                role_assignment_id=_optional_text(
+                    payload.get(
+                        "role_assignment_id", current_commitment.role_assignment_id
+                    )
+                ),
+                assistance_envelope_id=_optional_text(
+                    payload.get(
+                        "assistance_envelope_id",
+                        current_commitment.assistance_envelope_id,
+                    )
+                ),
+                activation_due_at=parse_datetime(
+                    payload.get("activation_due_at", current_commitment.activation_due_at)
+                ),
+                lead_time_evidence_refs=tuple(
+                    str(value)
+                    for value in payload.get(
+                        "lead_time_evidence_refs",
+                        current_commitment.lead_time_evidence_refs,
+                    )
+                ),
             )
             return True
 
@@ -425,10 +589,16 @@ class SituationModel:
             terminal_commitment = self._commitments.get(commitment_id)
             if terminal_commitment is None:
                 return False
-            status = CommitmentStatus(event.type.split(".", 1)[1])
+            legacy_terminal = event.type.split(".", 1)[1]
+            closure_reason = {
+                "completed": CommitmentClosureReason.FULFILLED,
+                "failed": CommitmentClosureReason.FAILED,
+                "cancelled": CommitmentClosureReason.CANCELLED,
+            }[legacy_terminal]
             self._commitments[commitment_id] = replace(
                 terminal_commitment,
-                status=status,
+                status=CommitmentStatus.CLOSED,
+                closure_reason=closure_reason,
                 updated_at=now,
             )
             return True

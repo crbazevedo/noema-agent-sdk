@@ -2,10 +2,10 @@
 
 > **Current revision:** 2026-08-31
 >
-> **Implemented through:** v0.5 Durable Work Coordination
+> **Implemented through:** v0.5.1 deterministic Intent & Outcome Stewardship
 >
-> **Accepted architecture direction; implementation staged:** Intent & Outcome
-> Stewardship; Information Governance and Confidential Context
+> **Accepted architecture direction; implementation staged:** Information
+> Governance and Confidential Context
 
 This document is the current architectural synthesis. It distinguishes shipped
 contracts from accepted but unimplemented target architecture so that a design
@@ -141,10 +141,12 @@ effects; attention and endogenous inquiry decide what deserves cognition; work
 produces action proposals; all derived context remains subject to information
 policy.
 
-## Accepted architecture direction: User Outcome Stewardship
+## Implemented foundation: User Outcome Stewardship
 
-This section records accepted architecture direction. These contracts are not
-implemented; their implementation is staged.
+v0.5.1 implements independent outcome roles, role-referencing assistance
+envelopes, epistemic external-workstream observations, and deterministic
+commitment coverage. Richer goal-coverage intervention policy remains a later
+extension over these contracts.
 
 Noema optimizes for user goal achievement, not for the amount of work performed
 by agents. Every meaningful outcome or commitment carries four independent
@@ -196,7 +198,7 @@ policy and ownership constraints.
 This intentionally rejects “automation rate,” agent utilization, token volume,
 and task count as top-level objectives.
 
-## Accepted architecture direction: Intent & Portfolio Stewardship
+## Implemented: Intent & Portfolio Stewardship
 
 This layer preserves **intentional continuity** above the implemented Work
 Control Plane:
@@ -707,7 +709,7 @@ Implemented invariants are enforced in `tests/test_architecture.py`, schema and
 replay tests, distributed fault tests, and subsystem acceptance tests.
 Documentation alone is not enforcement.
 
-The staged stewardship implementation must add gates that prove:
+The v0.5.1 stewardship implementation adds gates that prove:
 
 - legacy Goal and Commitment histories upcast deterministically to equivalent
   schema-v2 projections;
@@ -789,9 +791,9 @@ invariants.
 | Work readiness and assignment | `ReadyFrontier` / `WorkerMatcher` / `WorkLease` |
 | Agent ecology | `AgentPresence` / `CapabilityManifest` / `CompetenceEstimate` |
 | Endogenous cognition (planned) | `Inquiry` / `IntrinsicActivity` |
-| User outcomes (accepted; staged) | outcome roles / `ExecutionLocus` / `AssistanceEnvelope` / `GoalCoverage` |
-| Intent and portfolio (accepted; staged) | `GoalRevision` / `IntentAuthority` / `RoadmapRevision` / `Commitment` / coverage and health projections |
-| External work (accepted; staged) | `ExternalWorkstream` / support-gap projection |
+| User outcomes | outcome roles / `ExecutionLocus` / `AssistanceEnvelope` / commitment coverage |
+| Intent and portfolio | `GoalRevision` / `IntentAuthority` / `RoadmapRevision` / `Commitment` / coverage and health projections |
+| External work | `ExternalWorkstream` / support-demand projection |
 | Information governance (accepted; staged) | `InformationPolicy` / `PolicyComposition` / access and disclosure decisions / `ArtifactStore` |
 
 ## Non-goals of the core
@@ -817,8 +819,8 @@ policy.
   memory;
 - [ADR 0006](adr/0006-situated-continuity-foundation.md): situated continuity;
 - [ADR 0007](adr/0007-durable-work-coordination.md): durable work coordination;
-- [ADR 0008](adr/0008-intent-and-outcome-stewardship.md): accepted, staged intent,
-  user outcomes, external work, and coverage;
+- [ADR 0008](adr/0008-intent-and-outcome-stewardship.md): implemented
+  deterministic intent, user outcomes, external work, and coverage foundation;
 - [ADR 0009](adr/0009-information-governance-and-confidential-context.md):
   accepted, staged information governance and confidential context.
 

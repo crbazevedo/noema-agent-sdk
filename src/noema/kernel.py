@@ -30,7 +30,14 @@ class NoemaKernel:
         self.store = store or InMemoryEventStore()
         self.bus = bus or AsyncEventBus()
         self.situation = situation or SituationModel()
-        self.schemas = schemas or EventSchemaRegistry()
+        if schemas is None:
+            schemas = EventSchemaRegistry()
+            # Imported lazily to keep the event primitive independent while
+            # making legacy strategic migration the default runtime behavior.
+            from .intent.schemas import register_intent_event_schemas
+
+            register_intent_event_schemas(schemas)
+        self.schemas = schemas
         self.tracer = tracer or NullTracer()
         self.distributed = distributed
         self.topic_prefix = topic_prefix

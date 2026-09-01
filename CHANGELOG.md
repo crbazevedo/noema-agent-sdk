@@ -2,12 +2,35 @@
 
 ## Unreleased
 
+## 0.5.1 — 2026-08-31
+
+- implemented deterministic Intent & Outcome Stewardship over the canonical
+  event log without changing Durable Work Coordination semantics;
+- added immutable `GoalRevision` and `RoadmapRevision` histories, authenticated
+  origin provenance, and `IntentAuthority` independent from effect authority;
+- evolved the existing commitment lifecycle to proposed, accepted, active,
+  suspended, and closed state with separate fulfilled, cancelled, superseded,
+  failed, and breached closure reasons;
+- added deterministic legacy Goal/Commitment schema-v2 upcasters; legacy failure
+  maps to closed/failed and never invents breach;
+- added independent outcome-role assignments, role-referencing assistance
+  envelopes, epistemic external workstreams, commitment coverage, roadmap
+  health, observable allocation inputs, and deterministic WIP/review rules;
+- added a CAS-only strategic coordinator and a bounded bridge from eligible
+  commitment coverage to proposed and admitted existing `WorkOrder` values;
+- proved non-roadmap user, incident/maintenance, external-obligation, and
+  endogenous work origins remain valid;
+- added a model-free acceptance scenario covering immutable revisions,
+  hypothetical outcomes, future versus active obligations, mixed ownership,
+  external change, reactivation through reorientation, strategic CAS races,
+  v0.5 plan invalidation, and deterministic replay;
+
 - reframed the roadmap as a story of increasing agency from v0.1 Agency Kernel
   through v1.0 Durable Cognitive Agency, with explicit outcome thresholds,
   dependency arcs, measures, and decisive system demonstrations;
-- accepted a deliberately bounded Intent & Outcome Stewardship architecture
-  direction, with implementation staged between durable work and endogenous
-  cognition, including versioned existing Goal/Commitment semantics, intent
+- recorded the deliberately bounded Intent & Outcome Stewardship architecture
+  implemented between durable work and endogenous cognition, including
+  versioned existing Goal/Commitment semantics, intent
   authority, non-roadmap work origins, outcome roles, external workstreams,
   coverage, deterministic review/WIP policy, and expected-head admission;
 - accepted Information Governance and Confidential Context as a separate,

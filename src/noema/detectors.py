@@ -75,6 +75,8 @@ class DeadlineRiskDetector:
         events: list[Event] = []
         for commitment in situation.commitments.values():
             if commitment.status not in {
+                CommitmentStatus.ACCEPTED,
+                CommitmentStatus.ACTIVE,
                 CommitmentStatus.OPEN,
                 CommitmentStatus.IN_PROGRESS,
             }:

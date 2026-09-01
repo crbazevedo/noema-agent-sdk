@@ -435,12 +435,12 @@ PostgreSQL and NATS containers.
 
 ## Release sequence
 
-v0.5 is the implemented Durable Work Coordination milestone. The next accepted
-architecture direction, with implementation staged but not yet shipped, is
-v0.5.x Intent & Outcome Stewardship: immutable goal and roadmap revisions,
-explicit intent authority, versioned commitments, user/agent/external outcome
-roles, coverage, and deterministic review/WIP policy. Endogenous agenda
-formation follows only after those strategic objects exist to be stewarded.
+v0.5 is the implemented Durable Work Coordination milestone. v0.5.1 implements
+the deterministic v0.5.x Intent & Outcome Stewardship slice: immutable goal and
+roadmap revisions, explicit intent authority, versioned commitments,
+user/agent/external outcome roles, coverage, external-workstream observations,
+and deterministic review/WIP policy. Endogenous agenda formation follows only
+after those strategic objects exist to be stewarded.
 Information Governance is a separate accepted, unimplemented cross-cutting
 direction and must precede production use of restricted real-world context.
 
@@ -454,7 +454,7 @@ See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITE
 [ADR 0005](docs/adr/0005-persistent-cognitive-memory.md), and
 [ADR 0006](docs/adr/0006-situated-continuity-foundation.md), and
 [Durable Work Coordination](docs/DURABLE_WORK_COORDINATION.md) with
-[ADR 0007](docs/adr/0007-durable-work-coordination.md), plus the accepted,
-implementation-staged
-[Intent and Outcome Stewardship](docs/adr/0008-intent-and-outcome-stewardship.md)
+[ADR 0007](docs/adr/0007-durable-work-coordination.md), plus the implemented
+[Intent and Outcome Stewardship](docs/INTENT_OUTCOME_STEWARDSHIP.md)
+and its [ADR 0008](docs/adr/0008-intent-and-outcome-stewardship.md),
 and [Information Governance and Confidential Context](docs/adr/0009-information-governance-and-confidential-context.md).

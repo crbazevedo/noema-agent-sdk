@@ -22,6 +22,13 @@ principle they change.
 | Clocks are distinct | Durable wall time, local monotonic duration, and source-reported world time cannot substitute for one another. |
 | Orientation precedes consequence | Action prerequisites expose minimum freshness and confidence before the effect path. |
 | Work identity is layered | `Goal`, `WorkOrder`, `PlanProposal`, `WorkGraph`, `WorkNode`, and `ActionIntent` cannot substitute for one another. |
+| Strategic identity is layered | `GoalRevision`, `RoadmapRevision`, `Commitment`, and `WorkOrder` are distinct immutable contracts. |
+| Intent authority differs from effect authority | Permission to act cannot rewrite, reprioritize, or retire governing user intent. |
+| Roadmaps are hypotheses | Outcome nodes create neither obligations nor executable work; only an admitted commitment can bridge roadmap-derived work. |
+| Obligation differs from activation | `ACCEPTED` means owed; only `ACTIVE` permits commitment-derived work admission. |
+| Reactivation is reorientation | A suspended commitment requires a newer roadmap revision and current evidence before returning to active. |
+| Outcome roles are independent | Outcome owner, decision owner, executor, and verifier cannot be inferred from each other or duplicated in assistance policy. |
+| External work remains external truth | External observations may create support demand but cannot become a Noema work graph or authoritative roadmap copy. |
 | Planners propose structure | A planner cannot admit a graph, select a worker, grant a lease, authorize, or execute. |
 | Graphs own dependency progress | Ready frontiers derive from accepted dependencies, canonical completions, leases, orientation, and invalidation. |
 | Planning cuts are causal snapshots | Admission and replay use capability inputs through the proposal cursor and reject declared changes during planning. |

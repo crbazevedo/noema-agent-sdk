@@ -4,7 +4,8 @@
 >
 > **Current revision:** 2026-08-31
 >
-> **Status:** v0.1 through v0.5 implemented; later milestones are planned
+> **Status:** v0.1 through the deterministic v0.5.x slice implemented; later
+> milestones are planned
 
 Noema is infrastructure for agents that maintain a coherent relationship with
 a changing world. Its releases should therefore tell a story of increasing
@@ -59,7 +60,7 @@ cross-cutting release gates, not a final wave.
 | **v0.3 — Persistent Cognition** | The agent remembers what happened, what it believes, and why. | **I remember.** | Implemented |
 | **v0.4 — Situated Continuity** | The agent knows when memory is no longer sufficient and reconstructs orientation. | **I wake and know what I no longer know.** | Implemented |
 | **v0.5 — Durable Work Coordination** | Goals can become dependency-aware, recoverable, verified work. | **I organize work.** | Implemented |
-| **v0.5.x — Intent & Outcome Stewardship** | Work remains connected to revisable commitments and the user's actual outcomes. | **I know what I owe, whom it serves, and what should remain human.** | Accepted direction; implementation staged |
+| **v0.5.x — Intent & Outcome Stewardship** | Work remains connected to revisable commitments and the user's actual outcomes. | **I know what I owe, whom it serves, and what should remain human.** | Deterministic slice implemented in v0.5.1 |
 | **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Planned |
 | **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Planned |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
@@ -190,16 +191,15 @@ causal change without invoking a model or effect.
 See [Durable Work Coordination](DURABLE_WORK_COORDINATION.md) and
 [ADR 0007](adr/0007-durable-work-coordination.md).
 
-## Accepted direction — v0.5.x Intent & Outcome Stewardship
+## Implemented — v0.5.x Intent & Outcome Stewardship
 
 Question: **What important part of the user's goals is insufficiently covered,
 who legitimately owns it, and what is the least intrusive effective
 intervention?**
 
-This milestone introduces a bounded strategic layer above work coordination. It
-is accepted architecture direction with implementation staged, but none of its
-runtime contracts are implemented yet. Information governance is a separate
-accepted cross-cutting milestone rather than part of this slice.
+v0.5.1 implements the bounded deterministic strategic layer above work
+coordination. Information governance remains a separate accepted cross-cutting
+milestone rather than part of this slice.
 
 ### Intent & Portfolio Stewardship
 
@@ -268,7 +268,9 @@ references the canonical outcome roles while constraining maximum intervention,
 identity/physical/institutional limits, user-development value, permitted agent
 work, required human work, checkpoints, privacy, risk, and attention.
 
-`GoalCoverage` identifies valuable uncovered work across user, Noema, and
+v0.5.1 stops at deterministic `CommitmentCoverage`. The generalized
+`GoalCoverage` intervention policy below remains an accepted follow-on: it
+identifies valuable uncovered work across user, Noema, and
 external participants. `ExternalWorkstream` represents observations and beliefs
 about employer, institutional, or other outside roadmaps without pretending
 that Noema owns their source of truth. External milestones may generate Noema
@@ -294,7 +296,7 @@ GoalRevision + IntentAuthority
 → roadmap/commitment schema-v2 events and upcasters
 → deterministic projections, proposal validators, and expected-head admission
 → outcome roles + AssistanceEnvelope references
-→ commitment and goal coverage + direct-work compatibility
+→ commitment coverage + direct-work compatibility
 → external-workstream support derivation
 → deterministic WIP/review policies + roadmap-health shadow evaluation
 ```
@@ -310,7 +312,9 @@ Exit criterion:
 > proposals for the implemented v0.5 control plane, with execution gated on
 > activation.
 
-The accepted architecture direction is recorded in
+The implementation is described in
+[Intent & Outcome Stewardship](INTENT_OUTCOME_STEWARDSHIP.md), and its normative
+architecture is recorded in
 [ADR 0008](adr/0008-intent-and-outcome-stewardship.md).
 
 ## v0.6 — Endogenous Cognition

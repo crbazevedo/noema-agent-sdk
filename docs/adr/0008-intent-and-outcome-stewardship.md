@@ -1,6 +1,6 @@
 # ADR 0008: Intent and outcome stewardship
 
-- Status: Accepted architecture direction — implementation staged
+- Status: Accepted — deterministic v0.5.x slice implemented in v0.5.1
 - Date: 2026-08-31
 - Scope: goal revision and intent authority, roadmap and commitment semantics,
   outcome roles, assistance, external workstreams, coverage, and portfolio
@@ -288,3 +288,14 @@ Information access, policy composition, artifact retention, and disclosure are
 specified separately in
 [ADR 0009](0009-information-governance-and-confidential-context.md). Delivery
 order and release acceptance are defined in the [roadmap](../ROADMAP.md).
+
+## Implementation
+
+v0.5.1 implements the deterministic contracts, schema-v2 migration, canonical
+events, replay projections, intent-authority admission, expected-head CAS,
+commitment coverage, roadmap health, external-workstream observations, and the
+bounded `WorkOrderProposal` bridge described here. The flagship and structural
+fitness functions live in `tests/test_intent.py`.
+
+Goal-coverage optimization, learned allocation, model proposal generation, and
+the separate Information Governance runtime remain deferred.
