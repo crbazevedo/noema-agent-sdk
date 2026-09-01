@@ -76,6 +76,7 @@ class EndogenousShadowWorker:
         self.clock = clock
         self._subscription_ids: list[str] = []
         self._foreground_lock = asyncio.Lock()
+        self._checkpoint_lock = asyncio.Lock()
         self._started = False
 
     @property
@@ -243,8 +244,16 @@ class EndogenousShadowWorker:
         if active_epoch is not None and (
             existing_epoch is None or active_epoch.epoch_id != existing_epoch.epoch_id
         ):
-            await self._complete_scan_checkpoint(trigger, request, active_epoch)
-            return full_projection.selection(active_epoch.epoch_id)
+            if await self._abandon_stale_active_epoch(
+                full_projection,
+                active_epoch,
+                observed_at=observed_at,
+            ):
+                full_projection = await self.current_projection()
+                active_epoch = full_projection.active_epoch_for_consumer(self.consumer_id)
+            if active_epoch is not None:
+                await self._complete_scan_checkpoint(trigger, request, active_epoch)
+                return full_projection.selection(active_epoch.epoch_id)
 
         history = await self._normalized_history()
         cut = tuple(
@@ -473,6 +482,36 @@ class EndogenousShadowWorker:
             raise RuntimeError("incomplete scan remained eligible without a terminal explanation")
         await self._complete_scan_checkpoint(trigger, request, epoch)
 
+    async def _abandon_stale_active_epoch(
+        self,
+        projection: EndogenousProjection,
+        epoch: DreamEpoch,
+        *,
+        observed_at: datetime,
+    ) -> bool:
+        """Close an old active epoch whose recorded activities lost current intent."""
+
+        intent_refs = tuple(
+            sorted(
+                {
+                    ref
+                    for activity in projection.activities_for_epoch(epoch.epoch_id)
+                    for ref in activity.governing_intent_refs
+                }
+            )
+        )
+        if not intent_refs or projection.intent_refs_are_current(intent_refs):
+            return False
+        event = dream_epoch_abandoned_event(
+            epoch,
+            reason=DreamAbandonmentReason.GOVERNING_INTENT_CHANGED,
+            source=self.source,
+            abandoned_at=max(epoch.started_at, observed_at, self.clock()),
+        )
+        await self._append_transition(event, epoch_id=epoch.epoch_id)
+        refreshed = await self.current_projection()
+        return refreshed.epoch_status(epoch.epoch_id) is not DreamEpochStatus.ACTIVE
+
     async def _expire_incomplete_epoch(
         self,
         epoch: DreamEpoch,
@@ -658,31 +697,32 @@ class EndogenousShadowWorker:
         causation_id: str,
         timestamp: datetime,
     ) -> ConsumerCheckpoint:
-        history = await self._normalized_history()
-        checkpoints = ConsumerCheckpointProjection()
-        checkpoints.rebuild(history)
-        current = checkpoints.get(self.consumer_id)
-        if current is not None and current.last_completed_sequence >= completed_sequence:
-            return current
-        observed_head = max(
-            current.observed_head_sequence if current is not None else 0,
-            await self.kernel.store.latest_sequence(),
-            completed_sequence,
-        )
-        candidate = ConsumerCheckpoint(
-            consumer_id=self.consumer_id,
-            last_completed_sequence=completed_sequence,
-            observed_head_sequence=observed_head,
-            epoch_id=epoch_id,
-        )
-        stored = await self.kernel.emit(
-            candidate.to_event(
-                source=self.source,
-                timestamp=timestamp,
-                causation_id=causation_id,
+        async with self._checkpoint_lock:
+            history = await self._normalized_history()
+            checkpoints = ConsumerCheckpointProjection()
+            checkpoints.rebuild(history)
+            current = checkpoints.get(self.consumer_id)
+            if current is not None and current.last_completed_sequence >= completed_sequence:
+                return current
+            observed_head = max(
+                current.observed_head_sequence if current is not None else 0,
+                await self.kernel.store.latest_sequence(),
+                completed_sequence,
             )
-        )
-        return ConsumerCheckpoint.from_event(stored)
+            candidate = ConsumerCheckpoint(
+                consumer_id=self.consumer_id,
+                last_completed_sequence=completed_sequence,
+                observed_head_sequence=observed_head,
+                epoch_id=epoch_id,
+            )
+            stored = await self.kernel.emit(
+                candidate.to_event(
+                    source=self.source,
+                    timestamp=timestamp,
+                    causation_id=causation_id,
+                )
+            )
+            return ConsumerCheckpoint.from_event(stored)
 
     async def _normalized_history(self) -> list[Event]:
         return [self.kernel.schemas.normalize(event) for event in await self.kernel.history()]

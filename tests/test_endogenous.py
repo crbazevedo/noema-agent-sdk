@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,7 @@ from noema import (
     CognitiveResourceVector,
     Commitment,
     CommitmentStatus,
+    ConsumerCheckpoint,
     ConsumerCheckpointProjection,
     DreamAbandonmentReason,
     DreamEpoch,
@@ -809,6 +811,211 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             tuple(value.activity_id for value in final_projection.activities),
             activity_ids,
         )
+        await kernel.stop()
+
+    async def test_active_goal_revision_abandons_stale_epoch_before_new_scan(self) -> None:
+        intent_clock = MutableClock(NOW)
+        kernel = NoemaKernel()
+        steward, goal_v1, _roadmap, _commitment = await build_strategy(kernel, intent_clock)
+        origin, authority, _trust = user_security()
+        scan_clock = MutableClock(NOW + timedelta(hours=1))
+        worker = EndogenousShadowWorker(kernel, clock=scan_clock)
+        old_selection = await worker.run_scan(
+            budget=budget(activities=1),
+            started_at=scan_clock(),
+            expires_at=scan_clock() + timedelta(minutes=10),
+        )
+        self.assertIsNotNone(old_selection)
+        assert old_selection is not None
+
+        intent_clock.value = scan_clock() + timedelta(seconds=30)
+        goal_v2 = await steward.record_goal_revision(
+            goal_id="goal:endogenous",
+            description="Maintain a revised reliable release direction",
+            priority=0.95,
+            utility=1.0,
+            success_criteria=("revised release direction remains defensible",),
+            owner="user:carlos",
+            status=GoalStatus.ACTIVE,
+            deadline=NOW + timedelta(days=30),
+            kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
+            origin=origin,
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="revise governing intent while DREAM remains active",
+        )
+        scan_clock.advance(timedelta(minutes=1))
+        new_selection = await worker.run_scan(
+            budget=budget(activities=1),
+            started_at=scan_clock(),
+            expires_at=scan_clock() + timedelta(minutes=10),
+        )
+        if new_selection is not None:
+            self.assertNotEqual(new_selection.epoch_id, old_selection.epoch_id)
+
+        projection = await worker.current_projection()
+        self.assertIs(
+            projection.epoch_status(old_selection.epoch_id),
+            DreamEpochStatus.ABANDONED,
+        )
+        self.assertEqual(projection.selection(old_selection.epoch_id), old_selection)
+        new_activities = tuple(
+            activity
+            for epoch in projection.epochs
+            if epoch.epoch_id != old_selection.epoch_id
+            for activity in projection.activities_for_epoch(epoch.epoch_id)
+        )
+        self.assertTrue(
+            all(
+                ref.goal_revision_id == goal_v2.revision_id
+                for activity in new_activities
+                for ref in activity.governing_intent_refs
+            )
+        )
+        self.assertFalse(
+            any(
+                ref.goal_revision_id == goal_v1.revision_id  # type: ignore[attr-defined]
+                for activity in new_activities
+                for ref in activity.governing_intent_refs
+            )
+        )
+        await kernel.stop()
+
+    async def test_cancelled_goal_abandons_stale_epoch_without_new_cognition(self) -> None:
+        intent_clock = MutableClock(NOW)
+        kernel = NoemaKernel()
+        steward, _goal_v1, _roadmap, _commitment = await build_strategy(kernel, intent_clock)
+        origin, authority, _trust = user_security()
+        scan_clock = MutableClock(NOW + timedelta(hours=1))
+        worker = EndogenousShadowWorker(kernel, clock=scan_clock)
+        old_selection = await worker.run_scan(
+            budget=budget(activities=1),
+            started_at=scan_clock(),
+            expires_at=scan_clock() + timedelta(minutes=10),
+        )
+        self.assertIsNotNone(old_selection)
+        assert old_selection is not None
+
+        intent_clock.value = scan_clock() + timedelta(seconds=30)
+        await steward.record_goal_revision(
+            goal_id="goal:endogenous",
+            description="Maintain a reliable release direction",
+            priority=0.9,
+            utility=1.0,
+            success_criteria=("release direction remains defensible",),
+            owner="user:carlos",
+            status=GoalStatus.CANCELLED,
+            deadline=NOW + timedelta(days=30),
+            kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
+            origin=origin,
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="cancel intent while DREAM remains active",
+        )
+        scan_clock.advance(timedelta(minutes=1))
+        self.assertIsNone(
+            await worker.run_scan(
+                budget=budget(activities=1),
+                started_at=scan_clock(),
+                expires_at=scan_clock() + timedelta(minutes=10),
+            )
+        )
+
+        projection = await worker.current_projection()
+        self.assertIs(
+            projection.epoch_status(old_selection.epoch_id),
+            DreamEpochStatus.ABANDONED,
+        )
+        self.assertEqual(projection.selection(old_selection.epoch_id), old_selection)
+        self.assertEqual(len(projection.epochs), 1)
+        await kernel.stop()
+
+    async def test_concurrent_foreground_and_scan_checkpoints_remain_monotonic(self) -> None:
+        class InterleavingCheckpointWorker(EndogenousShadowWorker):
+            def __init__(self, kernel: NoemaKernel, *, clock: MutableClock) -> None:
+                super().__init__(kernel, clock=clock)
+                self.crash_initial_checkpoint = True
+                self.foreground_checkpoint_waiting = asyncio.Event()
+                self.release_foreground_checkpoint = asyncio.Event()
+                self.scan_sequence: int | None = None
+                self.foreground_sequence: int | None = None
+
+            async def _advance_checkpoint(
+                self,
+                *,
+                completed_sequence: int,
+                epoch_id: str | None,
+                causation_id: str,
+                timestamp: datetime,
+            ) -> ConsumerCheckpoint:
+                if self.crash_initial_checkpoint:
+                    self.crash_initial_checkpoint = False
+                    raise RuntimeError("simulated crash before initial scan checkpoint")
+                if completed_sequence == self.foreground_sequence:
+                    self.foreground_checkpoint_waiting.set()
+                    await self.release_foreground_checkpoint.wait()
+                elif completed_sequence == self.scan_sequence:
+                    await self.foreground_checkpoint_waiting.wait()
+                    self.release_foreground_checkpoint.set()
+                    await asyncio.sleep(0)
+                return await super()._advance_checkpoint(
+                    completed_sequence=completed_sequence,
+                    epoch_id=epoch_id,
+                    causation_id=causation_id,
+                    timestamp=timestamp,
+                )
+
+        clock = MutableClock(NOW + timedelta(hours=1))
+        kernel = NoemaKernel()
+        await build_strategy(kernel, MutableClock(NOW))
+        worker = InterleavingCheckpointWorker(kernel, clock=clock)
+        with self.assertRaisesRegex(RuntimeError, "initial scan checkpoint"):
+            await worker.run_scan(
+                budget=budget(activities=1),
+                started_at=clock(),
+                expires_at=clock() + timedelta(minutes=5),
+            )
+        projection = await worker.current_projection()
+        epoch = projection.epochs[0]
+        scan_event = projection.event(epoch.trigger_event_id)
+        assert scan_event is not None and scan_event.sequence is not None
+        worker.scan_sequence = scan_event.sequence
+
+        foreground = await kernel.emit(
+            Event(
+                "decision.proposed",
+                "fixture",
+                {"reason": "interleave checkpoint writers"},
+                timestamp=clock() + timedelta(seconds=1),
+            )
+        )
+        assert foreground.sequence is not None
+        worker.foreground_sequence = foreground.sequence
+        foreground_task = asyncio.create_task(worker.preempt_for_foreground(foreground))
+        await worker.foreground_checkpoint_waiting.wait()
+        recovery_task = asyncio.create_task(worker.recover())
+        preempted, recovered = await asyncio.gather(foreground_task, recovery_task)
+        self.assertEqual(tuple(value.epoch_id for value in preempted), (epoch.epoch_id,))
+        self.assertEqual(recovered, ())
+
+        history = await kernel.history()
+        checkpoint_history = [
+            ConsumerCheckpoint.from_event(event)
+            for event in history
+            if event.type == "runtime.consumer_checkpoint_advanced"
+        ]
+        self.assertTrue(checkpoint_history)
+        completed = [value.last_completed_sequence for value in checkpoint_history]
+        observed = [value.observed_head_sequence for value in checkpoint_history]
+        self.assertEqual(completed, sorted(completed))
+        self.assertEqual(observed, sorted(observed))
+        checkpoints = ConsumerCheckpointProjection()
+        checkpoints.rebuild(history)
+        current = checkpoints.get(worker.consumer_id)
+        assert current is not None
+        self.assertEqual(current.last_completed_sequence, foreground.sequence)
         await kernel.stop()
 
     async def test_historical_foreground_and_unknown_selector_fail_closed(self) -> None:
