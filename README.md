@@ -13,6 +13,14 @@ Noema is not a persona framework and does not encode one preferred cognitive sty
 - event-driven scheduling, sensing, action, recovery, and reflection;
 - multi-agent operation over a shared world model.
 
+**Why Noema?** `Noema` is not an acronym. The name refers to something as
+apprehended or understood from a situated perspective. It reflects a central
+principle of the SDK: an agent does not act on “the world itself,” but on an
+evolving, evidence-bearing model of its situation—what it believes, how it
+knows, what may have changed, and what remains uncertain. Noema supplies the
+durable architecture around that understanding so agents can persist, orient,
+coordinate, act, and learn over time.
+
 The [Autonomic Fabric](docs/AUTONOMIC_FABRIC.md) adds a signal-first control
 plane beneath deliberation: accumulated experience can become cheap, typed,
 replayable micro-policies, while novelty and uncertainty are promoted to the
@@ -427,9 +435,14 @@ PostgreSQL and NATS containers.
 
 ## Release sequence
 
-v0.5 is the Durable Work Coordination milestone. The roadmap next layers richer
-agent interoperability and endogenous agenda formation above the durable event,
-governance, autonomic, memory, orientation, and work-control substrates.
+v0.5 is the implemented Durable Work Coordination milestone. The next accepted
+architecture direction, with implementation staged but not yet shipped, is
+v0.5.x Intent & Outcome Stewardship: immutable goal and roadmap revisions,
+explicit intent authority, versioned commitments, user/agent/external outcome
+roles, coverage, and deterministic review/WIP policy. Endogenous agenda
+formation follows only after those strategic objects exist to be stewarded.
+Information Governance is a separate accepted, unimplemented cross-cutting
+direction and must precede production use of restricted real-world context.
 
 See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](docs/adr/0001-portable-durable-agent.md), [autonomy](docs/AUTONOMY.md),
@@ -441,4 +454,7 @@ See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITE
 [ADR 0005](docs/adr/0005-persistent-cognitive-memory.md), and
 [ADR 0006](docs/adr/0006-situated-continuity-foundation.md), and
 [Durable Work Coordination](docs/DURABLE_WORK_COORDINATION.md) with
-[ADR 0007](docs/adr/0007-durable-work-coordination.md).
+[ADR 0007](docs/adr/0007-durable-work-coordination.md), plus the accepted,
+implementation-staged
+[Intent and Outcome Stewardship](docs/adr/0008-intent-and-outcome-stewardship.md)
+and [Information Governance and Confidential Context](docs/adr/0009-information-governance-and-confidential-context.md).

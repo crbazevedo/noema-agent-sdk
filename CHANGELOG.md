@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- reframed the roadmap as a story of increasing agency from v0.1 Agency Kernel
+  through v1.0 Durable Cognitive Agency, with explicit outcome thresholds,
+  dependency arcs, measures, and decisive system demonstrations;
+- accepted a deliberately bounded Intent & Outcome Stewardship architecture
+  direction, with implementation staged between durable work and endogenous
+  cognition, including versioned existing Goal/Commitment semantics, intent
+  authority, non-roadmap work origins, outcome roles, external workstreams,
+  coverage, deterministic review/WIP policy, and expected-head admission;
+- accepted Information Governance and Confidential Context as a separate,
+  implementation-staged cross-cutting direction with quarantine-first ingestion,
+  typed operation-specific policy composition, explicit declassification,
+  internal access control, whole-envelope protection, artifact retention,
+  disclosure gates, and bounded audit receipts;
+- documented the meaning of the Noema name and the project's epistemic center
+  of gravity without turning it into a backronym.
+
 ## 0.5.0 — 2026-08-31
 
 - added immutable `WorkOrder`, `WorkNode`, `WorkDependency`, and validated
