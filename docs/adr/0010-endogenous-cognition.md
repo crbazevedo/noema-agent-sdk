@@ -1,6 +1,6 @@
 # ADR 0010: Deterministic endogenous cognition
 
-- Status: Proposed — deterministic v0.6 implementation candidate awaiting acceptance
+- Status: Accepted — deterministic v0.6 shadow slice implemented
 - Date: 2026-09-01
 - Scope: endogenous inquiry, value-of-cognition evaluation, finite background
   budgets, deterministic agenda selection, calibration, replay, and preemption
