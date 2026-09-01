@@ -60,11 +60,20 @@ expires, planning replays from its exact causal cut, and lease completion uses
 the control-plane clock. Planning, matching, and work ownership remain distinct
 from `ActionIntent`, authority, and capability execution.
 
+The [Endogenous Cognition](docs/ENDOGENOUS_COGNITION.md) slice adds bounded
+internal cognitive demand without an external prompt. A model-free detector
+derives evidence-bearing inquiries from current roadmap health, commitment
+coverage, belief conflict/staleness, autonomic novelty, and peer disagreement.
+Explicit Value-of-Cognition terms compete for a finite background budget inside
+a replayable DREAM epoch. Selection is deterministic, crash-recoverable, and
+preemptible by foreground work. It remains shadow-first: no work dispatch,
+model call, goal mutation, capability invocation, or external effect is
+reachable from the endogenous worker.
+
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
-accepted mid-term architecture for bounded inquiry, calibration, consolidation,
-and intrinsic agenda formation. It is deliberately staged behind observational
-evidence from the shadow worker; its schedulers, HabitForge, and SkillForge are
-not part of the current runtime.
+accepted mid-term architecture beyond this first bounded inquiry, calibration,
+and intrinsic-agenda slice. Its schedulers, consolidation processes, generated
+habits, and generated skills are not part of the current runtime.
 
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
@@ -116,6 +125,9 @@ environment / agents / timers
 - **Observable:** causal events remain canonical while provider-neutral spans can be exported through OpenTelemetry.
 - **Governed:** autonomy is explicit and configurable; “fully autonomous” means no mandatory human interaction, not invisible or unlimited authority.
 - **Cognitively sparse:** shadow rules cheaply test which observations should be suppressed, retained, or promoted before expensive deliberation is involved.
+- **Endogenously selective:** internal questions are evidence-bound, priced by
+  explicit Value-of-Cognition terms, and admitted only inside a finite,
+  preemptible DREAM budget.
 
 ## Install locally
 
@@ -428,6 +440,9 @@ The test suite covers:
   and shadow orientation prerequisites;
 - validated work graphs, dependency frontiers, deterministic worker matching,
   fenced lease recovery, independent verification, and causal invalidation;
+- deterministic endogenous inquiry, finite cognitive-budget selection,
+  negative-value suppression, peer calibration, replay, crash recovery, and
+  foreground preemption;
 - multi-step autonomous incident recovery.
 
 The CI acceptance suite also runs the incident application against real
@@ -436,11 +451,11 @@ PostgreSQL and NATS containers.
 ## Release sequence
 
 v0.5 is the implemented Durable Work Coordination milestone. v0.5.1 implements
-the deterministic v0.5.x Intent & Outcome Stewardship slice: immutable goal and
-roadmap revisions, explicit intent authority, versioned commitments,
-user/agent/external outcome roles, coverage, external-workstream observations,
-and deterministic review/WIP policy. Endogenous agenda formation follows only
-after those strategic objects exist to be stewarded.
+the deterministic Intent & Outcome Stewardship layer over it. v0.6 implements
+the first Endogenous Cognition slice: grounded inquiry, explicit
+Value-of-Cognition estimates, finite background budgets, deterministic shadow
+agendas, peer calibration, replay, recovery, and foreground preemption. It does
+not dispatch selected cognition as work or grant effect authority.
 Information Governance is a separate accepted, unimplemented cross-cutting
 direction and must precede production use of restricted real-world context.
 
@@ -457,4 +472,6 @@ See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITE
 [ADR 0007](docs/adr/0007-durable-work-coordination.md), plus the implemented
 [Intent and Outcome Stewardship](docs/INTENT_OUTCOME_STEWARDSHIP.md)
 and its [ADR 0008](docs/adr/0008-intent-and-outcome-stewardship.md),
+the implemented [Endogenous Cognition](docs/ENDOGENOUS_COGNITION.md)
+and its [ADR 0010](docs/adr/0010-endogenous-cognition.md),
 and [Information Governance and Confidential Context](docs/adr/0009-information-governance-and-confidential-context.md).

@@ -1,8 +1,8 @@
 # Architecture
 
-> **Current revision:** 2026-08-31
+> **Current revision:** 2026-09-01
 >
-> **Implemented through:** v0.5.1 deterministic Intent & Outcome Stewardship
+> **Implemented through:** v0.6 deterministic Endogenous Cognition shadow slice
 >
 > **Accepted architecture direction; implementation staged:** Information
 > Governance and Confidential Context
@@ -54,6 +54,8 @@ Noema is a general substrate for long-running autonomous systems. It separates:
 - goals from roadmaps, commitments, work, plans, and effects;
 - outcome ownership from decision ownership, execution, and verification;
 - external workstreams from Noema-owned work graphs;
+- signals from inquiries, intrinsic cognitive allocation, durable work, and
+  action proposals;
 - cognition from effectful capabilities;
 - action proposals from authorization;
 - capability from competence, information access, and authority;
@@ -70,6 +72,8 @@ Goal/GoalRevision != Roadmap/RoadmapRevision != Commitment
                   != WorkGraph/WorkNode != ActionIntent
 
 IntentAuthority != EffectAuthority
+
+Signal != Inquiry != IntrinsicActivity != WorkOrder != ActionIntent
 ```
 
 An agent's ability to perform a task does not imply that the agent should own
@@ -622,13 +626,20 @@ an `ActionIntent`, but critics, policy, authorization, idempotency, and typed
 capabilities remain mandatory. Learned policies are immutable typed data,
 never arbitrary executable code.
 
-The planned [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) adds a
+The implemented [Endogenous Cognition](ENDOGENOUS_COGNITION.md) slice adds a
 second governed source of cognitive demand: questions, belief/goal/roadmap
-maintenance, calibration, preparedness, and bounded simulation when no
-external event warrants thought. Exogenous and endogenous demand compete for
-one finite aware workspace. Internal initiative remains subordinate to
-constitutional, user, mission, and commitment goals and creates proposals more
-readily than actions.
+maintenance, and peer calibration when no external event warrants thought. A
+canonical scan pins one deterministic cut; a DREAM epoch pins policy, budget,
+expiry, and a proposal-only cognitive authority ceiling; explicit
+Value-of-Cognition terms produce one finite, replayable shadow agenda.
+
+Roadmap health, uncovered active commitments, exactly strategy-bound stale or
+contradictory beliefs, autonomic novelty, and recorded peer disagreement are
+the first candidate sources. Novelty does not imply value. Internal initiative
+requires current active or blocked governing goal revisions, is preemptible by
+foreground work, and cannot dispatch work or effects. The broader
+[Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) remains the staged
+direction for later consolidation, simulation, learning, and scheduling.
 
 ## Situation graph and agent cycle
 
@@ -798,7 +809,7 @@ invariants.
 | Durable work identity and planning | `WorkOrder` / `PlanProposal` / `WorkGraph` / `PlanValidator` |
 | Work readiness and assignment | `ReadyFrontier` / `WorkerMatcher` / `WorkLease` |
 | Agent ecology | `AgentPresence` / `CapabilityManifest` / `CompetenceEstimate` |
-| Endogenous cognition (planned) | `Inquiry` / `IntrinsicActivity` |
+| Endogenous cognition | `Inquiry` / `IntrinsicActivity` / `DreamEpoch` / Value-of-Cognition / `IntrinsicAgendaSelection` |
 | User outcomes | outcome roles / `ExecutionLocus` / `AssistanceEnvelope` / commitment coverage |
 | Intent and portfolio | `GoalRevision` / `IntentAuthority` / `RoadmapRevision` / `Commitment` / coverage and health projections |
 | External work | `ExternalWorkstream` / support-demand projection |
@@ -830,6 +841,8 @@ policy.
 - [ADR 0008](adr/0008-intent-and-outcome-stewardship.md): implemented
   deterministic intent, user outcomes, external work, and coverage foundation;
 - [ADR 0009](adr/0009-information-governance-and-confidential-context.md):
-  accepted, staged information governance and confidential context.
+  accepted, staged information governance and confidential context;
+- [ADR 0010](adr/0010-endogenous-cognition.md): implemented deterministic,
+  finite, preemptible, shadow-first endogenous cognition.
 
 See the [roadmap](ROADMAP.md) for delivery order and release acceptances.

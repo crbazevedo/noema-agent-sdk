@@ -2,9 +2,9 @@
 
 > **Roadmap ID:** `noema-core`
 >
-> **Current revision:** 2026-08-31
+> **Current revision:** 2026-09-01
 >
-> **Status:** v0.1 through the deterministic v0.5.x slice implemented; later
+> **Status:** v0.1 through the deterministic v0.6 slice implemented; later
 > milestones are planned
 
 Noema is infrastructure for agents that maintain a coherent relationship with
@@ -61,7 +61,7 @@ cross-cutting release gates, not a final wave.
 | **v0.4 — Situated Continuity** | The agent knows when memory is no longer sufficient and reconstructs orientation. | **I wake and know what I no longer know.** | Implemented |
 | **v0.5 — Durable Work Coordination** | Goals can become dependency-aware, recoverable, verified work. | **I organize work.** | Implemented |
 | **v0.5.x — Intent & Outcome Stewardship** | Work remains connected to revisable commitments and the user's actual outcomes. | **I know what I owe, whom it serves, and what should remain human.** | Deterministic slice implemented in v0.5.1 |
-| **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Planned |
+| **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Deterministic shadow slice implemented |
 | **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Planned |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
 | **v0.9 — Integrated Autonomous Runtime** | All cognitive systems operate together continuously under faults and budgets. | **I can keep going without being babysat.** | Planned |
@@ -332,18 +332,36 @@ questions include stale important beliefs, uncovered commitments, contradicted
 roadmap assumptions, stalled goals, upcoming risk, valuable uncertainty,
 peer disagreement, repeated expensive work, and useful simulation.
 
-The allocator evaluates expected decision improvement against compute, delay,
-attention, and opportunity cost. The slice adds durable inquiry and
-peer-calibration contracts, explicit background cognitive budgets, bounded
-value-of-cognition experiments, a shadow `IntrinsicAgenda`, and endogenous
-roadmap-health review. It does not create terminal values or a new effect path.
+The deterministic v0.6 slice evaluates expected decision improvement against
+compute, delay, attention, opportunity, and privacy/risk cost. It implements
+durable inquiry and peer-calibration contracts, explicit multidimensional
+background cognitive budgets, policy-pinned Value-of-Cognition estimates, a
+shadow `IntrinsicAgenda`, endogenous roadmap-health/coverage review, exact
+strategic-revision binding, canonical replay, crash recovery, expiry, and
+foreground preemption. It does not create terminal values or a new effect path.
 
-Acceptance: identical captured inputs reproduce semantic agenda selection;
-background work is bounded, preemptible, subordinate to user and commitment
-goals, and more likely to produce a question or proposal than an action.
+The implemented control path is:
+
+```text
+canonical scan → pinned DREAM epoch → deterministic candidates
+               → explicit Value of Cognition → finite shadow agenda
+               → foreground preemption or expiry
+```
+
+Novelty can seed an inquiry but receives no automatic value. Belief maintenance
+uses exact goal/roadmap/revision/commitment identity until a generic durable
+relevance relation exists. Selected activities do not automatically become
+`WorkOrder` values.
+
+Acceptance is implemented: identical captured inputs reproduce semantic agenda
+selection; background cognition is bounded, single-spend, preemptible,
+subordinate to live governing goals, and structurally unable to dispatch work
+or effects.
 
 See [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) and
-[ADR 0003](adr/0003-endogenous-drive-ecology.md).
+[ADR 0003](adr/0003-endogenous-drive-ecology.md). The implemented slice is
+described in [Endogenous Cognition](ENDOGENOUS_COGNITION.md) and normatively
+bounded by [ADR 0010](adr/0010-endogenous-cognition.md).
 
 ## v0.7 — Habit Learning
 
@@ -439,10 +457,10 @@ bypass the existing event, policy, authority, and capability boundary.
 ### Endogenous Drive Ecology
 
 The [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) is the second source
-of cognitive demand. v0.6 introduces its first active contracts only after
+of cognitive demand. v0.6 implements its first shadow contracts only after
 memory, orientation, work, and intent stewardship provide something grounded
-to maintain. Intrinsic activity remains subordinate, budgeted, preemptible, and
-proposal-biased.
+to maintain. Intrinsic activity remains subordinate, budgeted, preemptible,
+single-spend per epoch, and proposal-only.
 
 ### User value
 

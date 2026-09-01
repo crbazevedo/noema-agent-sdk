@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+## 0.6.0 — 2026-09-01
+
+- added immutable, content-addressed `Inquiry`, `IntrinsicActivity`,
+  `DreamEpoch`, policy snapshot, finite cognitive-budget, Value-of-Cognition,
+  intrinsic-agenda, and peer-calibration contracts;
+- added deterministic candidate producers for roadmap-health review,
+  commitment-coverage gaps, exactly strategy-bound stale or contradictory
+  beliefs, autonomic novelty, and evidence-preserving peer disagreement;
+- implemented explicit, replay-visible Value-of-Cognition terms and stable
+  multidimensional finite-budget selection with selected, deferred, and
+  suppressed dispositions;
+- added a model-free, effect-free `EndogenousShadowWorker` using canonical scan
+  events, exact-head compare-and-append, deterministic replay, and generic
+  `ConsumerCheckpoint` recovery;
+- made DREAM epochs finite, single-spend, foreground-preemptible, and durably
+  terminal after preemption or expiry;
+- bound every inquiry and activity to exact current `ACTIVE` or `BLOCKED` goal
+  revisions while preventing terminal intent from admitting new cognition;
+- preserved the boundary between signals, inquiries, intrinsic activity, work,
+  and actions, with a DREAM-only proposal authority ceiling;
+- added a flagship acceptance scenario covering strategic and epistemic demand,
+  negative-value novelty, calibration, deterministic selection/replay, crash
+  recovery, and work-triggered preemption;
+- added structural gates preventing endogenous cognition from reaching models,
+  durable-work dispatch, capabilities, authorization, or effects;
+- recorded the bounded design, conservative relevance rule, tradeoffs, and
+  deferred learned/solver/scheduler mechanisms in ADR 0010.
+
 ## 0.5.1 — 2026-08-31
 
 - implemented deterministic Intent & Outcome Stewardship over the canonical

@@ -366,3 +366,96 @@ class ArchitectureFitnessTests(unittest.TestCase):
             if forbidden_name in planning_source:
                 violations.append(f"work/planning.py references {forbidden_name}")
         self.assertEqual(violations, [])
+
+    def test_endogenous_core_is_shadow_only_and_cannot_own_work_or_effects(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        endogenous_root = source_root / "endogenous"
+        forbidden_modules = {
+            "adapters",
+            "agent",
+            "authority",
+            "capabilities",
+            "delivery",
+            "endogenous_worker",
+            "kernel",
+            "models",
+            "reasoning",
+            "scheduler",
+            "store",
+            "system",
+            "work",
+        }
+        forbidden_calls = {"authorize", "deliberate", "dispatch", "execute", "invoke"}
+        deferred_names = {
+            "ReflectionManager",
+            "CognitionEngine",
+            "LLMReflection",
+            "LearnedAllocator",
+            "MDPAllocator",
+            "HabitForge",
+            "SkillForge",
+            "WorkflowDSL",
+        }
+        violations: list[str] = []
+        for path in endogenous_root.rglob("*.py"):
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(path))
+            for name in deferred_names:
+                if name in source:
+                    violations.append(f"{path.relative_to(source_root)} implements deferred {name}")
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    root = node.module.split(".")[0]
+                    if node.level >= 2 and root in forbidden_modules:
+                        violations.append(f"{path.relative_to(source_root)} imports {node.module}")
+                    if node.module == "intent.coordination":
+                        violations.append(
+                            f"{path.relative_to(source_root)} imports strategic mutation"
+                        )
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        parts = alias.name.split(".")
+                        if (
+                            len(parts) >= 2
+                            and parts[0] == "noema"
+                            and parts[1] in forbidden_modules
+                        ):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports {alias.name}"
+                            )
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in forbidden_calls
+                ):
+                    violations.append(f"{path.relative_to(source_root)} calls {node.func.attr}")
+        self.assertEqual(violations, [])
+
+    def test_endogenous_worker_cannot_reach_models_work_dispatch_or_effects(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        path = source_root / "endogenous_worker.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        forbidden_modules = {
+            "adapters",
+            "agent",
+            "authority",
+            "capabilities",
+            "models",
+            "reasoning",
+            "scheduler",
+            "work",
+        }
+        forbidden_calls = {"authorize", "deliberate", "dispatch", "execute", "invoke"}
+        violations: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                root = node.module.split(".")[0]
+                if node.level >= 1 and root in forbidden_modules:
+                    violations.append(f"imports {node.module}")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in forbidden_calls
+            ):
+                violations.append(f"calls {node.func.attr}")
+        self.assertEqual(violations, [])

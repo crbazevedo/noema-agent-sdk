@@ -65,6 +65,12 @@ principle they change.
 | Observation precedes learning | Continuous shadow telemetry must ground HabitForge fitness before learned policy can advance. |
 | Intrinsic goals are subordinate | Future endogenous processes may propose instrumental, epistemic, maintenance, and exploratory goals, never terminal values. |
 | Background cognition is leased | Future dream/maintenance work consumes explicit preemptible budgets and cannot silently act externally. |
+| Cognitive demand is layered | `Signal`, `Inquiry`, `IntrinsicActivity`, `WorkOrder`, and `ActionIntent` cannot substitute for one another. |
+| Curiosity is not novelty | Novelty may seed a candidate inquiry but does not establish positive Value of Cognition. |
+| Endogenous intent is subordinate | New inquiries require exact current `ACTIVE` or `BLOCKED` governing goal revisions; terminal intent admits none. |
+| Value of Cognition is explicit | Improvement and compute, delay, attention, opportunity, and privacy/risk costs remain separately replayable under a pinned policy. |
+| DREAM is not effect authority | A DREAM epoch may select cognitive proposals only; it cannot dispatch work, authorize effects, or invoke capabilities. |
+| Background budget is single-spend | One DREAM epoch records at most one deterministic agenda and terminal epochs consume no further cognition. |
 | Competence does not grant authority | A future SkillForge may propose a capability; capability registration and authority remain independent gates. |
 
 Structural enforcement lives in `tests/test_architecture.py`, schema/replay

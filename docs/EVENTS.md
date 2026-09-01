@@ -60,6 +60,27 @@ action.compensated
 action.compensation_failed
 ```
 
+## Endogenous cognition events
+
+```text
+endogenous.policy_snapshot_recorded
+endogenous.scan_requested
+endogenous.dream_epoch_started
+endogenous.inquiry_recorded
+endogenous.activity_recorded
+endogenous.voc_evaluated
+endogenous.agenda_selected
+endogenous.calibration_exchange_recorded
+endogenous.dream_epoch_preempted
+endogenous.dream_epoch_expired
+```
+
+The scan request pins the causal cut. DREAM outputs use content-addressed
+identities and exact-head admission receipts. One agenda may spend each epoch's
+finite budget; preemption and expiry are terminal for further epoch output.
+These events represent cognition proposals only and never imply work dispatch,
+authorization, or effect.
+
 ## Causal chain
 
 A typical episode is reconstructable as:
