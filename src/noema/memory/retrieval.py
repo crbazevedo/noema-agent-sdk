@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Protocol
 
+from ..information.models import InformationAccessDecision
 from .models import EvidenceRelation, SemanticAssertion
 from .projection import MemoryProjection
 
@@ -72,6 +74,23 @@ class RetrievedMemory:
     assertion: SemanticAssertion
     score: float
     components: RetrievalComponents
+    access_decision: InformationAccessDecision | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryRetrieval:
+    results: tuple[RetrievedMemory, ...]
+    access_decisions: tuple[InformationAccessDecision, ...]
+
+
+class MemoryAccessEvaluator(Protocol):
+    """Return a material decision for governed memory, or ``None`` if unbound."""
+
+    def evaluate(
+        self,
+        assertion: SemanticAssertion,
+        query: MemoryQuery,
+    ) -> InformationAccessDecision | None: ...
 
 
 class LexicalMemoryIndex:
@@ -110,10 +129,12 @@ class MemoryRetriever:
         *,
         weights: RetrievalWeights | None = None,
         index: LexicalMemoryIndex | None = None,
+        access_evaluator: MemoryAccessEvaluator | None = None,
     ) -> None:
         self.projection = projection
         self.weights = weights or RetrievalWeights()
         self.index = index or LexicalMemoryIndex()
+        self.access_evaluator = access_evaluator
 
     def rebuild_index(self) -> None:
         self.index.rebuild(self.projection)
@@ -122,6 +143,9 @@ class MemoryRetriever:
         self.index.clear()
 
     def retrieve(self, query: MemoryQuery) -> tuple[RetrievedMemory, ...]:
+        return self.retrieve_with_decisions(query).results
+
+    def retrieve_with_decisions(self, query: MemoryQuery) -> MemoryRetrieval:
         assertions = self.projection.visible_assertions(
             valid_at=query.valid_at,
             known_at=query.known_at,
@@ -130,15 +154,27 @@ class MemoryRetriever:
         )
         query_tokens = _tokens(query.text)
         goal_tokens = _tokens(" ".join(query.goal_terms))
-        ranked = [
-            self._score(
-                assertion,
-                query=query,
-                query_tokens=query_tokens,
-                goal_tokens=goal_tokens,
+        ranked: list[RetrievedMemory] = []
+        access_decisions: list[InformationAccessDecision] = []
+        for assertion in assertions:
+            decision = (
+                self.access_evaluator.evaluate(assertion, query)
+                if self.access_evaluator is not None
+                else None
             )
-            for assertion in assertions
-        ]
+            if decision is not None:
+                access_decisions.append(decision)
+            if decision is not None and not decision.allowed:
+                continue
+            ranked.append(
+                self._score(
+                    assertion,
+                    query=query,
+                    query_tokens=query_tokens,
+                    goal_tokens=goal_tokens,
+                    access_decision=decision,
+                )
+            )
         ranked.sort(
             key=lambda result: (
                 -result.score,
@@ -146,7 +182,10 @@ class MemoryRetriever:
                 result.assertion.assertion_id,
             )
         )
-        return tuple(ranked[: query.limit])
+        return MemoryRetrieval(
+            results=tuple(ranked[: query.limit]),
+            access_decisions=tuple(access_decisions),
+        )
 
     def _score(
         self,
@@ -155,6 +194,7 @@ class MemoryRetriever:
         query: MemoryQuery,
         query_tokens: frozenset[str],
         goal_tokens: frozenset[str],
+        access_decision: InformationAccessDecision | None,
     ) -> RetrievedMemory:
         assertion_tokens = self.index.get(assertion.assertion_id)
         if assertion_tokens is None:
@@ -190,7 +230,12 @@ class MemoryRetriever:
             + weights.freshness * freshness
             - weights.contradiction * contradiction
         )
-        return RetrievedMemory(assertion=assertion, score=score, components=components)
+        return RetrievedMemory(
+            assertion=assertion,
+            score=score,
+            components=components,
+            access_decision=access_decision,
+        )
 
     def _evidence_strength(self, assertion: SemanticAssertion, known_at: datetime) -> float:
         links = [

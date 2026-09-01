@@ -78,6 +78,17 @@ accepted mid-term architecture beyond this first bounded inquiry, calibration,
 and intrinsic-agenda slice. Its schedulers, consolidation processes, generated
 habits, and generated skills are not part of the current runtime.
 
+The [Information Governance Foundation](docs/INFORMATION_GOVERNANCE.md) makes
+possession distinct from access, disclosure, and authority. Immutable source
+policies compose by field across lineage; unresolved information is
+quarantined; material decisions replay from historical principal, purpose,
+provider, policy-version, and lineage snapshots. Optional enforcement filters
+protected memory before ranking, requires access plus disclosure for governed
+context crossing a model trust boundary, and excludes workers that are capable
+and competent but lack information access. Production encrypted artifacts,
+real restricted ingestion, and exhaustive sink/connector coverage remain
+staged under ADR 0009.
+
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
 
@@ -131,6 +142,9 @@ environment / agents / timers
 - **Endogenously selective:** internal questions are evidence-bound, priced by
   explicit Value-of-Cognition terms, and admitted only inside a finite,
   preemptible DREAM budget.
+- **Information-governed:** explicitly bound knowledge is usable only for a
+  permitted purpose, principal, locality, provider, and trust boundary; replay
+  uses the historical decision context.
 
 ## Install locally
 
@@ -459,8 +473,9 @@ the first Endogenous Cognition slice: grounded inquiry, explicit
 Value-of-Cognition estimates, finite background budgets, deterministic shadow
 agendas, peer calibration, replay, recovery, and foreground preemption. It does
 not dispatch selected cognition as work or grant effect authority.
-Information Governance is a separate accepted, unimplemented cross-cutting
-direction and must precede production use of restricted real-world context.
+The deterministic Information Governance foundation is implemented as a
+separate cross-cutting layer. Its remaining artifact, sink, and connector slices
+must precede production use of restricted real-world context.
 
 See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITECTURE_PRINCIPLES.md),
 [ADR 0001](docs/adr/0001-portable-durable-agent.md), [autonomy](docs/AUTONOMY.md),
@@ -477,4 +492,5 @@ See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITE
 and its [ADR 0008](docs/adr/0008-intent-and-outcome-stewardship.md),
 the implemented [Endogenous Cognition](docs/ENDOGENOUS_COGNITION.md)
 and its [ADR 0010](docs/adr/0010-endogenous-cognition.md),
-and [Information Governance and Confidential Context](docs/adr/0009-information-governance-and-confidential-context.md).
+the [Information Governance Foundation](docs/INFORMATION_GOVERNANCE.md), and
+[ADR 0009](docs/adr/0009-information-governance-and-confidential-context.md).

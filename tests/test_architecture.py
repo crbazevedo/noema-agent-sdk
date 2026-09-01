@@ -459,3 +459,71 @@ class ArchitectureFitnessTests(unittest.TestCase):
             ):
                 violations.append(f"calls {node.func.attr}")
         self.assertEqual(violations, [])
+
+    def test_information_governance_core_is_not_authority_memory_or_effect_plane(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        information_root = source_root / "information"
+        core_paths = tuple(
+            information_root / name for name in ("models.py", "policy.py", "projection.py")
+        )
+        forbidden_modules = {
+            "adapters",
+            "agent",
+            "authority",
+            "capabilities",
+            "delivery",
+            "intent",
+            "kernel",
+            "memory",
+            "models",
+            "reasoning",
+            "scheduler",
+            "store",
+            "system",
+            "telemetry",
+            "tracing",
+            "work",
+        }
+        forbidden_calls = {
+            "authorize",
+            "deliberate",
+            "dispatch",
+            "execute",
+            "invoke",
+        }
+        forbidden_names = {
+            "HabitForge",
+            "PermissionManager",
+            "SecurityContext",
+            "SkillForge",
+        }
+        violations: list[str] = []
+        for path in core_paths:
+            source = path.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(path))
+            for name in forbidden_names:
+                if name in source:
+                    violations.append(f"{path.relative_to(source_root)} contains forbidden {name}")
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    root = node.module.split(".")[0]
+                    if node.level >= 2 and root in forbidden_modules:
+                        violations.append(f"{path.relative_to(source_root)} imports {node.module}")
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        parts = alias.name.split(".")
+                        if (
+                            len(parts) >= 2
+                            and parts[0] == "noema"
+                            and parts[1] in forbidden_modules
+                        ):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports {alias.name}"
+                            )
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in forbidden_calls
+                ):
+                    violations.append(f"{path.relative_to(source_root)} calls {node.func.attr}")
+        self.assertEqual(violations, [])

@@ -14,6 +14,7 @@ from typing import cast
 from ..authority import AuthorityLevel
 from ..continuity import ActionPrerequisite
 from ..events import Event
+from ..information.models import validate_opaque_governance_id
 from ..types import JSONObject, JSONValue, parse_datetime
 
 WORK_ORDER_RECORDED_EVENT = "work.order_recorded"
@@ -308,6 +309,7 @@ class WorkNode:
     completion_criteria: tuple[str, ...]
     epistemic_prerequisites: tuple[ActionPrerequisite, ...] = ()
     verification_of: tuple[str, ...] = ()
+    governed_information_refs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _require_text(self.node_id, "work node id")
@@ -315,6 +317,12 @@ class WorkNode:
         _unique_text(self.required_capabilities, "work node capabilities", required=True)
         _unique_text(self.completion_criteria, "work node completion criteria", required=True)
         _unique_text(self.verification_of, "verified node ids")
+        _unique_text(
+            self.governed_information_refs,
+            "work node governed information refs",
+        )
+        for value in self.governed_information_refs:
+            validate_opaque_governance_id(value, "work node governed information ref")
         prerequisite_ids = [value.source_id for value in self.epistemic_prerequisites]
         if len(set(prerequisite_ids)) != len(prerequisite_ids):
             raise ValueError("work node epistemic prerequisite sources must be unique")
@@ -326,7 +334,7 @@ class WorkNode:
             raise ValueError("a work node cannot verify itself")
 
     def to_dict(self) -> JSONObject:
-        return {
+        data: JSONObject = {
             "node_id": self.node_id,
             "kind": self.kind.value,
             "description": self.description,
@@ -337,6 +345,9 @@ class WorkNode:
             ],
             "verification_of": list(self.verification_of),
         }
+        if self.governed_information_refs:
+            data["governed_information_refs"] = list(self.governed_information_refs)
+        return data
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> WorkNode:
@@ -348,6 +359,7 @@ class WorkNode:
             completion_criteria=_strings(data, "completion_criteria"),
             epistemic_prerequisites=_prerequisites(data, "epistemic_prerequisites"),
             verification_of=_strings(data, "verification_of"),
+            governed_information_refs=_strings(data, "governed_information_refs"),
         )
 
 
@@ -948,6 +960,7 @@ class WorkLease:
     expires_at: datetime
     match_score: float
     competence_estimate_refs: tuple[str, ...]
+    information_access_decision_refs: tuple[str, ...] = ()
 
     @classmethod
     def create(
@@ -961,6 +974,7 @@ class WorkLease:
         lease_duration: timedelta,
         match_score: float,
         competence_estimate_refs: tuple[str, ...],
+        information_access_decision_refs: tuple[str, ...] = (),
     ) -> WorkLease:
         return cls(
             lease_id=f"work-lease:{graph_id}:{node_id}:{fencing_token}",
@@ -972,6 +986,7 @@ class WorkLease:
             expires_at=granted_at + lease_duration,
             match_score=match_score,
             competence_estimate_refs=competence_estimate_refs,
+            information_access_decision_refs=information_access_decision_refs,
         )
 
     def __post_init__(self) -> None:
@@ -997,9 +1012,18 @@ class WorkLease:
             "work lease competence estimate refs",
             required=True,
         )
+        _unique_text(
+            self.information_access_decision_refs,
+            "work lease information access decision refs",
+        )
+        for value in self.information_access_decision_refs:
+            validate_opaque_governance_id(
+                value,
+                "work lease information access decision ref",
+            )
 
     def to_dict(self) -> JSONObject:
-        return {
+        data: JSONObject = {
             "lease_id": self.lease_id,
             "graph_id": self.graph_id,
             "node_id": self.node_id,
@@ -1010,6 +1034,11 @@ class WorkLease:
             "match_score": self.match_score,
             "competence_estimate_refs": list(self.competence_estimate_refs),
         }
+        if self.information_access_decision_refs:
+            data["information_access_decision_refs"] = list(
+                self.information_access_decision_refs
+            )
+        return data
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> WorkLease:
@@ -1023,6 +1052,9 @@ class WorkLease:
             expires_at=_datetime(data, "expires_at"),
             match_score=float(cast(float, data["match_score"])),
             competence_estimate_refs=_strings(data, "competence_estimate_refs"),
+            information_access_decision_refs=_strings(
+                data, "information_access_decision_refs"
+            ),
         )
 
     def to_event(self, *, source: str, causation_id: str) -> Event:

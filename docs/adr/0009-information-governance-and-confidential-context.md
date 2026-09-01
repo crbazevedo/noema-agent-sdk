@@ -1,6 +1,7 @@
 # ADR 0009: Information governance and confidential context
 
-- Status: Accepted architecture direction — implementation staged
+- Status: Accepted architecture direction — deterministic foundation implemented;
+  remaining slices staged
 - Date: 2026-08-31
 - Scope: information policy, provenance and composition, internal access,
   artifact retention, declassification, disclosure, and protected derived data
@@ -214,6 +215,51 @@ commitment.
 13. Implement and test this architecture before real confidential employer or
     similarly restricted context enters production Noema. It is not a side
     feature of portfolio stewardship and can be delivered independently.
+
+## Implemented deterministic foundation
+
+The first bounded implementation slice establishes the dependency-free policy
+kernel and three enforcement ports without claiming the complete confidential
+data platform:
+
+- immutable, content-addressed policy, retention/hold, principal, context,
+  lineage, binding, quarantine, access, disclosure, declassification, view, and
+  audit-receipt contracts;
+- field-specific policy composition with operation-scoped conflicts, including
+  legal-hold and retention conflicts that deny `DELETE` without globally denying
+  a permitted legal-review read;
+- canonical governance events with opaque subjects, reusable envelope leakage
+  validation, deterministic decision replay, and a rebuildable governance
+  projection;
+- inherited policy across multi-source derivation, with redaction and
+  abstraction remaining transformations rather than declassification;
+- optional pre-ranking enforcement in `MemoryRetriever`, guarded
+  `ContextAssembler` items with a second disclosure check on trust-boundary
+  crossing, and information access as a hard `WorkerMatcher` feasibility filter;
+- access-decision references on governed work leases; head-checked appends admit
+  a lease only when no event interleaves after its access-decision sequence.
+
+Compatibility is additive. Historical memory and work without explicit
+governed-information bindings retain their prior behavior; explicitly governed
+references fail closed when lineage, policy, context, or access evidence is
+missing. This avoids inventing policy for old data while making new protected
+paths opt in to enforcement explicitly.
+
+The privileged bootstrap path is deliberately bounded: policy, lineage,
+binding, and decision records are read directly by the governance projection;
+they do not recursively require access decisions about their own authorization
+records. A `SecurityAuditReceipt` summarizes an already computed decision and
+is never accepted as authorization.
+
+Still deferred are production encrypted artifact storage and real restricted
+ingestion; KMS/HSM integration, rotation, crypto-erasure, and secrets backends;
+production principal/role attestation and durable grant/revocation workflows;
+global historical event-envelope retrofitting; exhaustive telemetry, tracing,
+logging, exception, cache, index, evaluation, model-response, connector, tool,
+and output interception; vector stores; cross-tenant isolation; arbitrary
+policy languages; learned classification; and automatic declassification.
+Those remain later ADR-0009 integration slices and must precede production use
+of restricted real-world information.
 
 ## Consequences and tradeoffs
 

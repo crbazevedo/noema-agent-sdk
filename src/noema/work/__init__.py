@@ -5,6 +5,7 @@ from .coordination import (
     NodeCompletion,
     PlanInvalidation,
     ReadyFrontier,
+    WorkerAccessEvaluator,
     WorkerMatch,
     WorkerMatcher,
     WorkProjection,
@@ -69,5 +70,6 @@ __all__ = [
     "WorkProjection",
     "WorkerMatch",
     "WorkerMatcher",
+    "WorkerAccessEvaluator",
     "plan_invalidation_event",
 ]

@@ -4,8 +4,8 @@
 >
 > **Current revision:** 2026-09-01
 >
-> **Status:** v0.1 through the deterministic v0.6 slice implemented; later
-> milestones are planned
+> **Status:** v0.1 through the deterministic v0.6 slice and the Information
+> Governance foundation implemented; later milestones are planned
 
 Noema is infrastructure for agents that maintain a coherent relationship with
 a changing world. Its releases should therefore tell a story of increasing
@@ -470,20 +470,23 @@ grants outcome ownership, intent authority, or effect authority.
 
 ### Information Governance and Confidential Context
 
-This is a separate accepted architecture direction with implementation staged,
+This is a separate accepted architecture direction whose deterministic
+foundation is implemented, with later confidential-data slices staged, as
 specified by
 [ADR 0009](adr/0009-information-governance-and-confidential-context.md). It may
 develop independently of v0.5.x but must be implemented before real confidential
 employer or similarly restricted context enters production Noema.
 
-The first slice defines quarantine before policy resolution, typed
+The implemented foundation proves quarantine before policy resolution, typed
 operation-specific policy composition, provenance inheritance, internal
 `InformationAccessDecision`, trust-boundary `DisclosureDecision`, explicit
-declassification after redaction/abstraction, whole-event-envelope protection,
-encrypted artifact retention, immutable access context, and distinct canonical
-security semantics versus bounded audit receipts. Its gates cover models, tools,
-agents, telemetry, traces, logs, caches, indexes, replay fixtures, evaluation
-artifacts, errors, connectors, and outputs.
+declassification after redaction/abstraction, safe governance-event envelopes,
+immutable historical context, and distinct canonical decisions versus bounded
+audit receipts. It enforces explicitly governed memory retrieval, model context,
+and worker feasibility. Production encrypted artifact retention, real restricted
+ingestion, global event-envelope retrofitting, and exhaustive gates for model
+responses, tools, agents, telemetry, traces, logs, caches, indexes, fixtures,
+errors, connectors, and outputs remain staged.
 
 ## Measures of success
 

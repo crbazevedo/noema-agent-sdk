@@ -27,7 +27,9 @@ from .projection import (
 )
 from .retrieval import (
     LexicalMemoryIndex,
+    MemoryAccessEvaluator,
     MemoryQuery,
+    MemoryRetrieval,
     MemoryRetriever,
     RetrievalComponents,
     RetrievalWeights,
@@ -51,9 +53,11 @@ __all__ = [
     "EvidenceRelation",
     "LexicalMemoryIndex",
     "MEMORY_EVENT_TYPES",
+    "MemoryAccessEvaluator",
     "MemoryContradiction",
     "MemoryProjection",
     "MemoryQuery",
+    "MemoryRetrieval",
     "MemoryRetriever",
     "TemporalNeighbors",
     "RetrievalComponents",

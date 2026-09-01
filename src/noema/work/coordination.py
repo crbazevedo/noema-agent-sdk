@@ -6,10 +6,17 @@ import math
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
-from typing import cast
+from typing import Protocol, cast
 
 from ..continuity import AwarenessCoverage, OrientationBarrier
 from ..events import Event
+from ..information.models import (
+    INFORMATION_ACCESS_DECIDED_EVENT,
+    InformationAccessDecision,
+    InformationOperation,
+)
+from ..information.policy import InformationGovernanceEngine
+from ..information.projection import InformationGovernanceProjection
 from ..kernel import NoemaKernel
 from ..store import ConcurrentAppendError
 from ..types import parse_datetime, utc_now
@@ -430,6 +437,45 @@ class WorkProjection:
         }
         if lease.agent_id in excluded_workers:
             raise ValueError("verification work must use a worker independent of its target")
+        self._validate_information_access(lease, node)
+
+    def _validate_information_access(self, lease: WorkLease, node: WorkNode) -> None:
+        if not node.governed_information_refs:
+            if lease.information_access_decision_refs:
+                raise ValueError("ungoverned work cannot cite information access decisions")
+            return
+        if len(lease.information_access_decision_refs) != len(node.governed_information_refs):
+            raise ValueError("work lease lacks complete information access evidence")
+        decisions: list[InformationAccessDecision] = []
+        decision_events: list[Event] = []
+        for decision_id in lease.information_access_decision_refs:
+            event = self._events.get(f"information-access-decided:{decision_id}")
+            if event is None:
+                raise ValueError("work lease cites a non-canonical access decision")
+            decision_events.append(event)
+            decisions.append(InformationAccessDecision.from_event(event))
+        if {value.request.information_ref.information_id for value in decisions} != set(
+            node.governed_information_refs
+        ):
+            raise ValueError("work lease access evidence covers different information")
+        if any(
+            not value.allowed
+            or value.request.context.operation is not InformationOperation.WORK_ASSIGN
+            or value.request.context.principal.principal_id != lease.agent_id
+            or value.request.context.recipient != lease.agent_id
+            or value.decided_at != lease.granted_at
+            for value in decisions
+        ):
+            raise ValueError("work lease information access evidence is inapplicable")
+        decision_cut = min(event.sequence or 0 for event in decision_events)
+        if any(
+            (event.sequence or 0) > decision_cut
+            and event.type != INFORMATION_ACCESS_DECIDED_EVENT
+            for event in self._events.values()
+        ):
+            raise ValueError(
+                "work lease access evidence is stale across an intervening canonical event"
+            )
 
     def _apply_lease_expiration(self, event: Event) -> None:
         lease_id = str(event.payload["lease_id"])
@@ -661,10 +707,27 @@ class WorkerMatch:
     agent_id: str
     score: float
     competence_estimate_refs: tuple[str, ...]
+    information_access_decisions: tuple[InformationAccessDecision, ...] = ()
+
+
+class WorkerAccessEvaluator(Protocol):
+    """Evaluate governed inputs before a worker becomes assignment-feasible."""
+
+    def evaluate(
+        self,
+        graph: WorkGraph,
+        node: WorkNode,
+        agent_id: str,
+        *,
+        at: datetime,
+    ) -> tuple[InformationAccessDecision, ...]: ...
 
 
 class WorkerMatcher:
     """Choose a feasible seeded worker; it does not authorize execution."""
+
+    def __init__(self, access_evaluator: WorkerAccessEvaluator | None = None) -> None:
+        self.access_evaluator = access_evaluator
 
     def match(
         self,
@@ -674,9 +737,26 @@ class WorkerMatcher:
         *,
         at: datetime,
     ) -> WorkerMatch | None:
+        match, _ = self.match_with_access_evidence(
+            graph,
+            node,
+            projection,
+            at=at,
+        )
+        return match
+
+    def match_with_access_evidence(
+        self,
+        graph: WorkGraph,
+        node: WorkNode,
+        projection: WorkProjection,
+        *,
+        at: datetime,
+    ) -> tuple[WorkerMatch | None, tuple[InformationAccessDecision, ...]]:
         if at.tzinfo is None:
             raise ValueError("worker matching time must be timezone-aware")
         candidates: list[WorkerMatch] = []
+        access_evidence: list[InformationAccessDecision] = []
         excluded_workers = {
             worker
             for target_id in node.verification_of
@@ -706,6 +786,24 @@ class WorkerMatcher:
             typed_estimates = cast(tuple[CompetenceEstimate, ...], estimates)
             if any(value.basis is not CompetenceBasis.SEEDED for value in typed_estimates):
                 continue
+            access_decisions: tuple[InformationAccessDecision, ...] = ()
+            if node.governed_information_refs:
+                if self.access_evaluator is None:
+                    continue
+                access_decisions = self.access_evaluator.evaluate(
+                    graph,
+                    node,
+                    presence.agent_id,
+                    at=at,
+                )
+                access_evidence.extend(access_decisions)
+                if not self._access_is_feasible(
+                    node,
+                    presence.agent_id,
+                    at,
+                    access_decisions,
+                ):
+                    continue
             candidates.append(
                 WorkerMatch(
                     node_id=node.node_id,
@@ -717,12 +815,34 @@ class WorkerMatcher:
                     competence_estimate_refs=tuple(
                         value.estimate_id for value in typed_estimates
                     ),
+                    information_access_decisions=access_decisions,
                 )
             )
         if not candidates:
-            return None
+            return None, tuple(access_evidence)
         candidates.sort(key=lambda value: (-value.score, value.agent_id))
-        return candidates[0]
+        return candidates[0], tuple(access_evidence)
+
+    @staticmethod
+    def _access_is_feasible(
+        node: WorkNode,
+        agent_id: str,
+        at: datetime,
+        decisions: tuple[InformationAccessDecision, ...],
+    ) -> bool:
+        return (
+            len(decisions) == len(node.governed_information_refs)
+            and {value.request.information_ref.information_id for value in decisions}
+            == set(node.governed_information_refs)
+            and all(
+                value.allowed
+                and value.request.context.operation is InformationOperation.WORK_ASSIGN
+                and value.request.context.principal.principal_id == agent_id
+                and value.request.context.recipient == agent_id
+                and value.decided_at == at
+                for value in decisions
+            )
+        )
 
 
 class DurableWorkCoordinator:
@@ -735,6 +855,7 @@ class DurableWorkCoordinator:
         planner: Planner,
         validator: PlanValidator | None = None,
         matcher: WorkerMatcher | None = None,
+        information_projection: InformationGovernanceProjection | None = None,
         lease_duration: timedelta = timedelta(minutes=30),
         clock: Callable[[], datetime] = utc_now,
         source: str = "work:coordinator",
@@ -747,6 +868,26 @@ class DurableWorkCoordinator:
         self.planner = planner
         self.validator = validator or PlanValidator()
         self.matcher = matcher or WorkerMatcher()
+        if (
+            self.matcher.access_evaluator is not None
+            and information_projection is None
+        ):
+            raise ValueError(
+                "governed worker matching requires a canonical governance projection"
+            )
+        evaluator_state = getattr(
+            self.matcher.access_evaluator,
+            "governance_state",
+            information_projection,
+        )
+        if (
+            information_projection is not None
+            and evaluator_state is not information_projection
+        ):
+            raise ValueError(
+                "worker access evaluator must share the coordinator governance projection"
+            )
+        self.information_projection = information_projection
         self.lease_duration = lease_duration
         self.clock = clock
         self.source = source
@@ -850,7 +991,39 @@ class DurableWorkCoordinator:
         assigned: list[WorkLease] = []
         at = self.clock()
         for node in frontier.ready:
-            match = self.matcher.match(graph, node, self.projection, at=at)
+            match, access_evidence = self.matcher.match_with_access_evidence(
+                graph,
+                node,
+                self.projection,
+                at=at,
+            )
+            selected_decision_ids = {
+                value.decision_id
+                for value in (
+                    match.information_access_decisions if match is not None else ()
+                )
+            }
+            material_decisions = tuple(
+                value
+                for value in access_evidence
+                if not value.allowed or value.decision_id in selected_decision_ids
+            )
+            if material_decisions:
+                if self.information_projection is None:
+                    raise AssertionError("governed matching lost its governance projection")
+                governance = InformationGovernanceEngine(self.information_projection)
+                if any(
+                    decision != governance.decide_access(decision.request)
+                    for decision in material_decisions
+                ):
+                    continue
+            expected_head = self.projection.event_cursor
+            for decision in material_decisions:
+                stored_decision = await self._emit_if_head(
+                    decision.to_event(source=self.source),
+                    expected_head_sequence=expected_head,
+                )
+                expected_head = stored_decision.sequence or expected_head
             if match is None:
                 continue
             lease = WorkLease.create(
@@ -862,13 +1035,21 @@ class DurableWorkCoordinator:
                 lease_duration=self.lease_duration,
                 match_score=match.score,
                 competence_estimate_refs=match.competence_estimate_refs,
+                information_access_decision_refs=tuple(
+                    value.decision_id for value in match.information_access_decisions
+                ),
             )
-            stored = await self._emit(
-                lease.to_event(
-                    source=self.source,
-                    causation_id=f"work-graph-accepted:{graph.graph_id}",
+            lease_event = lease.to_event(
+                source=self.source,
+                causation_id=f"work-graph-accepted:{graph.graph_id}",
+            )
+            if material_decisions:
+                stored = await self._emit_if_head(
+                    lease_event,
+                    expected_head_sequence=expected_head,
                 )
-            )
+            else:
+                stored = await self._emit(lease_event)
             assigned.append(WorkLease.from_event(stored))
         return tuple(assigned)
 
@@ -959,12 +1140,33 @@ class DurableWorkCoordinator:
     async def _reload(self) -> None:
         history = await self.kernel.history()
         self.projection.rebuild(history)
+        if self.information_projection is not None:
+            self.information_projection.rebuild(history)
 
     async def _emit(self, event: Event) -> Event:
         stored = await self.kernel.emit(event)
         if replace(stored, sequence=None) != event:
             raise ValueError(f"canonical event id conflict: {event.id}")
         self.projection.apply(stored)
+        if self.information_projection is not None:
+            self.information_projection.apply(stored)
+        return stored
+
+    async def _emit_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        stored = await self.kernel.emit_if_head(
+            event,
+            expected_head_sequence=expected_head_sequence,
+        )
+        if replace(stored, sequence=None) != event:
+            raise ValueError(f"canonical event id conflict: {event.id}")
+        self.projection.apply(stored)
+        if self.information_projection is not None:
+            self.information_projection.apply(stored)
         return stored
 
     async def _append_graph_if_head(
@@ -980,4 +1182,6 @@ class DurableWorkCoordinator:
         if replace(stored, sequence=None) != event:
             raise ValueError(f"canonical event id conflict: {event.id}")
         self.projection.apply(stored)
+        if self.information_projection is not None:
+            self.information_projection.apply(stored)
         return stored

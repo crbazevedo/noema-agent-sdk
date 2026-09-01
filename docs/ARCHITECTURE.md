@@ -2,10 +2,11 @@
 
 > **Current revision:** 2026-09-01
 >
-> **Implemented through:** v0.6 deterministic Endogenous Cognition shadow slice
+> **Implemented through:** v0.6 deterministic Endogenous Cognition shadow slice,
+> plus the deterministic Information Governance foundation
 >
-> **Accepted architecture direction; implementation staged:** Information
-> Governance and Confidential Context
+> **Remaining ADR-0009 stages:** production confidential artifacts, identity
+> attestation, and exhaustive sink/connector enforcement
 
 This document is the current architectural synthesis. It distinguishes shipped
 contracts from accepted but unimplemented target architecture so that a design
@@ -350,7 +351,7 @@ representable and observable. It implements deterministic review and WIP
 policies only. Portfolio optimization remains a separate research program until
 real trajectories calibrate its objective.
 
-## Accepted architecture direction: Information governance and confidential context
+## Implemented foundation: Information governance and confidential context
 
 Information governance is separate cross-cutting infrastructure specified in
 [ADR 0009](adr/0009-information-governance-and-confidential-context.md), not a
@@ -373,6 +374,13 @@ retention produces effective constraints plus explicit conflicts that are
 evaluated for the requested operation. A legal hold can deny deletion without
 automatically denying a separately permitted legal-review read. Unknown or
 incompatible permissions relevant to an operation fail that operation closed.
+
+The implemented foundation adds immutable policy/context/lineage contracts, a
+deterministic `InformationGovernanceEngine`, replay projection, quarantine,
+access/disclosure/declassification decisions, safe opaque governance envelopes,
+and narrow enforcement at memory retrieval, model-context assembly, and worker
+matching. It does not yet implement production restricted ingestion, encrypted
+artifact bytes, exhaustive sink interception, or connector/provider coverage.
 
 ### Quarantine before classification
 
@@ -404,7 +412,7 @@ every governing source policy, may grant a less restrictive disclosure policy.
 A user may always tighten treatment but may lack authority to loosen employer,
 contractual, institutional, or legal restrictions.
 
-### Raw artifacts and canonical events
+### Target: raw artifacts and canonical events
 
 The event log remains canonical for causal and semantic history, but it must not
 become an immutable secret dump. Raw documents, audio, images, transcripts, and
@@ -451,10 +459,12 @@ recipient, time, policy versions, lineage, trust domains, and relevant provider
 posture. Direct event-store access is privileged infrastructure, not ordinary
 worker visibility.
 
-Both boundaries cover semantic events, memory retrieval, prompts and responses,
-work contexts, telemetry, traces, logs, error reporting, caches, embeddings,
-vector and lexical indexes, replay fixtures, evaluation artifacts, artifact
-stores, connectors, tools, protocols, and outputs.
+The foundation enforces bound memory retrieval, explicitly governed model
+context, and worker assignment. Later integration slices must extend the same
+boundaries to semantic event views, model responses, telemetry, traces, logs,
+error reporting, caches, embeddings, vector and lexical indexes, replay
+fixtures, evaluation artifacts, artifact stores, connectors, tools, protocols,
+and outputs before those paths handle restricted real-world information.
 
 Durable security meaning—policy versions, lineage, declassification, artifact
 lifecycle, durable grants/revocations, material disclosures, and material
@@ -813,7 +823,7 @@ invariants.
 | User outcomes | outcome roles / `ExecutionLocus` / `AssistanceEnvelope` / commitment coverage |
 | Intent and portfolio | `GoalRevision` / `IntentAuthority` / `RoadmapRevision` / `Commitment` / coverage and health projections |
 | External work | `ExternalWorkstream` / support-demand projection |
-| Information governance (accepted; staged) | `InformationPolicy` / `PolicyComposition` / access and disclosure decisions / `ArtifactStore` |
+| Information governance (foundation implemented; remaining slices staged) | `InformationPolicy` / `PolicyComposition` / access, disclosure, and declassification decisions / governed retrieval, context, and matching ports |
 
 ## Non-goals of the core
 
@@ -841,7 +851,8 @@ policy.
 - [ADR 0008](adr/0008-intent-and-outcome-stewardship.md): implemented
   deterministic intent, user outcomes, external work, and coverage foundation;
 - [ADR 0009](adr/0009-information-governance-and-confidential-context.md):
-  accepted, staged information governance and confidential context;
+  deterministic information-governance foundation implemented; confidential
+  artifact and exhaustive sink integration staged;
 - [ADR 0010](adr/0010-endogenous-cognition.md): implemented deterministic,
   finite, preemptible, shadow-first endogenous cognition.
 
