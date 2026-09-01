@@ -24,6 +24,17 @@
   hypothetical outcomes, future versus active obligations, mixed ownership,
   external change, reactivation through reorientation, strategic CAS races,
   v0.5 plan invalidation, and deterministic replay;
+- hardened outcome assistance so typed intervention and support declarations
+  cannot exceed canonical role/envelope constraints, including identity-bound
+  user work;
+- added explicit derived-goal lineage and revisioned goal deadlines, current-cut
+  barriers for roadmaps, commitments, and work, plus referentially complete
+  reactivation role/envelope remapping;
+- made commitment coverage criterion-based and made replay enforce the same
+  deterministic DAG, reference, lifecycle, provenance-binding, assistance, and
+  freshness invariants as live command admission;
+- corrected migrated legacy causal cursors to use the actual preceding canonical
+  head when durable sequence numbers contain gaps;
 
 - reframed the roadmap as a story of increasing agency from v0.1 Agency Kernel
   through v1.0 Durable Cognitive Agency, with explicit outcome thresholds,

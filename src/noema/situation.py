@@ -392,7 +392,7 @@ class SituationModel:
                 priority=float(payload["priority"]),
                 utility=float(payload["utility"]),
                 status=GoalStatus(str(payload["status"])),
-                deadline=current_goal.deadline if current_goal else None,
+                deadline=parse_datetime(payload.get("deadline")),
                 success_criteria=tuple(
                     str(item) for item in payload.get("success_criteria", ())
                 ),
@@ -480,6 +480,15 @@ class SituationModel:
                 roadmap_revision_id=(
                     _optional_text(payload.get("reactivation_roadmap_revision_id"))
                     or current_commitment.roadmap_revision_id
+                ),
+                role_assignment_id=(
+                    _optional_text(payload.get("reactivation_role_assignment_id"))
+                    or current_commitment.role_assignment_id
+                ),
+                assistance_envelope_id=(
+                    _optional_text(payload.get("reactivation_assistance_envelope_id"))
+                    if payload.get("reactivation_roadmap_revision_id") is not None
+                    else current_commitment.assistance_envelope_id
                 ),
                 updated_at=now,
             )

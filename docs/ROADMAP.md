@@ -225,7 +225,8 @@ Required semantics:
   approximate dependencies—not large `WorkGraph` values;
 - the existing `Goal` keeps stable identity while immutable `GoalRevision`
   values form the semantic contract for user intent history; authenticated
-  provenance establishes constitutional and user-authored origin;
+  provenance establishes constitutional and user-authored origin, deadlines are
+  revisioned, and derived goals name their governing goal lineage;
 - `IntentAuthority` remains independent from effect authority, and agent goals
   stay subordinate to governing constitutional/user goals;
 - roadmap identity persists while revisions are immutable and superseding;
@@ -237,9 +238,12 @@ Required semantics:
   `FULFILLED`, `CANCELLED`, `SUPERSEDED`, `FAILED`, or `BREACHED`; legacy failure
   maps to `CLOSED/FAILED` rather than asserting breach;
 - automatic commitment-derived work proposals require `ACTIVE`, activation due,
-  or prerequisite lead-time evidence, and execution requires activation;
+  or prerequisite lead-time evidence, current goal/roadmap provenance, and a
+  typed intervention/support declaration within canonical assistance; execution
+  requires activation;
 - reactivation is reorientation, not blind resume: goals, assumptions,
-  dependencies, capabilities, external state, and prior work are reassessed;
+  dependencies, capabilities, external state, and prior work are reassessed,
+  then current revision-scoped roles and assistance are remapped explicitly;
 - `RoadmapHealth` derives goal alignment, assumption validity, dependency
   validity, feasibility, capacity fit, progress consistency, and opportunity;
 - models may propose revisions, but deterministic validation, intent authority,
@@ -275,6 +279,8 @@ external participants. `ExternalWorkstream` represents observations and beliefs
 about employer, institutional, or other outside roadmaps without pretending
 that Noema owns their source of truth. External milestones may generate Noema
 support work; they do not become Noema work graphs by observation alone.
+`CommitmentCoverage` itself is criterion-based: required, covered, and uncovered
+outcome criteria remain visible until admitted work covers the full obligation.
 
 ### Strategic commitments are not the only work origin
 

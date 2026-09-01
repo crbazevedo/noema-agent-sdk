@@ -29,6 +29,10 @@ principle they change.
 | Reactivation is reorientation | A suspended commitment requires a newer roadmap revision and current evidence before returning to active. |
 | Outcome roles are independent | Outcome owner, decision owner, executor, and verifier cannot be inferred from each other or duplicated in assistance policy. |
 | External work remains external truth | External observations may create support demand but cannot become a Noema work graph or authoritative roadmap copy. |
+| Strategic execution requires a current cut | New roadmaps, commitments, proposals, admission, and reactivation cannot rely on known-stale goal or roadmap revisions. |
+| Assistance bounds agent work | Non-agent execution requires canonical roles and assistance; declared intervention/support cannot exceed that envelope. |
+| Coverage means criterion sufficiency | An obligation is covered only when admitted work covers every required outcome criterion. |
+| Replay defends strategic legality | Deterministic cross-object invariants are checked during reconstruction, not only at the command facade. |
 | Planners propose structure | A planner cannot admit a graph, select a worker, grant a lease, authorize, or execute. |
 | Graphs own dependency progress | Ready frontiers derive from accepted dependencies, canonical completions, leases, orientation, and invalidation. |
 | Planning cuts are causal snapshots | Admission and replay use capability inputs through the proposal cursor and reject declared changes during planning. |

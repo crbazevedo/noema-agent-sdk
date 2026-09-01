@@ -34,13 +34,17 @@ from noema import (
     OutcomeNode,
     OutcomeRoleAssignment,
     PortfolioSignals,
+    RoadmapRevision,
     StaticStrategicTrust,
     StrategicProjection,
     StrategicValidator,
     WorkNode,
     WorkNodeKind,
     WorkOrder,
+    WorkOrderProposal,
+    WorkProposalEligibility,
 )
+from noema.intent.models import commitment_recorded_event
 
 NOW = datetime(2026, 8, 31, 15, 0, tzinfo=UTC)
 
@@ -105,7 +109,9 @@ class LegacyStrategicMigrationTests(unittest.IsolatedAsyncioTestCase):
             success_criteria=("exact prior head is preserved",),
             owner="user:carlos",
             status=GoalStatus.ACTIVE,
+            deadline=None,
             kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
             origin=origin,
             intent_authority=authority,
             based_on_event_cursor=1,
@@ -121,6 +127,49 @@ class LegacyStrategicMigrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(projection.apply(event))
         self.assertEqual(projection.event_cursor, 3)
         self.assertEqual(projection.current_goal_revision("goal:after-gap"), revision)
+
+        registry = NoemaKernel().schemas
+        legacy = StrategicProjection()
+        legacy.apply(Event("unrelated.one", "test", {}, timestamp=NOW).with_sequence(2))
+        legacy_goal = registry.normalize(
+            Event(
+                "goal.created",
+                "legacy",
+                {"id": "goal:legacy-gap", "description": "Preserve actual head"},
+                timestamp=NOW + timedelta(minutes=2),
+            ).with_sequence(5)
+        )
+        legacy.apply(legacy_goal)
+        migrated_goal = legacy.current_goal_revision("goal:legacy-gap")
+        self.assertIsNotNone(migrated_goal)
+        assert migrated_goal is not None
+        self.assertEqual(migrated_goal.based_on_event_cursor, 2)
+
+        legacy_commitment = registry.normalize(
+            Event(
+                "commitment.created",
+                "legacy",
+                {
+                    "id": "commitment:legacy-gap",
+                    "description": "Gap-safe transition",
+                    "owner": "legacy",
+                },
+                timestamp=NOW + timedelta(minutes=3),
+            ).with_sequence(8)
+        )
+        legacy.apply(legacy_commitment)
+        legacy.apply(Event("unrelated.two", "test", {}, timestamp=NOW).with_sequence(10))
+        legacy_failed = registry.normalize(
+            Event(
+                "commitment.failed",
+                "legacy",
+                {"id": "commitment:legacy-gap"},
+                timestamp=NOW + timedelta(minutes=4),
+            ).with_sequence(13)
+        )
+        legacy.apply(legacy_failed)
+        transitions = legacy.commitment_transitions("commitment:legacy-gap")
+        self.assertEqual(transitions[-1].based_on_event_cursor, 10)
 
     async def test_legacy_goal_and_commitment_history_upcasts_deterministically(self) -> None:
         kernel = NoemaKernel()
@@ -254,7 +303,9 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 success_criteria=("must never become canonical",),
                 owner="user:carlos",
                 status=GoalStatus.ACTIVE,
+                deadline=None,
                 kind=GoalKind.USER_AUTHORED,
+                governing_goal_refs=(),
                 origin=forged,
                 intent_authority=authority,
                 author="user:carlos",
@@ -269,7 +320,9 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 success_criteria=("must never become canonical",),
                 owner="user:carlos",
                 status=GoalStatus.ACTIVE,
+                deadline=None,
                 kind=GoalKind.USER_AUTHORED,
+                governing_goal_refs=(),
                 origin=origin,
                 intent_authority=other_authority,
                 author="user:other",
@@ -284,7 +337,9 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 success_criteria=("must never become canonical",),
                 owner="user:carlos",
                 status=GoalStatus.ACTIVE,
+                deadline=None,
                 kind=GoalKind.USER_AUTHORED,
+                governing_goal_refs=(),
                 origin=origin,
                 intent_authority=proposal_only,
                 author="user:carlos",
@@ -347,12 +402,15 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             success_criteria=("promotion outcome is decided",),
             owner="user:carlos",
             status=GoalStatus.ACTIVE,
+            deadline=NOW + timedelta(days=60),
             kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
             origin=origin,
             intent_authority=authority,
             author="user:carlos",
             revision_reason="initial authenticated user intent",
         )
+        self.assertEqual(goal_v1.deadline, NOW + timedelta(days=60))
         clock.advance()
         nodes = (
             OutcomeNode(
@@ -371,7 +429,10 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             OutcomeNode(
                 "agent-preparation",
                 "Prepare evidence and interview options",
-                ("preparation brief is ready",),
+                (
+                    "preparation brief is ready",
+                    "evidence references are checked",
+                ),
                 confidence=0.8,
             ),
         )
@@ -459,6 +520,8 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 purpose="premature interview execution",
                 desired_outcome="interview done",
                 success_criteria=("interview done",),
+                intervention=InterventionLevel.PREPARE,
+                declared_agent_support=("research",),
                 portfolio_signals=signals(),
             )
 
@@ -485,8 +548,79 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             purpose="prepare activation prerequisites",
             desired_outcome="activation prerequisites are ready",
             success_criteria=("activation prerequisites are ready",),
+            intervention=InterventionLevel.PREPARE,
+            declared_agent_support=("research",),
             portfolio_signals=signals(),
         )
+        with self.assertRaisesRegex(ValueError, "intervention limit"):
+            await steward.propose_work_for_commitment(
+                activation_due.id,
+                purpose="conduct the identity-bound interview",
+                desired_outcome="agent substitutes for the user",
+                success_criteria=("interview is completed by the user",),
+                intervention=InterventionLevel.ACT,
+                declared_agent_support=("research",),
+                portfolio_signals=signals(wip=1),
+            )
+        with self.assertRaisesRegex(ValueError, "outside the assistance envelope"):
+            await steward.propose_work_for_commitment(
+                activation_due.id,
+                purpose="perform undeclared assistance",
+                desired_outcome="unsupported work slips through",
+                success_criteria=("must never become canonical",),
+                intervention=InterventionLevel.PREPARE,
+                declared_agent_support=("impersonation",),
+                portfolio_signals=signals(wip=1),
+            )
+        clock.advance()
+        identity_envelope = AssistanceEnvelope.create(
+            role_assignment_id=human_roles.assignment_id,
+            maximum_intervention=InterventionLevel.ACT,
+            identity_bound=True,
+            physical_presence_required=True,
+            relationship_bound=True,
+            institutional_restrictions=("employer authenticates the candidate",),
+            user_development_value=1.0,
+            permitted_agent_support=("conduct interview",),
+            required_human_work=("personally attend interview",),
+            checkpoints=("user remains the authenticated participant",),
+            reversible=False,
+            risk_limit=0.2,
+            privacy_limit=0.2,
+            attention_budget=2.0,
+            recorded_at=clock(),
+        )
+        await steward.record_assistance_envelope(identity_envelope)
+        clock.advance()
+        identity_bound_active = Commitment(
+            id="commitment:identity-bound-interview",
+            description="User personally conducts the identity-bound interview",
+            owner="user:carlos",
+            priority=1.0,
+            status=CommitmentStatus.ACTIVE,
+            deadline=NOW + timedelta(days=14),
+            created_at=clock(),
+            updated_at=clock(),
+            governing_goal_refs=("goal:career",),
+            roadmap_revision_id=roadmap_v1.revision_id,
+            outcome_node_id="human-interview",
+            role_assignment_id=human_roles.assignment_id,
+            assistance_envelope_id=identity_envelope.envelope_id,
+        )
+        await steward.record_commitment(
+            identity_bound_active,
+            intent_authority=authority,
+        )
+        with self.assertRaisesRegex(ValueError, "identity-bound"):
+            await steward.propose_work_for_commitment(
+                identity_bound_active.id,
+                purpose="impersonate the user in the interview",
+                desired_outcome="agent acts in the user's identity",
+                success_criteria=("interview is completed by the user",),
+                intervention=InterventionLevel.ACT,
+                declared_agent_support=("conduct interview",),
+                portfolio_signals=signals(wip=1),
+            )
         with self.assertRaisesRegex(ValueError, "requires ACTIVE"):
             await steward.admit_work_order(due_proposal.proposal_id)
 
@@ -506,7 +640,7 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             role_assignment_id=support_roles.assignment_id,
         )
         await steward.record_commitment(active, intent_authority=authority)
-        self.assertEqual(len(steward.projection.commitments), 3)
+        self.assertEqual(len(steward.projection.commitments), 4)
         self.assertEqual(
             {value.outcome_node_id for value in steward.projection.commitments},
             {"human-interview", "agent-preparation"},
@@ -522,6 +656,8 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             purpose="prepare promotion evidence",
             desired_outcome="a bounded preparation brief exists",
             success_criteria=("preparation brief is ready",),
+            intervention=InterventionLevel.PREPARE,
+            declared_agent_support=("writing",),
             portfolio_signals=signals(wip=1),
         )
         self.assertIs(
@@ -530,9 +666,31 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         )
         order = await steward.admit_work_order(proposal.proposal_id)
         self.assertIn(f"commitment:{active.id}", order.created_from)
-        self.assertIs(
-            (await steward.coverage(active.id)).disposition,
-            CoverageDisposition.COVERED,
+        partial_coverage = await steward.coverage(active.id)
+        self.assertIs(partial_coverage.disposition, CoverageDisposition.UNCOVERED)
+        self.assertEqual(
+            partial_coverage.uncovered_criteria,
+            ("evidence references are checked",),
+        )
+        clock.advance()
+        evidence_proposal = await steward.propose_work_for_commitment(
+            active.id,
+            purpose="verify promotion evidence references",
+            desired_outcome="all evidence references are checked",
+            success_criteria=("evidence references are checked",),
+            intervention=InterventionLevel.PREPARE,
+            declared_agent_support=("verification",),
+            portfolio_signals=signals(wip=1),
+        )
+        await steward.admit_work_order(evidence_proposal.proposal_id)
+        complete_coverage = await steward.coverage(active.id)
+        self.assertIs(complete_coverage.disposition, CoverageDisposition.COVERED)
+        self.assertEqual(
+            complete_coverage.covered_criteria,
+            (
+                "preparation brief is ready",
+                "evidence references are checked",
+            ),
         )
 
         work_clock = MutableClock(clock())
@@ -628,15 +786,45 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             success_criteria=("promotion outcome and sustainable workload are decided",),
             owner="user:carlos",
             status=GoalStatus.ACTIVE,
+            deadline=NOW + timedelta(days=45),
             kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
             origin=origin,
             intent_authority=authority,
             author="user:carlos",
             revision_reason="user reprioritized sustainable workload",
         )
         self.assertEqual(len(steward.projection.goal_history("goal:career")), 2)
+        self.assertEqual(goal_v2.deadline, NOW + timedelta(days=45))
+        self.assertEqual(
+            (await kernel.snapshot()).goals["goal:career"].deadline,
+            NOW + timedelta(days=45),
+        )
         stale_health = await steward.roadmap_health("roadmap:career")
         self.assertEqual(stale_health.goal_alignment.value, "needs_review")
+        with self.assertRaisesRegex(ValueError, "current governing goal"):
+            await steward.record_roadmap_revision(
+                roadmap_id="roadmap:known-stale",
+                governing_goal_revision_ids=(goal_v1.revision_id,),
+                outcome_nodes=nodes,
+                assumptions=("stale intent is acceptable",),
+                confidence=0.1,
+                success_criteria=("must never become canonical",),
+                resource_envelope={"attention_hours": 1.0},
+                intent_authority=authority,
+                author="user:carlos",
+                revision_reason="known-stale roadmap attempt",
+            )
+        with self.assertRaisesRegex(ValueError, "stale governing intent"):
+            await steward.propose_work_for_commitment(
+                active.id,
+                purpose="create new work from stale intent",
+                desired_outcome="must never become canonical",
+                success_criteria=("must never become canonical",),
+                intervention=InterventionLevel.PREPARE,
+                declared_agent_support=("writing",),
+                portfolio_signals=signals(wip=1),
+            )
 
         clock.advance()
         roadmap_v2 = await steward.record_roadmap_revision(
@@ -653,6 +841,34 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(steward.projection.roadmap_history("roadmap:career")), 2)
         self.assertNotEqual(roadmap_v1.revision_id, roadmap_v2.revision_id)
+        stale_commitment = Commitment(
+            id="commitment:stale-roadmap",
+            description="must not bind a superseded roadmap",
+            owner="user:carlos",
+            status=CommitmentStatus.ACCEPTED,
+            created_at=clock(),
+            updated_at=clock(),
+            governing_goal_refs=("goal:career",),
+            roadmap_revision_id=roadmap_v1.revision_id,
+            outcome_node_id="agent-preparation",
+            role_assignment_id=support_roles.assignment_id,
+        )
+        with self.assertRaisesRegex(ValueError, "stale roadmap"):
+            await steward.record_commitment(
+                stale_commitment,
+                intent_authority=authority,
+            )
+
+        clock.advance()
+        support_roles_v2 = OutcomeRoleAssignment.create(
+            outcome_ref=f"{roadmap_v2.revision_id}#agent-preparation",
+            outcome_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            decision_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            executor=OutcomeActor("agent:noema", ExecutionLocus.AGENT),
+            verifier=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            recorded_at=clock(),
+        )
+        await steward.record_outcome_roles(support_roles_v2)
 
         clock.advance()
         suspension = await steward.transition_commitment(
@@ -684,6 +900,18 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 author="user:carlos",
                 reason="blind resume",
             )
+        with self.assertRaisesRegex(ValueError, "roles do not target"):
+            await steward.transition_commitment(
+                active.id,
+                to_state=CommitmentStatus.ACTIVE,
+                closure_reason=None,
+                intent_authority=authority,
+                author="user:carlos",
+                reason="reuse stale revision-scoped roles",
+                reactivation_roadmap_revision_id=roadmap_v2.revision_id,
+                reactivation_role_assignment_id=support_roles.assignment_id,
+                reorientation_evidence_refs=("orientation:career-current",),
+            )
         clock.advance()
         await steward.transition_commitment(
             active.id,
@@ -693,8 +921,14 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             author="user:carlos",
             reason="reactivate after current assessment",
             reactivation_roadmap_revision_id=roadmap_v2.revision_id,
+            reactivation_role_assignment_id=support_roles_v2.assignment_id,
             reorientation_evidence_refs=("orientation:career-current",),
         )
+        reactivated = steward.projection.commitment(active.id)
+        self.assertIsNotNone(reactivated)
+        assert reactivated is not None
+        self.assertEqual(reactivated.roadmap_revision_id, roadmap_v2.revision_id)
+        self.assertEqual(reactivated.role_assignment_id, support_roles_v2.assignment_id)
 
         history = await kernel.history()
         replayed = StrategicProjection()
@@ -720,6 +954,315 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         )
         await kernel.stop()
 
+    async def test_delegated_intent_creates_subordinate_goals_without_rewriting_user_intent(
+        self,
+    ) -> None:
+        user_origin, user_authority, _trust = user_security()
+        agent_origin = OriginProvenance(
+            provenance_id="origin:agent:noema",
+            kind=OriginKind.AGENT,
+            principal_id="agent:noema",
+            authentication_ref="runtime-identity:noema",
+        )
+        delegated = IntentAuthority(
+            authority_id="intent-authority:agent:noema:career",
+            principal_id="agent:noema",
+            scope=IntentAuthorityScope.DELEGATED,
+            allowed_goal_kinds=(GoalKind.INSTRUMENTAL,),
+            goal_refs=("goal:career",),
+            provenance_ref=agent_origin.provenance_id,
+        )
+        trust = StaticStrategicTrust(
+            (user_origin, agent_origin),
+            (user_authority, delegated),
+        )
+        kernel = NoemaKernel()
+        steward = IntentStewardCoordinator(
+            kernel,
+            validator=StrategicValidator(trust),
+            clock=MutableClock(NOW),
+        )
+        await steward.record_goal_revision(
+            goal_id="goal:career",
+            description="User controls the governing career outcome",
+            priority=1.0,
+            utility=1.0,
+            success_criteria=("user intent remains authoritative",),
+            owner="user:carlos",
+            status=GoalStatus.ACTIVE,
+            deadline=None,
+            kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
+            origin=user_origin,
+            intent_authority=user_authority,
+            author="user:carlos",
+            revision_reason="governing user intent",
+        )
+        with self.assertRaisesRegex(ValueError, "semantic lineage"):
+            await steward.record_goal_revision(
+                goal_id="goal:career",
+                description="Agent attempts to capture the governing identity",
+                priority=1.0,
+                utility=1.0,
+                success_criteria=("agent owns the rewritten goal",),
+                owner="agent:noema",
+                status=GoalStatus.ACTIVE,
+                deadline=None,
+                kind=GoalKind.INSTRUMENTAL,
+                governing_goal_refs=("goal:career",),
+                origin=agent_origin,
+                intent_authority=delegated,
+                author="agent:noema",
+                revision_reason="illegal in-place semantic rewrite",
+            )
+        with self.assertRaisesRegex(ValueError, "explicit governing goal lineage"):
+            await steward.record_goal_revision(
+                goal_id="goal:prepare",
+                description="Prepare evidence",
+                priority=0.8,
+                utility=0.8,
+                success_criteria=("evidence is prepared",),
+                owner="agent:noema",
+                status=GoalStatus.ACTIVE,
+                deadline=None,
+                kind=GoalKind.INSTRUMENTAL,
+                governing_goal_refs=(),
+                origin=agent_origin,
+                intent_authority=delegated,
+                author="agent:noema",
+                revision_reason="missing lineage attempt",
+            )
+        derived = await steward.record_goal_revision(
+            goal_id="goal:prepare",
+            description="Prepare evidence",
+            priority=0.8,
+            utility=0.8,
+            success_criteria=("evidence is prepared",),
+            owner="agent:noema",
+            status=GoalStatus.ACTIVE,
+            deadline=NOW + timedelta(days=7),
+            kind=GoalKind.INSTRUMENTAL,
+            governing_goal_refs=("goal:career",),
+            origin=agent_origin,
+            intent_authority=delegated,
+            author="agent:noema",
+            revision_reason="bounded subordinate goal",
+        )
+        self.assertEqual(derived.governing_goal_refs, ("goal:career",))
+        governing = steward.projection.current_goal_revision("goal:career")
+        self.assertIsNotNone(governing)
+        assert governing is not None
+        self.assertIs(governing.kind, GoalKind.USER_AUTHORED)
+        self.assertEqual(governing.owner, "user:carlos")
+        await kernel.stop()
+
+    async def test_replay_rejects_structurally_illegal_native_events(self) -> None:
+        origin, authority, trust = user_security()
+        kernel = NoemaKernel()
+        steward = IntentStewardCoordinator(
+            kernel,
+            validator=StrategicValidator(trust),
+            clock=MutableClock(NOW),
+        )
+        goal = await steward.record_goal_revision(
+            goal_id="goal:replay",
+            description="Replay remains a structural admission boundary",
+            priority=1.0,
+            utility=1.0,
+            success_criteria=("illegal histories fail closed",),
+            owner="user:carlos",
+            status=GoalStatus.ACTIVE,
+            deadline=None,
+            kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
+            origin=origin,
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="replay boundary fixture",
+        )
+        projection = StrategicProjection()
+        projection.rebuild(kernel.schemas.normalize(event) for event in await kernel.history())
+        native_legacy = GoalRevision.create(
+            goal_id="goal:illegal-native-legacy",
+            version=1,
+            description="Native events cannot claim migration-only provenance",
+            priority=1.0,
+            utility=1.0,
+            success_criteria=(),
+            owner="user:carlos",
+            status=GoalStatus.ACTIVE,
+            deadline=None,
+            kind=GoalKind.LEGACY_UNCLASSIFIED,
+            governing_goal_refs=(),
+            origin=origin,
+            intent_authority=authority,
+            based_on_event_cursor=projection.event_cursor,
+            author="user:carlos",
+            revision_reason="direct legacy provenance attempt",
+            recorded_at=NOW + timedelta(seconds=30),
+        )
+        native_legacy_event = replace(
+            native_legacy.to_event(source="direct-emitter"),
+            metadata={"validated_at_event_cursor": projection.event_cursor},
+        ).with_sequence(projection.event_cursor + 1)
+        with self.assertRaisesRegex(ValueError, "native admission"):
+            projection.apply(native_legacy_event)
+
+        cyclic = RoadmapRevision.create(
+            roadmap_id="roadmap:illegal-cycle",
+            version=1,
+            governing_goal_revision_ids=(goal.revision_id,),
+            outcome_nodes=(
+                OutcomeNode("a", "A", ("A complete",), ("b",)),
+                OutcomeNode("b", "B", ("B complete",), ("a",)),
+            ),
+            assumptions=(),
+            confidence=0.5,
+            success_criteria=("cycle must be rejected",),
+            resource_envelope={},
+            intent_authority=authority,
+            based_on_event_cursor=projection.event_cursor,
+            author="user:carlos",
+            revision_reason="direct illegal event",
+            recorded_at=NOW + timedelta(minutes=1),
+        )
+        cyclic_event = replace(
+            cyclic.to_event(source="direct-emitter"),
+            metadata={"validated_at_event_cursor": projection.event_cursor},
+        ).with_sequence(projection.event_cursor + 1)
+        with self.assertRaisesRegex(ValueError, "DAG"):
+            projection.apply(cyclic_event)
+
+        orphan_roles = OutcomeRoleAssignment.create(
+            outcome_ref="roadmap-revision:missing#missing-node",
+            outcome_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            decision_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            executor=OutcomeActor("agent:noema", ExecutionLocus.AGENT),
+            verifier=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            recorded_at=NOW + timedelta(minutes=2),
+        )
+        orphan_event = replace(
+            orphan_roles.to_event(source="direct-emitter"),
+            metadata={"validated_at_event_cursor": projection.event_cursor},
+        ).with_sequence(projection.event_cursor + 1)
+        with self.assertRaisesRegex(ValueError, "canonical roadmap outcome"):
+            projection.apply(orphan_event)
+
+        valid_roadmap = await steward.record_roadmap_revision(
+            roadmap_id="roadmap:replay",
+            governing_goal_revision_ids=(goal.revision_id,),
+            outcome_nodes=(OutcomeNode("valid", "Valid outcome", ("valid outcome is covered",)),),
+            assumptions=(),
+            confidence=1.0,
+            success_criteria=("valid outcome remains structural",),
+            resource_envelope={},
+            intent_authority=authority,
+            author="user:carlos",
+            revision_reason="valid replay fixture",
+        )
+        projection.rebuild(kernel.schemas.normalize(event) for event in await kernel.history())
+        invalid_commitment = Commitment(
+            id="commitment:missing-roles",
+            description="Direct event bypasses canonical roles",
+            owner="user:carlos",
+            status=CommitmentStatus.ACTIVE,
+            created_at=NOW + timedelta(minutes=3),
+            updated_at=NOW + timedelta(minutes=3),
+            governing_goal_refs=("goal:replay",),
+            roadmap_revision_id=valid_roadmap.revision_id,
+            outcome_node_id="valid",
+            role_assignment_id="outcome-roles:missing",
+        )
+        commitment_event = replace(
+            commitment_recorded_event(
+                invalid_commitment,
+                source="direct-emitter",
+            ),
+            metadata={
+                "validated_at_event_cursor": projection.event_cursor,
+                "intent_authority": authority.to_dict(),
+            },
+        ).with_sequence(projection.event_cursor + 1)
+        with self.assertRaisesRegex(ValueError, "role assignment"):
+            projection.apply(commitment_event)
+
+        human_roles = OutcomeRoleAssignment.create(
+            outcome_ref=f"{valid_roadmap.revision_id}#valid",
+            outcome_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            decision_owner=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            executor=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            verifier=OutcomeActor("user:carlos", ExecutionLocus.USER),
+            recorded_at=NOW + timedelta(minutes=4),
+        )
+        await steward.record_outcome_roles(human_roles)
+        bounded_envelope = AssistanceEnvelope.create(
+            role_assignment_id=human_roles.assignment_id,
+            maximum_intervention=InterventionLevel.PREPARE,
+            identity_bound=True,
+            physical_presence_required=False,
+            relationship_bound=False,
+            institutional_restrictions=(),
+            user_development_value=1.0,
+            permitted_agent_support=("research",),
+            required_human_work=("complete the outcome",),
+            checkpoints=("user reviews preparation",),
+            reversible=True,
+            risk_limit=0.2,
+            privacy_limit=0.2,
+            attention_budget=1.0,
+            recorded_at=NOW + timedelta(minutes=5),
+        )
+        await steward.record_assistance_envelope(bounded_envelope)
+        human_commitment = Commitment(
+            id="commitment:replay-assistance",
+            description="Human executes while the agent remains bounded",
+            owner="user:carlos",
+            status=CommitmentStatus.ACTIVE,
+            created_at=NOW + timedelta(minutes=6),
+            updated_at=NOW + timedelta(minutes=6),
+            governing_goal_refs=("goal:replay",),
+            roadmap_revision_id=valid_roadmap.revision_id,
+            outcome_node_id="valid",
+            role_assignment_id=human_roles.assignment_id,
+            assistance_envelope_id=bounded_envelope.envelope_id,
+        )
+        await steward.record_commitment(human_commitment, intent_authority=authority)
+        projection.rebuild(kernel.schemas.normalize(event) for event in await kernel.history())
+        direct_order = WorkOrder.create(
+            purpose="bypass bounded assistance",
+            governing_goal_refs=("goal:replay",),
+            created_from=(
+                f"commitment:{human_commitment.id}",
+                f"roadmap-revision:{valid_roadmap.revision_id}",
+                "outcome-node:valid",
+            ),
+            priority=0.5,
+            desired_outcome="agent substitutes for human execution",
+            success_criteria=("valid outcome is covered",),
+            created_at=NOW + timedelta(minutes=7),
+        )
+        direct_proposal = WorkOrderProposal.create(
+            commitment_id=human_commitment.id,
+            roadmap_revision_id=valid_roadmap.revision_id,
+            outcome_node_id="valid",
+            work_order=direct_order,
+            intervention=InterventionLevel.ACT,
+            declared_agent_support=("research",),
+            eligibility=WorkProposalEligibility.ACTIVE,
+            portfolio_signals=signals(),
+            wip_limit=4,
+            based_on_event_cursor=projection.event_cursor,
+            proposed_at=NOW + timedelta(minutes=7),
+            validator_id="strategic-validator:v1",
+        )
+        direct_proposal_event = replace(
+            direct_proposal.to_event(source="direct-emitter"),
+            metadata={"validated_at_event_cursor": projection.event_cursor},
+        ).with_sequence(projection.event_cursor + 1)
+        with self.assertRaisesRegex(ValueError, "intervention limit"):
+            projection.apply(direct_proposal_event)
+        await kernel.stop()
+
     async def test_strategic_cas_reloads_and_rejects_concurrent_goal_mutation(self) -> None:
         clock = MutableClock(NOW)
         origin, authority, trust = user_security()
@@ -735,7 +1278,9 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             success_criteria=("done",),
             owner="user:carlos",
             status=GoalStatus.ACTIVE,
+            deadline=None,
             kind=GoalKind.USER_AUTHORED,
+            governing_goal_refs=(),
             origin=origin,
             intent_authority=authority,
             author="user:carlos",
@@ -756,7 +1301,9 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                     success_criteria=("done",),
                     owner="user:carlos",
                     status=GoalStatus.ACTIVE,
+                    deadline=None,
                     kind=GoalKind.USER_AUTHORED,
+                    governing_goal_refs=(),
                     origin=origin,
                     intent_authority=authority,
                     author="user:carlos",
@@ -777,7 +1324,9 @@ class IntentOutcomeAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 success_criteria=("done",),
                 owner="user:carlos",
                 status=GoalStatus.ACTIVE,
+                deadline=None,
                 kind=GoalKind.USER_AUTHORED,
+                governing_goal_refs=(),
                 origin=origin,
                 intent_authority=authority,
                 author="user:carlos",

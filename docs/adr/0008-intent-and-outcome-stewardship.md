@@ -266,6 +266,8 @@ outcome ownership, or maximizing agent activity.
   regardless of effect authority;
 - a goal's user/constitutional origin cannot be asserted without authenticated
   provenance, including by an otherwise authorized agent;
+- delegated intent cannot change a governing goal's kind, origin, owner, or
+  lineage in place; derived goals name current governing goal identities;
 - a roadmap node cannot produce work directly; every roadmap-derived
   `WorkOrder` carries commitment provenance;
 - automatic commitment-derived `WorkOrderProposal` generation requires
@@ -276,13 +278,21 @@ outcome ownership, or maximizing agent activity.
 - commitment state and closure reason validate independently, and a closed
   commitment cannot reactivate in place;
 - reactivation from suspension requires a new review/revision event;
+- new roadmaps, commitments, proposals, admissions, and reactivations reject
+  stale governing goal or roadmap revisions;
 - external roadmap IDs cannot be accepted as Noema work-graph IDs;
 - outcome-role assignments remain independent, and assistance envelopes contain
   references rather than duplicate ownership;
+- human/external execution requires typed proposal intervention/support within
+  the canonical assistance envelope; user identity-bound action cannot be
+  delegated to the agent;
+- commitment coverage exposes required, covered, and uncovered criteria and is
+  `COVERED` only when all outcome criteria have admitted work;
 - model proposals cannot admit goal, roadmap, commitment, work, or effects;
 - initial portfolio code contains no learned optimizer and records every WIP or
   review decision with its inputs;
-- all strategic projections rebuild through an explicit canonical cursor.
+- all strategic projections rebuild through an explicit canonical cursor and
+  reject deterministic cross-object illegality during replay.
 
 Information access, policy composition, artifact retention, and disclosure are
 specified separately in
@@ -296,6 +306,14 @@ events, replay projections, intent-authority admission, expected-head CAS,
 commitment coverage, roadmap health, external-workstream observations, and the
 bounded `WorkOrderProposal` bridge described here. The flagship and structural
 fitness functions live in `tests/test_intent.py`.
+
+The merge hardening makes these boundaries structural: derived goals carry
+explicit governing lineage and revisioned deadlines; current goal/roadmap cuts
+gate new strategic execution; reactivation remaps current revision-scoped
+roles and assistance; work proposals declare bounded intervention/support;
+coverage is criterion-based; and replay reruns deterministic cross-object
+legality independently of the command facade. Legacy synthetic cursors use the
+actual preceding canonical head even when durable sequences contain gaps.
 
 Goal-coverage optimization, learned allocation, model proposal generation, and
 the separate Information Governance runtime remain deferred.

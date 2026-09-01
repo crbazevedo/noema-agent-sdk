@@ -175,6 +175,11 @@ references the canonical outcome-role assignment and constrains:
 - required checkpoints and verification;
 - reversibility, risk, privacy, and attention budgets.
 
+Commitment-derived proposals declare their intervention level and concrete
+agent-support categories. Human, shared, and external execution requires an
+envelope; proposal and admission reject intervention above its maximum,
+undeclared support, and agent substitution for user-owned identity-bound acts.
+
 Non-delegable does not mean non-assistable. Noema may research, prepare,
 simulate, remind, draft, retrieve, and analyze around a human-owned interview,
 negotiation, attestation, relationship, or physical act without pretending to
@@ -212,10 +217,12 @@ This architecture evolves the existing `Goal` and `Commitment` situation
 contracts; it does not introduce parallel meanings. `Goal` retains stable
 identity while immutable `GoalRevision` values are the semantic contract for
 user intent history; canonical events durably represent admitted revisions.
-Each revision carries authenticated origin/provenance and a `GoalKind`. An agent
-cannot label its own generated goal `USER_AUTHORED` or `CONSTITUTIONAL` without
-authenticated provenance establishing that origin. Legacy `goal.updated` and
-`commitment.*` histories require schema-v2 upcasters and compatibility fixtures.
+Each revision carries authenticated origin/provenance, deadline, explicit
+derived-goal lineage, and a `GoalKind`. An agent cannot label its own generated
+goal `USER_AUTHORED` or `CONSTITUTIONAL` without authenticated provenance
+establishing that origin, or change a governing goal's semantic lineage in
+place. Legacy `goal.updated` and `commitment.*` histories require schema-v2
+upcasters and compatibility fixtures.
 
 `IntentAuthority` is independent from `EffectAuthority`. Constitutional and
 user-authored goals cannot be rewritten, reprioritized, or retired by an agent
@@ -267,7 +274,8 @@ the active portfolio but never erases its history.
 
 An `ACCEPTED` strategic commitment creates an obligation; `ACTIVE` means that
 execution is currently eligible. `CommitmentCoverage` measures both without
-starting future work prematurely. Automatic `WorkOrderProposal` generation
+starting future work prematurely and is `COVERED` only when admitted work
+covers every required outcome criterion. Automatic `WorkOrderProposal` generation
 requires an active commitment, an activation-due condition, or prerequisite
 lead-time evidence; commitment-derived execution still requires an authorized
 transition to active. An uncommitted roadmap node may not produce work.
@@ -301,8 +309,8 @@ REACTIVATE != RESUME
 
 Reactivating a suspended direction re-evaluates current goals, assumptions,
 dependencies, completed work, capabilities, deadlines, and external conditions,
-then creates a new revision and renewed commitment if warranted. The old path
-becomes evidence for the new one.
+then requires the current newer roadmap revision and fresh revision-scoped role
+and assistance references. The old path becomes evidence for the new one.
 
 Models may emit `GoalRevisionProposal` and `RoadmapRevisionProposal` values.
 Deterministic validation plus `IntentAuthority` and policy check goal

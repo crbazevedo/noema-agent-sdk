@@ -256,7 +256,9 @@ class GoalRevision:
     success_criteria: tuple[str, ...]
     owner: str
     status: GoalStatus
+    deadline: datetime | None
     kind: GoalKind
+    governing_goal_refs: tuple[str, ...]
     origin: OriginProvenance
     intent_authority: IntentAuthority
     based_on_event_cursor: int
@@ -277,7 +279,9 @@ class GoalRevision:
         success_criteria: tuple[str, ...],
         owner: str,
         status: GoalStatus,
+        deadline: datetime | None,
         kind: GoalKind,
+        governing_goal_refs: tuple[str, ...],
         origin: OriginProvenance,
         intent_authority: IntentAuthority,
         based_on_event_cursor: int,
@@ -295,7 +299,9 @@ class GoalRevision:
             "success_criteria": list(success_criteria),
             "owner": owner,
             "status": status.value,
+            "deadline": deadline.isoformat() if deadline else None,
             "kind": kind.value,
+            "governing_goal_refs": list(governing_goal_refs),
             "origin": origin.to_dict(),
             "intent_authority": intent_authority.to_dict(),
             "based_on_event_cursor": based_on_event_cursor,
@@ -314,7 +320,9 @@ class GoalRevision:
             success_criteria=success_criteria,
             owner=owner,
             status=status,
+            deadline=deadline,
             kind=kind,
+            governing_goal_refs=governing_goal_refs,
             origin=origin,
             intent_authority=intent_authority,
             based_on_event_cursor=based_on_event_cursor,
@@ -343,6 +351,9 @@ class GoalRevision:
             "goal success criteria",
             required=self.kind is not GoalKind.LEGACY_UNCLASSIFIED,
         )
+        _unique(self.governing_goal_refs, "governing goal refs")
+        if self.deadline is not None:
+            _aware(self.deadline, "goal deadline")
         _aware(self.recorded_at, "goal revision recorded_at")
 
     def to_dict(self) -> JSONObject:
@@ -356,7 +367,9 @@ class GoalRevision:
             "success_criteria": list(self.success_criteria),
             "owner": self.owner,
             "status": self.status.value,
+            "deadline": self.deadline.isoformat() if self.deadline else None,
             "kind": self.kind.value,
+            "governing_goal_refs": list(self.governing_goal_refs),
             "origin": self.origin.to_dict(),
             "intent_authority": self.intent_authority.to_dict(),
             "based_on_event_cursor": self.based_on_event_cursor,
@@ -378,7 +391,9 @@ class GoalRevision:
             success_criteria=_strings(data, "success_criteria"),
             owner=str(data["owner"]),
             status=GoalStatus(str(data["status"])),
+            deadline=_optional_datetime(data, "deadline"),
             kind=GoalKind(str(data["kind"])),
+            governing_goal_refs=_strings(data, "governing_goal_refs"),
             origin=OriginProvenance.from_dict(cast(Mapping[str, object], data["origin"])),
             intent_authority=IntentAuthority.from_dict(
                 cast(Mapping[str, object], data["intent_authority"])
@@ -398,7 +413,9 @@ class GoalRevision:
             success_criteria=revision.success_criteria,
             owner=revision.owner,
             status=revision.status,
+            deadline=revision.deadline,
             kind=revision.kind,
+            governing_goal_refs=revision.governing_goal_refs,
             origin=revision.origin,
             intent_authority=revision.intent_authority,
             based_on_event_cursor=revision.based_on_event_cursor,
@@ -653,6 +670,8 @@ class CommitmentTransition:
     reason: str
     transitioned_at: datetime
     reactivation_roadmap_revision_id: str | None = None
+    reactivation_role_assignment_id: str | None = None
+    reactivation_assistance_envelope_id: str | None = None
     reorientation_evidence_refs: tuple[str, ...] = ()
 
     @classmethod
@@ -668,6 +687,8 @@ class CommitmentTransition:
         reason: str,
         transitioned_at: datetime,
         reactivation_roadmap_revision_id: str | None = None,
+        reactivation_role_assignment_id: str | None = None,
+        reactivation_assistance_envelope_id: str | None = None,
         reorientation_evidence_refs: tuple[str, ...] = (),
     ) -> CommitmentTransition:
         identity: JSONObject = {
@@ -680,6 +701,8 @@ class CommitmentTransition:
             "reason": reason,
             "transitioned_at": transitioned_at.isoformat(),
             "reactivation_roadmap_revision_id": reactivation_roadmap_revision_id,
+            "reactivation_role_assignment_id": reactivation_role_assignment_id,
+            "reactivation_assistance_envelope_id": reactivation_assistance_envelope_id,
             "reorientation_evidence_refs": list(reorientation_evidence_refs),
         }
         return cls(
@@ -693,6 +716,8 @@ class CommitmentTransition:
             reason=reason,
             transitioned_at=transitioned_at,
             reactivation_roadmap_revision_id=reactivation_roadmap_revision_id,
+            reactivation_role_assignment_id=reactivation_role_assignment_id,
+            reactivation_assistance_envelope_id=reactivation_assistance_envelope_id,
             reorientation_evidence_refs=reorientation_evidence_refs,
         )
 
@@ -718,6 +743,8 @@ class CommitmentTransition:
             "reason": self.reason,
             "transitioned_at": self.transitioned_at.isoformat(),
             "reactivation_roadmap_revision_id": self.reactivation_roadmap_revision_id,
+            "reactivation_role_assignment_id": self.reactivation_role_assignment_id,
+            "reactivation_assistance_envelope_id": (self.reactivation_assistance_envelope_id),
             "reorientation_evidence_refs": list(self.reorientation_evidence_refs),
         }
 
@@ -737,6 +764,10 @@ class CommitmentTransition:
             reactivation_roadmap_revision_id=_optional_text(
                 data, "reactivation_roadmap_revision_id"
             ),
+            reactivation_role_assignment_id=_optional_text(data, "reactivation_role_assignment_id"),
+            reactivation_assistance_envelope_id=_optional_text(
+                data, "reactivation_assistance_envelope_id"
+            ),
             reorientation_evidence_refs=_strings(data, "reorientation_evidence_refs"),
         )
         expected = cls.create(
@@ -749,6 +780,8 @@ class CommitmentTransition:
             reason=transition.reason,
             transitioned_at=transition.transitioned_at,
             reactivation_roadmap_revision_id=(transition.reactivation_roadmap_revision_id),
+            reactivation_role_assignment_id=transition.reactivation_role_assignment_id,
+            reactivation_assistance_envelope_id=(transition.reactivation_assistance_envelope_id),
             reorientation_evidence_refs=transition.reorientation_evidence_refs,
         )
         if transition.transition_id != expected.transition_id:
@@ -1326,8 +1359,11 @@ class WorkOrderProposal:
     roadmap_revision_id: str
     outcome_node_id: str
     work_order: WorkOrder
+    intervention: InterventionLevel
+    declared_agent_support: tuple[str, ...]
     eligibility: WorkProposalEligibility
     portfolio_signals: PortfolioSignals
+    wip_limit: int
     based_on_event_cursor: int
     proposed_at: datetime
     validator_id: str
@@ -1340,8 +1376,11 @@ class WorkOrderProposal:
         roadmap_revision_id: str,
         outcome_node_id: str,
         work_order: WorkOrder,
+        intervention: InterventionLevel,
+        declared_agent_support: tuple[str, ...],
         eligibility: WorkProposalEligibility,
         portfolio_signals: PortfolioSignals,
+        wip_limit: int,
         based_on_event_cursor: int,
         proposed_at: datetime,
         validator_id: str,
@@ -1351,8 +1390,11 @@ class WorkOrderProposal:
             "roadmap_revision_id": roadmap_revision_id,
             "outcome_node_id": outcome_node_id,
             "work_order": work_order.to_dict(),
+            "intervention": intervention.value,
+            "declared_agent_support": list(declared_agent_support),
             "eligibility": eligibility.value,
             "portfolio_signals": portfolio_signals.to_dict(),
+            "wip_limit": wip_limit,
             "based_on_event_cursor": based_on_event_cursor,
             "proposed_at": proposed_at.isoformat(),
             "validator_id": validator_id,
@@ -1363,8 +1405,11 @@ class WorkOrderProposal:
             roadmap_revision_id=roadmap_revision_id,
             outcome_node_id=outcome_node_id,
             work_order=work_order,
+            intervention=intervention,
+            declared_agent_support=declared_agent_support,
             eligibility=eligibility,
             portfolio_signals=portfolio_signals,
+            wip_limit=wip_limit,
             based_on_event_cursor=based_on_event_cursor,
             proposed_at=proposed_at,
             validator_id=validator_id,
@@ -1381,6 +1426,13 @@ class WorkOrderProposal:
             _require_text(value, name)
         if self.based_on_event_cursor < 0:
             raise ValueError("work proposal cursor cannot be negative")
+        if self.wip_limit <= 0:
+            raise ValueError("work proposal WIP limit must be positive")
+        _unique(
+            self.declared_agent_support,
+            "declared agent support",
+            required=True,
+        )
         _aware(self.proposed_at, "work proposal proposed_at")
 
     def to_dict(self) -> JSONObject:
@@ -1390,8 +1442,11 @@ class WorkOrderProposal:
             "roadmap_revision_id": self.roadmap_revision_id,
             "outcome_node_id": self.outcome_node_id,
             "work_order": self.work_order.to_dict(),
+            "intervention": self.intervention.value,
+            "declared_agent_support": list(self.declared_agent_support),
             "eligibility": self.eligibility.value,
             "portfolio_signals": self.portfolio_signals.to_dict(),
+            "wip_limit": self.wip_limit,
             "based_on_event_cursor": self.based_on_event_cursor,
             "proposed_at": self.proposed_at.isoformat(),
             "validator_id": self.validator_id,
@@ -1405,10 +1460,13 @@ class WorkOrderProposal:
             roadmap_revision_id=str(data["roadmap_revision_id"]),
             outcome_node_id=str(data["outcome_node_id"]),
             work_order=WorkOrder.from_dict(cast(Mapping[str, object], data["work_order"])),
+            intervention=InterventionLevel(str(data["intervention"])),
+            declared_agent_support=_strings(data, "declared_agent_support"),
             eligibility=WorkProposalEligibility(str(data["eligibility"])),
             portfolio_signals=PortfolioSignals.from_dict(
                 cast(Mapping[str, object], data["portfolio_signals"])
             ),
+            wip_limit=int(cast(int, data["wip_limit"])),
             based_on_event_cursor=int(cast(int, data["based_on_event_cursor"])),
             proposed_at=_datetime(data, "proposed_at"),
             validator_id=str(data["validator_id"]),
@@ -1418,8 +1476,11 @@ class WorkOrderProposal:
             roadmap_revision_id=proposal.roadmap_revision_id,
             outcome_node_id=proposal.outcome_node_id,
             work_order=proposal.work_order,
+            intervention=proposal.intervention,
+            declared_agent_support=proposal.declared_agent_support,
             eligibility=proposal.eligibility,
             portfolio_signals=proposal.portfolio_signals,
+            wip_limit=proposal.wip_limit,
             based_on_event_cursor=proposal.based_on_event_cursor,
             proposed_at=proposal.proposed_at,
             validator_id=proposal.validator_id,
@@ -1443,6 +1504,9 @@ class WorkOrderProposal:
 class CommitmentCoverage:
     commitment_id: str
     disposition: CoverageDisposition
+    required_criteria: tuple[str, ...]
+    covered_criteria: tuple[str, ...]
+    uncovered_criteria: tuple[str, ...]
     work_proposal_ids: tuple[str, ...]
     admitted_work_order_ids: tuple[str, ...]
     external_support_required: bool
