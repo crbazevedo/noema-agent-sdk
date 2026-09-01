@@ -1,6 +1,6 @@
 # ADR 0010: Deterministic endogenous cognition
 
-- Status: Accepted — deterministic v0.6 shadow slice implemented
+- Status: Proposed — deterministic v0.6 implementation candidate awaiting acceptance
 - Date: 2026-09-01
 - Scope: endogenous inquiry, value-of-cognition evaluation, finite background
   budgets, deterministic agenda selection, calibration, replay, and preemption
@@ -107,11 +107,14 @@ scheduler or solver.
 
 ### Bound cognition with a DREAM epoch
 
-A `DreamEpoch` pins its scan trigger, event-log cursor, policy snapshot, finite
-resource budget, start, expiry, and `DREAM_PROPOSAL_ONLY` authority ceiling.
-Each epoch may record at most one agenda selection and therefore spend its
-budget once. Foreground work preempts active epochs, expiry closes them, and
-neither terminal state may accept further cognitive output.
+A `DreamEpoch` pins its consumer, scan trigger, event-log cursor, policy
+snapshot, agenda selector identity/version, finite resource budget, start,
+expiry, and `DREAM_PROPOSAL_ONLY` authority ceiling. Each consumer may own at
+most one active epoch, and each epoch may record at most one agenda selection.
+Foreground work that is causally later than the pinned cut preempts active
+epochs through the existing event bus. Historical foreground cannot preempt a
+new epoch. Expiry, preemption, and explicit abandonment are terminal and accept
+no further cognitive output.
 
 ### Keep admission and recovery canonical
 
@@ -122,8 +125,21 @@ append. Replay reruns current-intent, evidence, epoch, deterministic-policy,
 budget, single-selection, preemption, and expiry legality.
 
 The worker advances its generic `ConsumerCheckpoint` only after all required
-outputs exist. A crash before checkpoint advancement replays the scan and
-reuses content-addressed outputs rather than allocating the budget again.
+outputs exist or the scan has a durable terminal explanation. A preempted or
+expired partial epoch is complete processing even without a selection. Intent
+loss records explicit abandonment before checkpoint advancement. A crash in
+any of those windows replays the scan, recognizes its terminal epoch, and moves
+past it rather than retrying an impossible scan forever.
+
+An unchanged unresolved inquiry with unchanged evidence and governing-intent
+basis cannot create a new activity in a later scan. The original inquiry's
+causal cut and expiry remain authoritative; renewal requires an explicit new
+basis, such as new evidence or a changed governing intent revision.
+
+Agenda replay dispatches through the selector identity/version pinned in both
+policy and epoch state. v0.6 registers only
+`stable-greedy-multidimensional` version 1. Unknown selectors fail closed, and
+later algorithms must be added beside—not mutate—the v1 implementation.
 
 ### Remain shadow-first
 
@@ -144,9 +160,10 @@ policy, and effect boundaries remain independent.
 - A greedy multidimensional allocator may leave usable capacity. That is
   preferable to introducing an optimizer before resource and outcome data are
   calibrated.
-- DREAM epochs remain active after agenda formation until preempted or expired.
-  Later execution semantics may add more lifecycle states without weakening
-  the v0.6 authority ceiling.
+- DREAM epochs remain active after agenda formation until preempted or expired,
+  but a consumer cannot multiply slack by opening concurrent epochs. Later
+  renewable background leases may replace this conservative limit without
+  weakening the v0.6 authority ceiling.
 
 ## Rejected alternatives
 
@@ -179,6 +196,12 @@ general workflow languages, real connectors, and an endogenous scheduler.
 - non-positive `NetVOC` is suppressed;
 - every selected subset fits every finite budget dimension;
 - one epoch cannot record a second selection or output after preemption/expiry;
+- one endogenous consumer cannot own multiple active epochs;
+- foreground events at or before an epoch's causal cut cannot preempt it;
+- preempted, expired, and intent-abandoned partial scans advance recovery past
+  the canonical scan trigger;
+- an unchanged or expired inquiry cannot mint a later-cut activity;
+- replay uses the pinned agenda selector and rejects unknown versions;
 - a crash before checkpoint advancement cannot duplicate logical outputs or
   spend budget twice;
 - peer disagreement preserves both evidence sets and assumptions;

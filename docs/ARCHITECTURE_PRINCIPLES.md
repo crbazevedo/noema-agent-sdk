@@ -70,7 +70,10 @@ principle they change.
 | Endogenous intent is subordinate | New inquiries require exact current `ACTIVE` or `BLOCKED` governing goal revisions; terminal intent admits none. |
 | Value of Cognition is explicit | Improvement and compute, delay, attention, opportunity, and privacy/risk costs remain separately replayable under a pinned policy. |
 | DREAM is not effect authority | A DREAM epoch may select cognitive proposals only; it cannot dispatch work, authorize effects, or invoke capabilities. |
-| Background budget is single-spend | One DREAM epoch records at most one deterministic agenda and terminal epochs consume no further cognition. |
+| Background budget is single-spend | One consumer owns at most one active DREAM epoch, each epoch records at most one deterministic agenda, and terminal epochs consume no further cognition. |
+| Background yields causally | A configured foreground event preempts DREAM only when it follows the epoch's pinned event cut. |
+| Inquiry renewal is explicit | Unchanged evidence and intent cannot allocate a new activity for an unresolved or expired inquiry. |
+| Cognitive policy pins code semantics | Policy and DREAM state identify an immutable agenda-selector implementation; unknown versions fail closed. |
 | Competence does not grant authority | A future SkillForge may propose a capability; capability registration and authority remain independent gates. |
 
 Structural enforcement lives in `tests/test_architecture.py`, schema/replay

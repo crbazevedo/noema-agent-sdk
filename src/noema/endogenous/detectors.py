@@ -53,6 +53,7 @@ class DeterministicEndogenousDetector:
                 strategy=strategy,
                 at=at,
                 causal_cursor=causal_cursor,
+                history=history,
             ),
             *self._commitment_gap_candidates(
                 strategy=strategy,
@@ -97,6 +98,7 @@ class DeterministicEndogenousDetector:
         strategy: StrategicProjection,
         at: datetime,
         causal_cursor: int,
+        history: tuple[Event, ...],
     ) -> tuple[DetectedCandidate, ...]:
         values: list[DetectedCandidate] = []
         for revision in strategy.roadmap_revisions:
@@ -112,7 +114,13 @@ class DeterministicEndogenousDetector:
             if not health.review_required:
                 continue
             priority = self._priority(strategy, intents)
-            evidence = (f"event:roadmap-revision-recorded:{revision.revision_id}",)
+            evidence = self._roadmap_health_evidence(
+                strategy=strategy,
+                roadmap_id=revision.roadmap_id,
+                revision_id=revision.revision_id,
+                governing_goal_ids=tuple(ref.goal_id for ref in intents),
+                history=history,
+            )
             values.append(
                 self._candidate(
                     question=(
@@ -140,6 +148,42 @@ class DeterministicEndogenousDetector:
                 )
             )
         return tuple(values)
+
+    @staticmethod
+    def _roadmap_health_evidence(
+        *,
+        strategy: StrategicProjection,
+        roadmap_id: str,
+        revision_id: str,
+        governing_goal_ids: tuple[str, ...],
+        history: tuple[Event, ...],
+    ) -> tuple[str, ...]:
+        linked_commitment_ids = {
+            value.id for value in strategy.commitments if value.roadmap_revision_id == revision_id
+        }
+        related_event_ids = {
+            f"work-order-proposed:{proposal.proposal_id}"
+            for proposal in strategy.work_proposals
+            if proposal.roadmap_revision_id == revision_id
+        }
+        related_event_ids.update(
+            f"external-workstream-observed:{workstream.observation_id}"
+            for workstream in strategy.external_workstreams
+            if linked_commitment_ids.intersection(workstream.support_commitment_refs)
+        )
+        related_subjects = {
+            roadmap_id,
+            *governing_goal_ids,
+            *linked_commitment_ids,
+        }
+        evidence = {
+            f"event:{event.id}"
+            for event in history
+            if event.id in related_event_ids
+            or (event.subject in related_subjects and event.type.startswith("intent."))
+        }
+        evidence.add(f"event:roadmap-revision-recorded:{revision_id}")
+        return tuple(sorted(evidence))
 
     def _commitment_gap_candidates(
         self,

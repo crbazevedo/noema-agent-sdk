@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -14,15 +15,22 @@ from .endogenous.models import (
     BackgroundCognitiveBudget,
     CalibrationExchange,
     CognitionScanRequest,
+    DreamAbandonmentReason,
     DreamEpoch,
     DreamEpochStatus,
     EndogenousPolicySnapshot,
     GoverningIntentRef,
+    Inquiry,
     IntrinsicAgendaSelection,
+    dream_epoch_abandoned_event,
     dream_epoch_expired_event,
     dream_epoch_preempted_event,
 )
-from .endogenous.policy import evaluate_value_of_cognition, select_intrinsic_agenda
+from .endogenous.policy import (
+    ensure_selector_supported,
+    evaluate_value_of_cognition,
+    select_intrinsic_agenda,
+)
 from .endogenous.projection import EndogenousProjection
 from .events import Event
 from .kernel import NoemaKernel
@@ -66,6 +74,45 @@ class EndogenousShadowWorker:
         self.source = source
         self.foreground_event_types = tuple(sorted(set(foreground_event_types)))
         self.clock = clock
+        self._subscription_ids: list[str] = []
+        self._foreground_lock = asyncio.Lock()
+        self._started = False
+
+    @property
+    def started(self) -> bool:
+        return self._started
+
+    async def start(self) -> None:
+        """Observe configured foreground events without owning their scheduling."""
+
+        if self._started:
+            return
+        if not self.kernel.started:
+            await self.kernel.start()
+        subscriptions: list[str] = []
+        try:
+            for event_type in self.foreground_event_types:
+                subscriptions.append(
+                    await self.kernel.bus.subscribe(event_type, self._handle_foreground)
+                )
+            self._subscription_ids = subscriptions
+            self._started = True
+            await self.recover()
+        except BaseException:
+            self._started = False
+            for subscription_id in subscriptions:
+                await self.kernel.bus.unsubscribe(subscription_id)
+            self._subscription_ids = []
+            raise
+
+    async def stop(self) -> None:
+        """Stop foreground observation after queued deliveries finish."""
+
+        self._started = False
+        subscriptions = tuple(self._subscription_ids)
+        self._subscription_ids = []
+        for subscription_id in subscriptions:
+            await self.kernel.bus.unsubscribe(subscription_id)
 
     async def run_scan(
         self,
@@ -80,6 +127,7 @@ class EndogenousShadowWorker:
             await self.kernel.start()
         started = started_at or self.clock()
         expiry = expires_at or started + timedelta(minutes=5)
+        await self.expire_epochs(at=started)
         await self.kernel.emit(self.policy.to_event(source=self.source, recorded_at=started))
         request = CognitionScanRequest.create(
             policy_id=self.policy.policy_id,
@@ -88,7 +136,7 @@ class EndogenousShadowWorker:
             expires_at=expiry,
         )
         stored = await self.kernel.emit(request.to_event(source=self.source))
-        return await self._process_scan(stored)
+        return await self._process_scan(stored, observed_at=started)
 
     async def record_calibration(
         self,
@@ -123,7 +171,7 @@ class EndogenousShadowWorker:
             if event.sequence is None or event.sequence <= after:
                 continue
             if event.type == COGNITION_SCAN_REQUESTED_EVENT:
-                selection = await self._process_scan(event)
+                selection = await self._process_scan(event, observed_at=self.clock())
                 if selection is not None:
                     recovered.append(selection)
             elif event.type in self.foreground_event_types:
@@ -146,6 +194,8 @@ class EndogenousShadowWorker:
         projection = await self.current_projection()
         expired: list[DreamEpoch] = []
         for epoch in projection.active_epochs:
+            if epoch.consumer_id != self.consumer_id:
+                continue
             if epoch.expires_at > expired_at:
                 continue
             event = dream_epoch_expired_event(
@@ -163,7 +213,12 @@ class EndogenousShadowWorker:
         projection.rebuild(await self._normalized_history())
         return projection
 
-    async def _process_scan(self, trigger: Event) -> IntrinsicAgendaSelection | None:
+    async def _process_scan(
+        self,
+        trigger: Event,
+        *,
+        observed_at: datetime,
+    ) -> IntrinsicAgendaSelection | None:
         if trigger.sequence is None:
             raise ValueError("endogenous scan requires a canonical trigger")
         request = CognitionScanRequest.from_dict(trigger.payload)
@@ -171,15 +226,25 @@ class EndogenousShadowWorker:
         full_projection = await self.current_projection()
         existing_epoch = full_projection.epoch_for_trigger(trigger.id)
         if existing_epoch is not None:
+            existing_status = full_projection.epoch_status(existing_epoch.epoch_id)
+            if existing_status is not DreamEpochStatus.ACTIVE:
+                await self._complete_scan_checkpoint(trigger, request, existing_epoch)
+                return None
+            if observed_at >= existing_epoch.expires_at:
+                await self._expire_incomplete_epoch(existing_epoch, expired_at=observed_at)
+                await self._complete_scan_checkpoint(trigger, request, existing_epoch)
+                return None
             existing_selection = full_projection.selection(existing_epoch.epoch_id)
             if existing_selection is not None:
-                await self._advance_checkpoint(
-                    completed_sequence=trigger.sequence,
-                    epoch_id=existing_epoch.epoch_id,
-                    causation_id=trigger.id,
-                    timestamp=request.requested_at,
-                )
+                await self._complete_scan_checkpoint(trigger, request, existing_epoch)
                 return existing_selection
+
+        active_epoch = full_projection.active_epoch_for_consumer(self.consumer_id)
+        if active_epoch is not None and (
+            existing_epoch is None or active_epoch.epoch_id != existing_epoch.epoch_id
+        ):
+            await self._complete_scan_checkpoint(trigger, request, active_epoch)
+            return full_projection.selection(active_epoch.epoch_id)
 
         history = await self._normalized_history()
         cut = tuple(
@@ -208,12 +273,32 @@ class EndogenousShadowWorker:
             )
             return None
 
+        candidates = tuple(
+            candidate
+            for candidate in candidates
+            if self._candidate_is_new_or_same_scan(
+                full_projection,
+                candidate.inquiry,
+                trigger_sequence=trigger.sequence,
+            )
+        )
+        if not candidates:
+            await self._advance_checkpoint(
+                completed_sequence=trigger.sequence,
+                epoch_id=None,
+                causation_id=trigger.id,
+                timestamp=request.requested_at,
+            )
+            return None
+
         policy = cut_projection.policy(request.policy_id)
         if policy is None:
             raise ValueError("cognition scan policy is absent at its canonical cut")
+        ensure_selector_supported(policy)
         epoch = existing_epoch
         if epoch is None:
             epoch = DreamEpoch.start(
+                consumer_id=self.consumer_id,
                 trigger_event_id=trigger.id,
                 event_log_cursor=trigger.sequence,
                 policy=policy,
@@ -242,6 +327,13 @@ class EndogenousShadowWorker:
                     at=epoch.started_at,
                 )
                 if stored is None:
+                    await self._finish_incomplete_scan(
+                        trigger,
+                        request,
+                        epoch,
+                        intent_refs=candidate.inquiry.governing_intent_refs,
+                        observed_at=observed_at,
+                    )
                     return None
             elif (
                 known_inquiry.question != candidate.inquiry.question
@@ -261,6 +353,13 @@ class EndogenousShadowWorker:
                 at=epoch.started_at,
             )
             if stored_activity is None:
+                await self._finish_incomplete_scan(
+                    trigger,
+                    request,
+                    epoch,
+                    intent_refs=candidate.activity.governing_intent_refs,
+                    observed_at=observed_at,
+                )
                 return None
             estimate = evaluate_value_of_cognition(
                 candidate.activity,
@@ -275,6 +374,13 @@ class EndogenousShadowWorker:
                 at=epoch.started_at,
             )
             if stored_estimate is None:
+                await self._finish_incomplete_scan(
+                    trigger,
+                    request,
+                    epoch,
+                    intent_refs=candidate.activity.governing_intent_refs,
+                    observed_at=observed_at,
+                )
                 return None
 
         projection = await self.current_projection()
@@ -301,6 +407,13 @@ class EndogenousShadowWorker:
                 at=selection.selected_at,
             )
             if stored_selection is None:
+                await self._finish_incomplete_scan(
+                    trigger,
+                    request,
+                    epoch,
+                    intent_refs=refs,
+                    observed_at=observed_at,
+                )
                 return None
         await self._advance_checkpoint(
             completed_sequence=trigger.sequence,
@@ -310,12 +423,102 @@ class EndogenousShadowWorker:
         )
         return selection
 
+    @staticmethod
+    def _candidate_is_new_or_same_scan(
+        projection: EndogenousProjection,
+        inquiry: Inquiry,
+        *,
+        trigger_sequence: int,
+    ) -> bool:
+        known = projection.inquiry(inquiry.inquiry_id)
+        if known is None:
+            return True
+        if (
+            known.question != inquiry.question
+            or known.governing_intent_refs != inquiry.governing_intent_refs
+            or known.evidence_refs != inquiry.evidence_refs
+            or known.target_refs != inquiry.target_refs
+        ):
+            raise ValueError("content-addressed inquiry changed between scans")
+        return known.causal_cursor == trigger_sequence
+
+    async def _finish_incomplete_scan(
+        self,
+        trigger: Event,
+        request: CognitionScanRequest,
+        epoch: DreamEpoch,
+        *,
+        intent_refs: tuple[GoverningIntentRef, ...],
+        observed_at: datetime,
+    ) -> None:
+        """Make every impossible partial scan terminal before checkpointing it."""
+
+        while True:
+            projection = await self.current_projection()
+            status = projection.epoch_status(epoch.epoch_id)
+            if status is not DreamEpochStatus.ACTIVE:
+                break
+            if observed_at >= epoch.expires_at:
+                await self._expire_incomplete_epoch(epoch, expired_at=observed_at)
+                continue
+            if not projection.intent_refs_are_current(intent_refs):
+                event = dream_epoch_abandoned_event(
+                    epoch,
+                    reason=DreamAbandonmentReason.GOVERNING_INTENT_CHANGED,
+                    source=self.source,
+                    abandoned_at=max(epoch.started_at, observed_at, self.clock()),
+                )
+                await self._append_transition(event, epoch_id=epoch.epoch_id)
+                continue
+            raise RuntimeError("incomplete scan remained eligible without a terminal explanation")
+        await self._complete_scan_checkpoint(trigger, request, epoch)
+
+    async def _expire_incomplete_epoch(
+        self,
+        epoch: DreamEpoch,
+        *,
+        expired_at: datetime,
+    ) -> None:
+        event = dream_epoch_expired_event(
+            epoch,
+            source=self.source,
+            expired_at=max(epoch.expires_at, expired_at),
+        )
+        await self._append_transition(event, epoch_id=epoch.epoch_id)
+
+    async def _complete_scan_checkpoint(
+        self,
+        trigger: Event,
+        request: CognitionScanRequest,
+        epoch: DreamEpoch,
+    ) -> None:
+        if trigger.sequence is None:
+            raise ValueError("scan checkpoint requires a canonical trigger")
+        await self._advance_checkpoint(
+            completed_sequence=trigger.sequence,
+            epoch_id=epoch.epoch_id,
+            causation_id=trigger.id,
+            timestamp=request.requested_at,
+        )
+
+    async def _handle_foreground(self, event: Event) -> None:
+        if not self._started:
+            return
+        async with self._foreground_lock:
+            if not self._started:
+                return
+            await self._process_foreground(event)
+
     async def _process_foreground(self, event: Event) -> tuple[DreamEpoch, ...]:
         if event.sequence is None:
             raise ValueError("foreground demand requires canonical sequence")
         projection = await self.current_projection()
         preempted: list[DreamEpoch] = []
         for epoch in projection.active_epochs:
+            if epoch.consumer_id != self.consumer_id:
+                continue
+            if event.sequence <= epoch.event_log_cursor:
+                continue
             preempted_at = max(epoch.started_at, event.timestamp)
             transition = dream_epoch_preempted_event(
                 epoch,
@@ -343,6 +546,9 @@ class EndogenousShadowWorker:
             existing = projection.event(f"dream-epoch-started:{epoch.epoch_id}")
             if existing is not None:
                 return existing
+            active = projection.active_epoch_for_consumer(epoch.consumer_id)
+            if active is not None and active.epoch_id != epoch.epoch_id:
+                return None
             if projection.event_cursor != epoch.event_log_cursor:
                 return None
             event = self._with_admission_receipt(epoch.to_event(source=self.source), projection)

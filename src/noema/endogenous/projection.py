@@ -14,6 +14,7 @@ from .models import (
     AGENDA_SELECTED_EVENT,
     CALIBRATION_EXCHANGE_RECORDED_EVENT,
     COGNITION_SCAN_REQUESTED_EVENT,
+    DREAM_EPOCH_ABANDONED_EVENT,
     DREAM_EPOCH_EXPIRED_EVENT,
     DREAM_EPOCH_PREEMPTED_EVENT,
     DREAM_EPOCH_STARTED_EVENT,
@@ -23,6 +24,7 @@ from .models import (
     VOC_EVALUATED_EVENT,
     CalibrationExchange,
     CognitionScanRequest,
+    DreamAbandonmentReason,
     DreamEpoch,
     DreamEpochStatus,
     EndogenousPolicySnapshot,
@@ -32,7 +34,7 @@ from .models import (
     IntrinsicAgendaSelection,
     ValueOfCognitionEstimate,
 )
-from .policy import evaluate_value_of_cognition, select_intrinsic_agenda
+from .policy import ensure_selector_supported, evaluate_value_of_cognition, select_intrinsic_agenda
 
 T = TypeVar("T")
 K = TypeVar("K")
@@ -53,6 +55,7 @@ class EndogenousProjection:
         self._epochs: dict[str, DreamEpoch] = {}
         self._epoch_by_trigger: dict[str, str] = {}
         self._epoch_status: dict[str, DreamEpochStatus] = {}
+        self._epoch_abandonment_reason: dict[str, DreamAbandonmentReason] = {}
         self._inquiries: dict[str, Inquiry] = {}
         self._activities: dict[str, IntrinsicActivity] = {}
         self._epoch_activities: dict[str, set[str]] = {}
@@ -131,6 +134,12 @@ class EndogenousProjection:
     def epoch_for_trigger(self, trigger_event_id: str) -> DreamEpoch | None:
         epoch_id = self._epoch_by_trigger.get(trigger_event_id)
         return self._epochs.get(epoch_id) if epoch_id is not None else None
+
+    def active_epoch_for_consumer(self, consumer_id: str) -> DreamEpoch | None:
+        matches = tuple(epoch for epoch in self.active_epochs if epoch.consumer_id == consumer_id)
+        if len(matches) > 1:
+            raise ValueError(f"consumer has multiple active dream epochs: {consumer_id}")
+        return matches[0] if matches else None
 
     def epoch_status(self, epoch_id: str) -> DreamEpochStatus:
         if epoch_id not in self._epochs:
@@ -272,11 +281,20 @@ class EndogenousProjection:
             epoch_policy = self._policies.get(epoch.policy_id)
             if epoch_policy is None or epoch_policy.version != epoch.policy_version:
                 raise ValueError("dream epoch references an unknown policy version")
+            if (
+                epoch.selector_id != epoch_policy.selector_id
+                or epoch.selector_version != epoch_policy.selector_version
+            ):
+                raise ValueError("dream epoch selector differs from its pinned policy")
+            ensure_selector_supported(epoch_policy)
             if self._last_sequence != epoch.event_log_cursor:
                 raise ValueError("dream epoch must start at the exact pinned event head")
             existing_epoch = self._epoch_by_trigger.get(epoch.trigger_event_id)
             if existing_epoch is not None and existing_epoch != epoch.epoch_id:
                 raise ValueError("one cognition scan cannot start two dream epochs")
+            active_for_consumer = self.active_epoch_for_consumer(epoch.consumer_id)
+            if active_for_consumer is not None and active_for_consumer.epoch_id != epoch.epoch_id:
+                raise ValueError("one endogenous consumer cannot own two active dream epochs")
             self._record_immutable(self._epochs, epoch.epoch_id, epoch, "dream epoch")
             self._epoch_by_trigger[epoch.trigger_event_id] = epoch.epoch_id
             self._epoch_status[epoch.epoch_id] = DreamEpochStatus.ACTIVE
@@ -316,6 +334,10 @@ class EndogenousProjection:
                 raise ValueError("intrinsic activity references an unknown inquiry")
             if activity.causal_cursor != epoch.event_log_cursor:
                 raise ValueError("intrinsic activity does not cite the dream epoch causal cut")
+            if known_inquiry.causal_cursor != activity.causal_cursor:
+                raise ValueError("intrinsic activity cannot renew an inquiry from an older cut")
+            if known_inquiry.expires_at <= event.timestamp:
+                raise ValueError("expired inquiry cannot admit fresh intrinsic activity")
             if (
                 known_inquiry.governing_intent_refs != activity.governing_intent_refs
                 or known_inquiry.evidence_refs != activity.evidence_refs
@@ -402,6 +424,9 @@ class EndogenousProjection:
             foreground = self._events.get(foreground_event_id)
             if foreground is None:
                 raise ValueError("dream preemption references an unknown foreground event")
+            epoch = self._epochs[epoch_id]
+            if foreground.sequence is None or foreground.sequence <= epoch.event_log_cursor:
+                raise ValueError("foreground demand must follow the dream epoch causal cut")
             preempted_at = parse_datetime(cast(str, event.payload["preempted_at"]))
             if preempted_at is None or preempted_at != event.timestamp:
                 raise ValueError("dream preemption timestamp is inconsistent")
@@ -436,6 +461,29 @@ class EndogenousProjection:
             )
             self._epoch_status[epoch_id] = DreamEpochStatus.EXPIRED
             return True
+        if event.type == DREAM_EPOCH_ABANDONED_EVENT:
+            self._validate_exact_head_receipt(event)
+            epoch_id = str(event.payload["epoch_id"])
+            epoch = self._require_active_epoch(
+                epoch_id,
+                at=event.timestamp,
+                allow_expired_time=True,
+            )
+            abandoned_at = parse_datetime(cast(str, event.payload["abandoned_at"]))
+            if abandoned_at is None or abandoned_at != event.timestamp:
+                raise ValueError("dream abandonment timestamp is inconsistent")
+            reason = DreamAbandonmentReason(str(event.payload["reason"]))
+            self._validate_envelope(
+                event,
+                expected_id=f"dream-epoch-abandoned:{epoch_id}",
+                subject=epoch_id,
+                timestamp=abandoned_at,
+            )
+            if event.causation_id != epoch.trigger_event_id:
+                raise ValueError("dream abandonment must cite its scan trigger")
+            self._epoch_status[epoch_id] = DreamEpochStatus.ABANDONED
+            self._epoch_abandonment_reason[epoch_id] = reason
+            return True
         return False
 
     def _require_active_epoch(
@@ -449,7 +497,7 @@ class EndogenousProjection:
         if epoch is None:
             raise ValueError(f"unknown dream epoch: {epoch_id}")
         if self._epoch_status[epoch_id] is not DreamEpochStatus.ACTIVE:
-            raise ValueError("preempted or expired dream epoch cannot consume cognition")
+            raise ValueError("terminal dream epoch cannot consume cognition")
         if not allow_expired_time and at >= epoch.expires_at:
             raise ValueError("expired dream epoch cannot consume cognition")
         return epoch
@@ -507,6 +555,11 @@ class EndogenousProjection:
                 {
                     **value.to_dict(),
                     "status": self._epoch_status[value.epoch_id].value,
+                    "abandonment_reason": (
+                        self._epoch_abandonment_reason[value.epoch_id].value
+                        if value.epoch_id in self._epoch_abandonment_reason
+                        else None
+                    ),
                 }
                 for value in self.epochs
             ],

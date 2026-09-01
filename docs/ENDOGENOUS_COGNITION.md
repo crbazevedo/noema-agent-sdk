@@ -37,7 +37,7 @@ EndogenousPolicySnapshot
         +
 CognitionScanRequest at canonical cursor H
         ↓
-DreamEpoch(H, policy, budget, expiry, DREAM_PROPOSAL_ONLY)
+DreamEpoch(consumer, H, policy, selector, budget, expiry, DREAM_PROPOSAL_ONLY)
         ↓
 deterministic producers
         ↓
@@ -87,7 +87,14 @@ The first feasible positive candidates are selected greedily. This is a
 deterministic reference policy, not a learned estimate or optimization claim.
 
 Exactly one `IntrinsicAgendaSelection` may exist per DREAM epoch. Unused budget
-remains explicit; exhausted dimensions defer later positive candidates.
+remains explicit; exhausted dimensions defer later positive candidates. A
+consumer may own at most one active epoch, so repeated scans cannot multiply
+aggregate cognitive slack. While that epoch remains active, a later scan
+deterministically reuses its selection or does no additional work.
+
+The policy and epoch pin `stable-greedy-multidimensional` version 1. Replay
+dispatches through that immutable algorithm identity; unknown versions fail
+closed instead of being interpreted by whatever selector happens to be current.
 
 ## Calibration without consensus collapse
 
@@ -101,8 +108,15 @@ truth by vote, or transfer authority.
 - a crash before the scan checkpoint causes replay from the canonical scan;
 - already recorded inquiries, activities, estimates, and selection are reused;
 - foreground `WorkOrder` or decision demand preempts active DREAM epochs;
-- preemption and expiry are durable terminal states for that epoch;
+- the running worker observes configured foreground events through the existing
+  event bus; no manual preemption call or new scheduler is required;
+- only foreground events causally after the epoch cut may preempt it;
+- preemption, expiry, and intent-loss abandonment are durable terminal states;
 - terminal epochs cannot consume more cognition;
+- terminal partial scans advance the generic checkpoint and cannot become
+  poison scans during recovery;
+- unchanged evidence and intent do not renew an unresolved inquiry or allocate
+  another activity, and expired inquiries cannot be silently reopened;
 - old DREAM evidence remains inspectable after preemption;
 - a goal becoming terminal prevents later admission against that intent.
 

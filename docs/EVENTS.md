@@ -73,12 +73,15 @@ endogenous.agenda_selected
 endogenous.calibration_exchange_recorded
 endogenous.dream_epoch_preempted
 endogenous.dream_epoch_expired
+endogenous.dream_epoch_abandoned
 ```
 
 The scan request pins the causal cut. DREAM outputs use content-addressed
 identities and exact-head admission receipts. One agenda may spend each epoch's
-finite budget; preemption and expiry are terminal for further epoch output.
-These events represent cognition proposals only and never imply work dispatch,
+finite budget, and one consumer may own at most one active epoch. Preemption,
+expiry, and intent-loss abandonment are terminal for further epoch output.
+Preemption requires a foreground event sequenced after the pinned cut. These
+events represent cognition proposals only and never imply work dispatch,
 authorization, or effect.
 
 ## Causal chain

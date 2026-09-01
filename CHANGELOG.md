@@ -27,6 +27,16 @@
   recovery, and work-triggered preemption;
 - added structural gates preventing endogenous cognition from reaching models,
   durable-work dispatch, capabilities, authorization, or effects;
+- hardened partial-scan recovery so preemption, expiry, and intent loss reach a
+  durable terminal outcome before the canonical checkpoint advances;
+- made foreground preemption event-driven and causal-cut-aware, bounded each
+  consumer to one active DREAM epoch, and prevented unchanged or expired
+  inquiries from consuming later epoch budgets;
+- pinned the agenda selector identity/version in policy and epoch state and
+  made unknown historical selector versions fail closed;
+- strengthened roadmap-health inquiry provenance with related goal,
+  commitment, proposal, and external-workstream events exposed by the current
+  strategic projection;
 - recorded the bounded design, conservative relevance rule, tradeoffs, and
   deferred learned/solver/scheduler mechanisms in ADR 0010.
 

@@ -5,12 +5,18 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from noema import (
+    AGENDA_SELECTED_EVENT,
+    STABLE_GREEDY_SELECTOR_ID,
     ActivityDisposition,
     BackgroundCognitiveBudget,
     CalibrationExchange,
+    CognitionScanRequest,
     CognitiveResourceVector,
     Commitment,
     CommitmentStatus,
+    ConsumerCheckpointProjection,
+    DreamAbandonmentReason,
+    DreamEpoch,
     DreamEpochStatus,
     EndogenousPolicySnapshot,
     EndogenousProjection,
@@ -296,6 +302,7 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             recorded_at=scan_at - timedelta(minutes=2),
         )
         recorded_exchange = await worker.record_calibration(exchange)
+        await worker.start()
 
         strategic_before = tuple(
             event.id for event in await kernel.history() if event.type.startswith("intent.")
@@ -351,6 +358,16 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         policy = projection.policy(selection.policy_id)
         assert epoch is not None
         assert policy is not None
+        self.assertEqual(epoch.selector_id, STABLE_GREEDY_SELECTOR_ID)
+        roadmap_activity = next(
+            activity
+            for activity in activities.values()
+            if any(ref.startswith("roadmap-revision:") for ref in activity.target_refs)
+        )
+        self.assertIn(
+            "event:commitment-recorded:commitment:endogenous",
+            roadmap_activity.evidence_refs,
+        )
         duplicate_selection = select_intrinsic_agenda(
             epoch=epoch,
             policy=policy,
@@ -375,9 +392,8 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             success_criteria=("foreground request is bounded",),
             created_at=scan_at + timedelta(minutes=1),
         )
-        foreground_event = await kernel.emit(foreground.to_event(source="fixture"))
-        preempted = await worker.preempt_for_foreground(foreground_event)
-        self.assertEqual(tuple(value.epoch_id for value in preempted), (selection.epoch_id,))
+        await kernel.emit(foreground.to_event(source="fixture"))
+        await kernel.bus.drain()
         projection = await worker.current_projection()
         self.assertIs(
             projection.epoch_status(selection.epoch_id),
@@ -411,9 +427,7 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "cannot consume cognition"):
             projection.apply(post_preemption_event)
         terminal_replay = EndogenousProjection()
-        terminal_replay.rebuild(
-            kernel.schemas.normalize(event) for event in await kernel.history()
-        )
+        terminal_replay.rebuild(kernel.schemas.normalize(event) for event in await kernel.history())
         self.assertEqual(terminal_replay.semantic_snapshot(), projection.semantic_snapshot())
         strategic_after = tuple(
             event.id for event in await kernel.history() if event.type.startswith("intent.")
@@ -425,6 +439,7 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 for event in await kernel.history()
             )
         )
+        await worker.stop()
         await kernel.stop()
 
     async def test_no_positive_value_spends_no_cognitive_budget(self) -> None:
@@ -518,7 +533,8 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         clock = MutableClock(NOW)
         kernel = NoemaKernel()
         await build_strategy(kernel, clock)
-        crashed = CrashBeforeCheckpointWorker(kernel)
+        clock.value = NOW + timedelta(hours=1)
+        crashed = CrashBeforeCheckpointWorker(kernel, clock=clock)
         with self.assertRaisesRegex(RuntimeError, "simulated crash"):
             await crashed.run_scan(
                 budget=budget(activities=1),
@@ -529,7 +545,8 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         inquiry_ids = tuple(value.inquiry_id for value in before.inquiries)
         consumed = before.selections[0].consumed
 
-        recovered_worker = EndogenousShadowWorker(kernel)
+        clock.advance(timedelta(seconds=30))
+        recovered_worker = EndogenousShadowWorker(kernel, clock=clock)
         recovered = await recovered_worker.recover()
         self.assertEqual(len(recovered), 1)
         after = await recovered_worker.current_projection()
@@ -537,6 +554,327 @@ class EndogenousCognitionAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(after.selections), 1)
         self.assertEqual(after.selections[0].consumed, consumed)
         await kernel.stop()
+
+    async def test_event_driven_foreground_preempts_before_selection_and_recovers(self) -> None:
+        class PreemptBeforeAgendaWorker(EndogenousShadowWorker):
+            injected = False
+
+            async def _append_epoch_output(
+                self,
+                event: Event,
+                *,
+                epoch_id: str,
+                intent_refs: tuple[GoverningIntentRef, ...],
+                at: datetime,
+            ) -> Event | None:
+                if event.type == AGENDA_SELECTED_EVENT and not self.injected:
+                    self.injected = True
+                    await self.kernel.emit(
+                        Event(
+                            "decision.proposed",
+                            "fixture",
+                            {"reason": "foreground arrived during DREAM"},
+                            timestamp=at + timedelta(seconds=1),
+                        )
+                    )
+                    await self.kernel.bus.drain()
+                return await super()._append_epoch_output(
+                    event,
+                    epoch_id=epoch_id,
+                    intent_refs=intent_refs,
+                    at=at,
+                )
+
+        clock = MutableClock(NOW + timedelta(hours=1))
+        kernel = NoemaKernel()
+        await build_strategy(kernel, MutableClock(NOW))
+        worker = PreemptBeforeAgendaWorker(kernel, clock=clock)
+        await worker.start()
+        selection = await worker.run_scan(
+            budget=budget(activities=1),
+            started_at=clock(),
+            expires_at=clock() + timedelta(minutes=5),
+        )
+        self.assertIsNone(selection)
+        projection = await worker.current_projection()
+        self.assertEqual(len(projection.epochs), 1)
+        epoch = projection.epochs[0]
+        self.assertIs(projection.epoch_status(epoch.epoch_id), DreamEpochStatus.PREEMPTED)
+        self.assertEqual(projection.selections, ())
+
+        before_recovery = tuple(event.id for event in await kernel.history())
+        recovered = await worker.recover()
+        self.assertEqual(recovered, ())
+        self.assertEqual(tuple(event.id for event in await kernel.history()), before_recovery)
+        await worker.stop()
+        await kernel.stop()
+
+    async def test_expiry_before_selection_recovers_terminal_scan_checkpoint(self) -> None:
+        class ExpireBeforeAgendaWorker(EndogenousShadowWorker):
+            injected = False
+            crash_checkpoint = True
+
+            async def _append_epoch_output(
+                self,
+                event: Event,
+                *,
+                epoch_id: str,
+                intent_refs: tuple[GoverningIntentRef, ...],
+                at: datetime,
+            ) -> Event | None:
+                if event.type == AGENDA_SELECTED_EVENT and not self.injected:
+                    self.injected = True
+                    projection = await self.current_projection()
+                    epoch = projection.epoch(epoch_id)
+                    assert epoch is not None
+                    await self.expire_epochs(at=epoch.expires_at + timedelta(seconds=1))
+                return await super()._append_epoch_output(
+                    event,
+                    epoch_id=epoch_id,
+                    intent_refs=intent_refs,
+                    at=at,
+                )
+
+            async def _complete_scan_checkpoint(
+                self,
+                trigger: Event,
+                request: CognitionScanRequest,
+                epoch: DreamEpoch,
+            ) -> None:
+                if self.crash_checkpoint:
+                    self.crash_checkpoint = False
+                    raise RuntimeError("simulated crash after DREAM expiry")
+                await super()._complete_scan_checkpoint(trigger, request, epoch)
+
+        clock = MutableClock(NOW + timedelta(hours=1))
+        kernel = NoemaKernel()
+        await build_strategy(kernel, MutableClock(NOW))
+        crashed = ExpireBeforeAgendaWorker(kernel, clock=clock)
+        with self.assertRaisesRegex(RuntimeError, "after DREAM expiry"):
+            await crashed.run_scan(
+                budget=budget(activities=1),
+                started_at=clock(),
+                expires_at=clock() + timedelta(seconds=5),
+            )
+        projection = await crashed.current_projection()
+        epoch = projection.epochs[0]
+        self.assertIs(projection.epoch_status(epoch.epoch_id), DreamEpochStatus.EXPIRED)
+        self.assertEqual(projection.selections, ())
+
+        clock.advance(timedelta(seconds=10))
+        recovered_worker = EndogenousShadowWorker(kernel, clock=clock)
+        self.assertEqual(await recovered_worker.recover(), ())
+        checkpoints = ConsumerCheckpointProjection()
+        checkpoints.rebuild(await kernel.history())
+        checkpoint = checkpoints.get(recovered_worker.consumer_id)
+        assert checkpoint is not None
+        request_event = projection.event(epoch.trigger_event_id)
+        assert request_event is not None and request_event.sequence is not None
+        self.assertGreaterEqual(checkpoint.last_completed_sequence, request_event.sequence)
+        await kernel.stop()
+
+    async def test_intent_change_before_selection_abandons_and_recovers_scan(self) -> None:
+        clock = MutableClock(NOW)
+        kernel = NoemaKernel()
+        steward, _goal, _roadmap, _commitment = await build_strategy(kernel, clock)
+        origin, authority, _trust = user_security()
+        scan_at = NOW + timedelta(hours=1)
+        clock.value = scan_at
+
+        class ChangeIntentBeforeAgendaWorker(EndogenousShadowWorker):
+            injected = False
+            crash_checkpoint = True
+
+            async def _append_epoch_output(
+                self,
+                event: Event,
+                *,
+                epoch_id: str,
+                intent_refs: tuple[GoverningIntentRef, ...],
+                at: datetime,
+            ) -> Event | None:
+                if event.type == AGENDA_SELECTED_EVENT and not self.injected:
+                    self.injected = True
+                    clock.advance(timedelta(seconds=1))
+                    await steward.record_goal_revision(
+                        goal_id="goal:endogenous",
+                        description="Maintain a reliable release direction",
+                        priority=0.9,
+                        utility=1.0,
+                        success_criteria=("release direction remains defensible",),
+                        owner="user:carlos",
+                        status=GoalStatus.CANCELLED,
+                        deadline=NOW + timedelta(days=30),
+                        kind=GoalKind.USER_AUTHORED,
+                        governing_goal_refs=(),
+                        origin=origin,
+                        intent_authority=authority,
+                        author="user:carlos",
+                        revision_reason="cancel intent during DREAM",
+                    )
+                return await super()._append_epoch_output(
+                    event,
+                    epoch_id=epoch_id,
+                    intent_refs=intent_refs,
+                    at=at,
+                )
+
+            async def _complete_scan_checkpoint(
+                self,
+                trigger: Event,
+                request: CognitionScanRequest,
+                epoch: DreamEpoch,
+            ) -> None:
+                if self.crash_checkpoint:
+                    self.crash_checkpoint = False
+                    raise RuntimeError("simulated crash after DREAM abandonment")
+                await super()._complete_scan_checkpoint(trigger, request, epoch)
+
+        crashed = ChangeIntentBeforeAgendaWorker(kernel, clock=clock)
+        with self.assertRaisesRegex(RuntimeError, "after DREAM abandonment"):
+            await crashed.run_scan(
+                budget=budget(activities=1),
+                started_at=scan_at,
+                expires_at=scan_at + timedelta(minutes=5),
+            )
+        projection = await crashed.current_projection()
+        epoch = projection.epochs[0]
+        self.assertIs(projection.epoch_status(epoch.epoch_id), DreamEpochStatus.ABANDONED)
+        epoch_snapshot = projection.semantic_snapshot()["epochs"][0]
+        assert isinstance(epoch_snapshot, dict)
+        self.assertEqual(
+            epoch_snapshot["abandonment_reason"],
+            DreamAbandonmentReason.GOVERNING_INTENT_CHANGED.value,
+        )
+        self.assertEqual(projection.selections, ())
+
+        recovered_worker = EndogenousShadowWorker(kernel, clock=clock)
+        self.assertEqual(await recovered_worker.recover(), ())
+        checkpoints = ConsumerCheckpointProjection()
+        checkpoints.rebuild(await kernel.history())
+        checkpoint = checkpoints.get(recovered_worker.consumer_id)
+        assert checkpoint is not None
+        request_event = projection.event(epoch.trigger_event_id)
+        assert request_event is not None and request_event.sequence is not None
+        self.assertGreaterEqual(checkpoint.last_completed_sequence, request_event.sequence)
+        await kernel.stop()
+
+    async def test_repeated_scan_reuses_active_epoch_and_does_not_renew_inquiry(self) -> None:
+        clock = MutableClock(NOW + timedelta(hours=1))
+        kernel = NoemaKernel()
+        await build_strategy(kernel, MutableClock(NOW))
+        worker = EndogenousShadowWorker(kernel, clock=clock)
+        first = await worker.run_scan(
+            budget=budget(activities=1),
+            started_at=clock(),
+            expires_at=clock() + timedelta(minutes=5),
+        )
+        self.assertIsNotNone(first)
+        assert first is not None
+        first_projection = await worker.current_projection()
+        inquiry_ids = tuple(value.inquiry_id for value in first_projection.inquiries)
+        activity_ids = tuple(value.activity_id for value in first_projection.activities)
+
+        clock.advance(timedelta(minutes=1))
+        reused = await worker.run_scan(
+            budget=budget(activities=2),
+            started_at=clock(),
+            expires_at=clock() + timedelta(minutes=5),
+        )
+        self.assertEqual(reused, first)
+        active_projection = await worker.current_projection()
+        self.assertEqual(len(active_projection.epochs), 1)
+        self.assertEqual(
+            tuple(value.activity_id for value in active_projection.activities),
+            activity_ids,
+        )
+
+        clock.advance(timedelta(minutes=5))
+        await worker.expire_epochs(at=clock())
+        clock.advance(timedelta(seconds=1))
+        self.assertIsNone(
+            await worker.run_scan(
+                budget=budget(activities=2),
+                started_at=clock(),
+                expires_at=clock() + timedelta(minutes=5),
+            )
+        )
+        final_projection = await worker.current_projection()
+        self.assertEqual(len(final_projection.epochs), 1)
+        self.assertEqual(
+            tuple(value.inquiry_id for value in final_projection.inquiries),
+            inquiry_ids,
+        )
+        self.assertEqual(
+            tuple(value.activity_id for value in final_projection.activities),
+            activity_ids,
+        )
+        await kernel.stop()
+
+    async def test_historical_foreground_and_unknown_selector_fail_closed(self) -> None:
+        clock = MutableClock(NOW + timedelta(hours=1))
+        kernel = NoemaKernel()
+        await build_strategy(kernel, MutableClock(NOW))
+        historical = await kernel.emit(
+            Event(
+                "decision.proposed",
+                "fixture",
+                {"reason": "older foreground"},
+                timestamp=clock() - timedelta(minutes=1),
+            )
+        )
+        worker = EndogenousShadowWorker(kernel, clock=clock)
+        await worker.start()
+        selection = await worker.run_scan(
+            budget=budget(activities=1),
+            started_at=clock(),
+            expires_at=clock() + timedelta(minutes=5),
+        )
+        self.assertIsNotNone(selection)
+        assert selection is not None
+        projection = await worker.current_projection()
+        epoch = projection.epoch(selection.epoch_id)
+        assert epoch is not None and historical.sequence is not None
+        self.assertLess(historical.sequence, epoch.event_log_cursor)
+        self.assertIs(projection.epoch_status(epoch.epoch_id), DreamEpochStatus.ACTIVE)
+        await worker.stop()
+        await kernel.stop()
+
+        unknown_policy = EndogenousPolicySnapshot.create(
+            version="future-selector-fixture",
+            selector_id="future-selector",
+            selector_version=99,
+        )
+        request = CognitionScanRequest.create(
+            policy_id=unknown_policy.policy_id,
+            budget=budget(activities=1),
+            requested_at=NOW,
+            expires_at=NOW + timedelta(minutes=5),
+        )
+        policy_event = replace(
+            unknown_policy.to_event(source="fixture", recorded_at=NOW),
+            sequence=1,
+        )
+        request_event = replace(request.to_event(source="fixture"), sequence=2)
+        unknown_epoch = DreamEpoch.start(
+            consumer_id="fixture-consumer",
+            trigger_event_id=request_event.id,
+            event_log_cursor=2,
+            policy=unknown_policy,
+            budget=request.budget,
+            started_at=request.requested_at,
+            expires_at=request.expires_at,
+        )
+        epoch_event = replace(
+            unknown_epoch.to_event(source="fixture"),
+            sequence=3,
+            metadata={"validated_at_event_cursor": 2},
+        )
+        replay = EndogenousProjection()
+        replay.apply(policy_event)
+        replay.apply(request_event)
+        with self.assertRaisesRegex(ValueError, "unsupported endogenous agenda selector"):
+            replay.apply(epoch_event)
 
     async def test_blocked_goal_remains_eligible_for_recovery_cognition(self) -> None:
         clock = MutableClock(NOW)

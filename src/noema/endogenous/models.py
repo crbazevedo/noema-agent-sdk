@@ -24,6 +24,10 @@ AGENDA_SELECTED_EVENT = "endogenous.agenda_selected"
 CALIBRATION_EXCHANGE_RECORDED_EVENT = "endogenous.calibration_exchange_recorded"
 DREAM_EPOCH_PREEMPTED_EVENT = "endogenous.dream_epoch_preempted"
 DREAM_EPOCH_EXPIRED_EVENT = "endogenous.dream_epoch_expired"
+DREAM_EPOCH_ABANDONED_EVENT = "endogenous.dream_epoch_abandoned"
+
+STABLE_GREEDY_SELECTOR_ID = "stable-greedy-multidimensional"
+STABLE_GREEDY_SELECTOR_VERSION = 1
 
 ENDOGENOUS_EVENT_TYPES = (
     POLICY_SNAPSHOT_RECORDED_EVENT,
@@ -36,6 +40,7 @@ ENDOGENOUS_EVENT_TYPES = (
     CALIBRATION_EXCHANGE_RECORDED_EVENT,
     DREAM_EPOCH_PREEMPTED_EVENT,
     DREAM_EPOCH_EXPIRED_EVENT,
+    DREAM_EPOCH_ABANDONED_EVENT,
 )
 
 
@@ -68,6 +73,11 @@ class DreamEpochStatus(StrEnum):
     ACTIVE = "active"
     PREEMPTED = "preempted"
     EXPIRED = "expired"
+    ABANDONED = "abandoned"
+
+
+class DreamAbandonmentReason(StrEnum):
+    GOVERNING_INTENT_CHANGED = "governing_intent_changed"
 
 
 class CognitiveAuthorityCeiling(StrEnum):
@@ -287,6 +297,8 @@ class BackgroundCognitiveBudget:
 class EndogenousPolicySnapshot:
     policy_id: str
     version: str
+    selector_id: str
+    selector_version: int
     compute_cost_weight: float
     delay_cost_weight: float
     attention_cost_weight: float
@@ -299,6 +311,8 @@ class EndogenousPolicySnapshot:
         cls,
         *,
         version: str,
+        selector_id: str = STABLE_GREEDY_SELECTOR_ID,
+        selector_version: int = STABLE_GREEDY_SELECTOR_VERSION,
         compute_cost_weight: float = 1.0,
         delay_cost_weight: float = 1.0,
         attention_cost_weight: float = 1.0,
@@ -308,6 +322,8 @@ class EndogenousPolicySnapshot:
     ) -> EndogenousPolicySnapshot:
         payload: JSONObject = {
             "version": version,
+            "selector_id": selector_id,
+            "selector_version": selector_version,
             "compute_cost_weight": compute_cost_weight,
             "delay_cost_weight": delay_cost_weight,
             "attention_cost_weight": attention_cost_weight,
@@ -318,6 +334,8 @@ class EndogenousPolicySnapshot:
         return cls(
             policy_id=_canonical_id("endogenous-policy", payload),
             version=version,
+            selector_id=selector_id,
+            selector_version=selector_version,
             compute_cost_weight=compute_cost_weight,
             delay_cost_weight=delay_cost_weight,
             attention_cost_weight=attention_cost_weight,
@@ -329,6 +347,9 @@ class EndogenousPolicySnapshot:
     def __post_init__(self) -> None:
         _require_text(self.policy_id, "endogenous policy id")
         _require_text(self.version, "endogenous policy version")
+        _require_text(self.selector_id, "endogenous agenda selector id")
+        if self.selector_version <= 0:
+            raise ValueError("endogenous agenda selector version must be positive")
         for value, name in (
             (self.compute_cost_weight, "compute cost weight"),
             (self.delay_cost_weight, "delay cost weight"),
@@ -340,6 +361,8 @@ class EndogenousPolicySnapshot:
             _non_negative(value, name)
         identity: JSONObject = {
             "version": self.version,
+            "selector_id": self.selector_id,
+            "selector_version": self.selector_version,
             "compute_cost_weight": self.compute_cost_weight,
             "delay_cost_weight": self.delay_cost_weight,
             "attention_cost_weight": self.attention_cost_weight,
@@ -354,6 +377,8 @@ class EndogenousPolicySnapshot:
         return {
             "policy_id": self.policy_id,
             "version": self.version,
+            "selector_id": self.selector_id,
+            "selector_version": self.selector_version,
             "compute_cost_weight": self.compute_cost_weight,
             "delay_cost_weight": self.delay_cost_weight,
             "attention_cost_weight": self.attention_cost_weight,
@@ -367,6 +392,8 @@ class EndogenousPolicySnapshot:
         return cls(
             policy_id=str(data["policy_id"]),
             version=str(data["version"]),
+            selector_id=str(data["selector_id"]),
+            selector_version=int(cast(int, data["selector_version"])),
             compute_cost_weight=float(cast(float, data["compute_cost_weight"])),
             delay_cost_weight=float(cast(float, data["delay_cost_weight"])),
             attention_cost_weight=float(cast(float, data["attention_cost_weight"])),
@@ -466,10 +493,13 @@ class CognitionScanRequest:
 @dataclass(frozen=True, slots=True)
 class DreamEpoch:
     epoch_id: str
+    consumer_id: str
     trigger_event_id: str
     event_log_cursor: int
     policy_id: str
     policy_version: str
+    selector_id: str
+    selector_version: int
     budget: BackgroundCognitiveBudget
     started_at: datetime
     expires_at: datetime
@@ -479,6 +509,7 @@ class DreamEpoch:
     def start(
         cls,
         *,
+        consumer_id: str,
         trigger_event_id: str,
         event_log_cursor: int,
         policy: EndogenousPolicySnapshot,
@@ -487,10 +518,13 @@ class DreamEpoch:
         expires_at: datetime,
     ) -> DreamEpoch:
         payload: JSONObject = {
+            "consumer_id": consumer_id,
             "trigger_event_id": trigger_event_id,
             "event_log_cursor": event_log_cursor,
             "policy_id": policy.policy_id,
             "policy_version": policy.version,
+            "selector_id": policy.selector_id,
+            "selector_version": policy.selector_version,
             "budget": budget.to_dict(),
             "started_at": started_at.isoformat(),
             "expires_at": expires_at.isoformat(),
@@ -498,10 +532,13 @@ class DreamEpoch:
         }
         return cls(
             epoch_id=_canonical_id("dream-epoch", payload),
+            consumer_id=consumer_id,
             trigger_event_id=trigger_event_id,
             event_log_cursor=event_log_cursor,
             policy_id=policy.policy_id,
             policy_version=policy.version,
+            selector_id=policy.selector_id,
+            selector_version=policy.selector_version,
             budget=budget,
             started_at=started_at,
             expires_at=expires_at,
@@ -511,11 +548,15 @@ class DreamEpoch:
     def __post_init__(self) -> None:
         for value, name in (
             (self.epoch_id, "dream epoch id"),
+            (self.consumer_id, "dream epoch consumer id"),
             (self.trigger_event_id, "dream epoch trigger event id"),
             (self.policy_id, "dream epoch policy id"),
             (self.policy_version, "dream epoch policy version"),
+            (self.selector_id, "dream epoch selector id"),
         ):
             _require_text(value, name)
+        if self.selector_version <= 0:
+            raise ValueError("dream epoch selector version must be positive")
         if self.event_log_cursor <= 0:
             raise ValueError("dream epoch cursor must identify a canonical event")
         _require_aware(self.started_at, "dream epoch started_at")
@@ -523,10 +564,13 @@ class DreamEpoch:
         if self.expires_at <= self.started_at:
             raise ValueError("dream epoch expiry must follow its start")
         identity: JSONObject = {
+            "consumer_id": self.consumer_id,
             "trigger_event_id": self.trigger_event_id,
             "event_log_cursor": self.event_log_cursor,
             "policy_id": self.policy_id,
             "policy_version": self.policy_version,
+            "selector_id": self.selector_id,
+            "selector_version": self.selector_version,
             "budget": self.budget.to_dict(),
             "started_at": self.started_at.isoformat(),
             "expires_at": self.expires_at.isoformat(),
@@ -538,10 +582,13 @@ class DreamEpoch:
     def to_dict(self) -> JSONObject:
         return {
             "epoch_id": self.epoch_id,
+            "consumer_id": self.consumer_id,
             "trigger_event_id": self.trigger_event_id,
             "event_log_cursor": self.event_log_cursor,
             "policy_id": self.policy_id,
             "policy_version": self.policy_version,
+            "selector_id": self.selector_id,
+            "selector_version": self.selector_version,
             "budget": self.budget.to_dict(),
             "started_at": self.started_at.isoformat(),
             "expires_at": self.expires_at.isoformat(),
@@ -552,10 +599,13 @@ class DreamEpoch:
     def from_dict(cls, data: Mapping[str, object]) -> DreamEpoch:
         return cls(
             epoch_id=str(data["epoch_id"]),
+            consumer_id=str(data["consumer_id"]),
             trigger_event_id=str(data["trigger_event_id"]),
             event_log_cursor=int(cast(int, data["event_log_cursor"])),
             policy_id=str(data["policy_id"]),
             policy_version=str(data["policy_version"]),
+            selector_id=str(data["selector_id"]),
+            selector_version=int(cast(int, data["selector_version"])),
             budget=BackgroundCognitiveBudget.from_dict(cast(Mapping[str, object], data["budget"])),
             started_at=_datetime(data, "started_at"),
             expires_at=_datetime(data, "expires_at"),
@@ -1372,4 +1422,27 @@ def dream_epoch_expired_event(
         subject=epoch.epoch_id,
         timestamp=expired_at,
         payload=payload,
+    )
+
+
+def dream_epoch_abandoned_event(
+    epoch: DreamEpoch,
+    *,
+    reason: DreamAbandonmentReason,
+    source: str,
+    abandoned_at: datetime,
+) -> Event:
+    payload: JSONObject = {
+        "epoch_id": epoch.epoch_id,
+        "reason": reason.value,
+        "abandoned_at": abandoned_at.isoformat(),
+    }
+    return _event(
+        event_id=f"dream-epoch-abandoned:{epoch.epoch_id}",
+        event_type=DREAM_EPOCH_ABANDONED_EVENT,
+        source=source,
+        subject=epoch.epoch_id,
+        timestamp=abandoned_at,
+        payload=payload,
+        causation_id=epoch.trigger_event_id,
     )

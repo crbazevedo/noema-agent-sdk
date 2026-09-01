@@ -65,10 +65,13 @@ internal cognitive demand without an external prompt. A model-free detector
 derives evidence-bearing inquiries from current roadmap health, commitment
 coverage, belief conflict/staleness, autonomic novelty, and peer disagreement.
 Explicit Value-of-Cognition terms compete for a finite background budget inside
-a replayable DREAM epoch. Selection is deterministic, crash-recoverable, and
-preemptible by foreground work. It remains shadow-first: no work dispatch,
-model call, goal mutation, capability invocation, or external effect is
-reachable from the endogenous worker.
+a replayable DREAM epoch. Each consumer owns at most one active epoch; the
+selector algorithm is durably version-pinned; unchanged inquiries cannot spend
+new budgets; and configured foreground events cause causal, event-driven
+preemption. Partial terminal scans are crash-recoverable without poison-event
+retry. The layer remains shadow-first: no work dispatch, model call, goal
+mutation, capability invocation, or external effect is reachable from the
+endogenous worker.
 
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture beyond this first bounded inquiry, calibration,

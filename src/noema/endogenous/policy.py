@@ -6,6 +6,8 @@ from datetime import datetime
 
 from ..types import JSONObject
 from .models import (
+    STABLE_GREEDY_SELECTOR_ID,
+    STABLE_GREEDY_SELECTOR_VERSION,
     ActivityDisposition,
     AgendaDecision,
     CognitiveResourceVector,
@@ -90,7 +92,45 @@ def select_intrinsic_agenda(
     estimates: tuple[ValueOfCognitionEstimate, ...],
     selected_at: datetime,
 ) -> IntrinsicAgendaSelection:
-    """Greedily select an audit-stable feasible subset; this is not an optimizer."""
+    """Dispatch selection through the algorithm pinned in durable epoch state."""
+
+    selector = (policy.selector_id, policy.selector_version)
+    epoch_selector = (epoch.selector_id, epoch.selector_version)
+    if epoch_selector != selector:
+        raise ValueError("dream epoch does not pin the supplied agenda selector")
+    if selector == (STABLE_GREEDY_SELECTOR_ID, STABLE_GREEDY_SELECTOR_VERSION):
+        return _select_stable_greedy_v1(
+            epoch=epoch,
+            policy=policy,
+            activities=activities,
+            estimates=estimates,
+            selected_at=selected_at,
+        )
+    raise ValueError(f"unsupported endogenous agenda selector: {selector[0]} v{selector[1]}")
+
+
+def ensure_selector_supported(policy: EndogenousPolicySnapshot) -> None:
+    """Fail closed before an epoch starts under an unknown selector."""
+
+    if (policy.selector_id, policy.selector_version) != (
+        STABLE_GREEDY_SELECTOR_ID,
+        STABLE_GREEDY_SELECTOR_VERSION,
+    ):
+        raise ValueError(
+            "unsupported endogenous agenda selector: "
+            f"{policy.selector_id} v{policy.selector_version}"
+        )
+
+
+def _select_stable_greedy_v1(
+    *,
+    epoch: DreamEpoch,
+    policy: EndogenousPolicySnapshot,
+    activities: tuple[IntrinsicActivity, ...],
+    estimates: tuple[ValueOfCognitionEstimate, ...],
+    selected_at: datetime,
+) -> IntrinsicAgendaSelection:
+    """Immutable v1 greedy selector; add a new function for later algorithms."""
 
     if selected_at.tzinfo is None:
         raise ValueError("agenda selection time must be timezone-aware")
