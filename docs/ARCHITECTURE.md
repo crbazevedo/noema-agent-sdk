@@ -1,12 +1,12 @@
 # Architecture
 
-> **Current revision:** 2026-09-01
+> **Current revision:** 2026-09-02
 >
-> **Implemented through:** v0.6 deterministic Endogenous Cognition shadow slice,
-> plus the deterministic Information Governance foundation
+> **Implemented through:** v0.6.1 deterministic Cognitive Reconsideration
+> shadow foundation, plus Information Governance
 >
-> **Accepted next direction:** v0.6.x Governed Allocation of Scarce Cognition
-> and Historical Reconsideration; implementation staged
+> **Accepted next direction:** learned Governed Allocation of Scarce Cognition;
+> deterministic allocation traces now exist
 >
 > **Remaining ADR-0009 stages:** production confidential artifacts, identity
 > attestation, and exhaustive sink/connector enforcement
@@ -680,10 +680,11 @@ foreground work, and cannot dispatch work or effects. The broader
 [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) remains the staged
 direction for later consolidation, simulation, learning, and scheduling.
 
-### Accepted direction: historical reconsideration and scarce cognition
+### Implemented foundation: historical reconsideration and scarce cognition
 
 [ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md)
-defines the staged v0.6.x architecture. Historical cognition retains
+defines the implemented v0.6.1 deterministic foundation and staged learned
+architecture. Historical cognition retains
 informational value but loses the intent, selection, and authority of the
 context that produced it. Returning to an old cognitive item always creates a
 new current evaluation:
@@ -697,8 +698,8 @@ RECONSIDER != RESUME
 ```
 
 Historical fulfilled, failed, and cancelled goals cannot re-authorize prior
-cognition. Their evidence may seed a new inquiry only under current live intent
-or an explicit `ReconsiderationMandate`. The mandate is staged user or
+cognition. Their evidence may seed a new candidate only under current live
+intent or an explicit `ReconsiderationMandate`. The mandate is user or
 constitutional authorization for bounded meta-cognition when no live goal
 supplies the basis. It pins scope, candidate classes/domains, budget, cadence or
 triggers, expiry, maximum interruption, surfacing policy, and information-use
@@ -714,9 +715,10 @@ CurrentCognitiveBasis
 ```
 
 The implemented v0.6 rule remains stricter: current endogenous inquiries
-require exact active or recovery-oriented blocked governing intent. The mandate
-is staged v0.6.x architecture only. A contradiction in evidence may motivate
-reconsideration but is not itself a conflict among goals.
+require exact active or recovery-oriented blocked governing intent. A mandate
+is executable only through a separate reconsideration candidate and shadow-
+proposal path. A contradiction in evidence may motivate reconsideration but is
+not itself a conflict among goals.
 
 `UserValue` is comparatively durable evidence of outcomes or principles that
 matter. `ValueAlignmentEstimate` measures candidate alignment with it, while
@@ -753,11 +755,12 @@ permitted for current cognition
 ```
 
 Feature stores, training sets, evaluation corpora, and estimator artifacts are
-governed derived views of canonical traces, never a second source of truth. No
-runtime reconsideration or allocation substrate is implemented by this
-architecture decision.
+governed derived views of canonical traces, never a second source of truth.
+The deterministic substrate is described in
+[Cognitive Reconsideration](COGNITIVE_RECONSIDERATION.md); learned estimators,
+training, exploration, and active allocation remain unimplemented.
 
-A future `CognitiveAllocationTrace` makes allocation evidence identifiable. It
+The implemented `CognitiveAllocationTrace` makes allocation evidence identifiable. It
 pins candidate provenance, features, hard-gate outcomes, policy and estimator
 versions, budget, one of `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, or
 `EXPLICITLY_REJECTED`, its causal reason or binding constraint, and selection
@@ -953,7 +956,7 @@ control until structural gates prove:
 - positive `NetVOC` means eligible rather than mandatory;
 - `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, and
   `EXPLICITLY_REJECTED` remain distinct evidence labels;
-- future allocation traces pin provenance, features, gates, policy/estimator
+- allocation traces pin provenance, features, gates, policy/estimator
   versions, budget, causal reason, and applicable behavior-policy evidence;
 - learned causal ranking rejects unidentifiable selection data;
 - high-stakes, identity-bound, or relationship-sensitive active exploration

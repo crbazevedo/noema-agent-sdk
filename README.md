@@ -73,6 +73,16 @@ retry. The layer remains shadow-first: no work dispatch, model call, goal
 mutation, capability invocation, or external effect is reachable from the
 endogenous worker.
 
+[Deterministic Cognitive Reconsideration](docs/COGNITIVE_RECONSIDERATION.md)
+adds a separate proposal-only path for revalidating historical inquiries under
+current evidence, Information Governance, and either exact live intent or an
+authenticated, revocable mandate. A version-pinned allocator prices explicit
+benefit against multidimensional cognitive cost, records one immutable trace
+per decision, and appends later outcome evidence without rewriting that trace.
+Historical goals never regain authority, unchanged scans are idempotent, and
+the worker can recover partial output without creating goals, work, actions, or
+effects. Learned allocation and broader historical sources remain staged.
+
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture beyond this first bounded inquiry, calibration,
 and intrinsic-agenda slice. Its schedulers, consolidation processes, generated
@@ -460,6 +470,9 @@ The test suite covers:
 - deterministic endogenous inquiry, finite cognitive-budget selection,
   negative-value suppression, peer calibration, replay, crash recovery, and
   foreground preemption;
+- deterministic historical-inquiry reconsideration under live intent or an
+  explicit mandate, Information Governance, scarce-budget allocation,
+  immutable traces, replay, crash recovery, and proposal-only surfacing;
 - multi-step autonomous incident recovery.
 
 The CI acceptance suite also runs the incident application against real
@@ -472,7 +485,10 @@ the deterministic Intent & Outcome Stewardship layer over it. v0.6 implements
 the first Endogenous Cognition slice: grounded inquiry, explicit
 Value-of-Cognition estimates, finite background budgets, deterministic shadow
 agendas, peer calibration, replay, recovery, and foreground preemption. It does
-not dispatch selected cognition as work or grant effect authority.
+not dispatch selected cognition as work or grant effect authority. v0.6.1 adds
+deterministic historical-inquiry reconsideration under a current cognitive
+basis, current governed evidence, and a separate finite budget. It records
+shadow proposals and allocation traces only; learned allocation remains staged.
 The deterministic Information Governance foundation is implemented as a
 separate cross-cutting layer. Its remaining artifact, sink, and connector slices
 must precede production use of restricted real-world context.
@@ -492,5 +508,9 @@ See [Architecture](docs/ARCHITECTURE.md), [architecture principles](docs/ARCHITE
 and its [ADR 0008](docs/adr/0008-intent-and-outcome-stewardship.md),
 the implemented [Endogenous Cognition](docs/ENDOGENOUS_COGNITION.md)
 and its [ADR 0010](docs/adr/0010-endogenous-cognition.md),
+the implemented
+[Deterministic Cognitive Reconsideration](docs/COGNITIVE_RECONSIDERATION.md)
+and its
+[ADR 0011](docs/adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md),
 the [Information Governance Foundation](docs/INFORMATION_GOVERNANCE.md), and
 [ADR 0009](docs/adr/0009-information-governance-and-confidential-context.md).

@@ -2,11 +2,11 @@
 
 > **Roadmap ID:** `noema-core`
 >
-> **Current revision:** 2026-09-01
+> **Current revision:** 2026-09-02
 >
-> **Status:** v0.1 through the deterministic v0.6 slice and the Information
-> Governance foundation implemented; v0.6.x architecture accepted and staged;
-> later milestones are planned
+> **Status:** v0.1 through the deterministic v0.6.1 Cognitive Reconsideration
+> foundation and Information Governance implemented; learned allocation and
+> later milestones remain staged or planned
 
 Noema is infrastructure for agents that maintain a coherent relationship with
 a changing world. Its releases should therefore tell a story of increasing
@@ -63,7 +63,7 @@ cross-cutting release gates, not a final wave.
 | **v0.5 — Durable Work Coordination** | Goals can become dependency-aware, recoverable, verified work. | **I organize work.** | Implemented |
 | **v0.5.x — Intent & Outcome Stewardship** | Work remains connected to revisable commitments and the user's actual outcomes. | **I know what I owe, whom it serves, and what should remain human.** | Deterministic slice implemented in v0.5.1 |
 | **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Deterministic shadow slice implemented |
-| **v0.6.x — Cognitive Reconsideration & Allocation** | Historical cognition can be revalidated under current intent and compete for scarce cognitive slack without blind resumption. | **I know what may deserve thought again.** | Accepted architecture direction; implementation staged |
+| **v0.6.1 — Deterministic Cognitive Reconsideration** | Historical inquiries can be revalidated under current intent or an explicit mandate and compete for scarce cognitive slack without blind resumption. | **I know what may deserve thought again.** | Deterministic shadow foundation implemented; learned allocation staged |
 | **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Planned |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
 | **v0.9 — Integrated Autonomous Runtime** | All cognitive systems operate together continuously under faults and budgets. | **I can keep going without being babysat.** | Planned |
@@ -366,7 +366,7 @@ See [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) and
 described in [Endogenous Cognition](ENDOGENOUS_COGNITION.md) and normatively
 bounded by [ADR 0010](adr/0010-endogenous-cognition.md).
 
-## v0.6.x — Cognitive Reconsideration & Allocation
+## v0.6.1 — Deterministic Cognitive Reconsideration
 
 Question: **What from the agent's history may deserve thought again now?**
 
@@ -377,7 +377,7 @@ Outcome:
 
 Voice: **I know what may deserve thought again.**
 
-Status: **Accepted architecture direction; implementation staged.**
+Status: **Deterministic shadow foundation implemented; learned allocation staged.**
 
 Historical cognition keeps informational value but loses its former authority.
 Reconsideration creates new cognition under a current cognitive basis, current
@@ -386,13 +386,13 @@ world state, current Information Governance, and a new causal cut:
 ```text
 historical cognition
     → current-basis/current-world revalidation
-    → new inquiry eligibility
+    → new reconsideration-candidate eligibility
     → deterministic scarce-budget allocation
 ```
 
 `RECONSIDER != RESUME`. Fulfilled, cancelled, and failed goals cannot revive old
-cognition. Their evidence may seed a new inquiry only under current live intent
-or an explicit standing `ReconsiderationMandate`. The mandate is staged user or
+cognition. Their evidence may seed a new candidate only under current live
+intent or an explicit standing `ReconsiderationMandate`. The mandate is user or
 constitutional authorization for bounded meta-cognition. It pins scope,
 candidate classes/domains, budget, cadence or triggers, expiry, interruption
 ceiling, surfacing policy, and information-use policy. It may inspect,
@@ -402,8 +402,9 @@ work, or execute effects. A reconsideration candidate remains distinct from an
 `Inquiry`, `Goal`, `Commitment`, `WorkOrder`, and `ActionIntent`.
 
 This does not change implemented v0.6: current endogenous inquiries still
-require exact `ACTIVE` or recovery-oriented `BLOCKED` governing intent. The
-mandate is accepted v0.6.x architecture only.
+require exact `ACTIVE` or recovery-oriented `BLOCKED` governing intent. A
+mandate is executable only through the separate reconsideration candidate and
+shadow-proposal path.
 
 The staged deterministic policy keeps comparatively durable `UserValue`,
 candidate `ValueAlignmentEstimate`, and `ExpectedOutcomeValue` distinct. A
@@ -428,7 +429,7 @@ safety, and user-agency constraints run before learned ranking. Operational use
 of governed information does not automatically permit training or evaluation
 use.
 
-A future `CognitiveAllocationTrace` must make learning identifiable by pinning
+The implemented `CognitiveAllocationTrace` makes future learning identifiable by pinning
 candidate provenance, features, hard gates, estimator/policy versions, budget,
 one of `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, or
 `EXPLICITLY_REJECTED`, its causal reason, applicable behavior-policy evidence,
@@ -437,9 +438,11 @@ with value or non-selection with failure. High-stakes, identity-bound, or
 relationship-sensitive exploration requires separate authorization; no
 bandit/RL algorithm is chosen here.
 
-The normative architecture is
+The bounded implementation is described in
+[Deterministic Cognitive Reconsideration](COGNITIVE_RECONSIDERATION.md) and
+normatively governed by
 [ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md).
-No v0.6.x runtime substrate is implemented by this roadmap update.
+Learned allocation, exploration, and wider historical sources remain staged.
 
 ## v0.7 — Habit Learning
 
@@ -561,8 +564,8 @@ right not to require deliberation anymore. Learned Allocation sits inside—not
 above—Governed Allocation of Scarce Cognition. Learned estimators predict an
 inspectable outcome vector and never learn sovereign terminal utility.
 Information Governance separately gates live allocation features and every
-future training or evaluation corpus. A future `CognitiveAllocationTrace` must
-retain allocation labels, binding constraints, behavior-policy evidence when
+future training or evaluation corpus. The implemented `CognitiveAllocationTrace`
+retains allocation labels, binding constraints, behavior-policy evidence when
 applicable, and later outcomes so counterfactual evaluation is identifiable.
 Active exploration for high-stakes or identity-sensitive resurfacing remains
 separately authorized.

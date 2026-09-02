@@ -84,6 +84,32 @@ Preemption requires a foreground event sequenced after the pinned cut. These
 events represent cognition proposals only and never imply work dispatch,
 authorization, or effect.
 
+## Cognitive reconsideration events
+
+```text
+reconsideration.mandate_recorded
+reconsideration.mandate_revoked
+reconsideration.policy_recorded
+reconsideration.scan_requested
+reconsideration.candidate_recorded
+reconsideration.allocation_recorded
+reconsideration.allocation_trace_recorded
+reconsideration.allocation_outcome_linked
+reconsideration.shadow_proposal_recorded
+```
+
+A scan cites historical `Inquiry` provenance but creates a new candidate under
+current evidence and either exact live intent or an authenticated, current
+mandate. Mandate admission and all state-dependent outputs use exact-head
+compare-and-append; replay validates the actual preceding canonical head and
+does not assume contiguous database sequences. Candidate and output identities
+are content-addressed, and a generic consumer checkpoint advances only after
+the required allocation, traces, and shadow proposals are durable.
+
+Allocation traces are immutable. Later response or outcome evidence uses an
+append-only link event. These events cannot reactivate goals, admit work,
+create action intents, grant authority, or execute effects.
+
 ## Causal chain
 
 A typical episode is reconstructable as:

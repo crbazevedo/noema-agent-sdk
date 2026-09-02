@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 0.6.1 — 2026-09-02
+
+- added immutable, authenticated and explicitly revocable
+  `ReconsiderationMandate` revisions without encoding mandates as goals;
+- preserved v0.6 event identity by implementing mandate-based reconsideration
+  as a separate shadow path over historical `Inquiry` provenance;
+- added explicit current cognitive bases, historical references, evidence-
+  backed feature snapshots, multidimensional scarce-cognition costs and
+  budgets, and a version-pinned deterministic allocator;
+- recorded exact `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, and
+  `EXPLICITLY_REJECTED` label semantics without generating counterfactual
+  labels or behavior-policy probabilities;
+- added immutable `CognitiveAllocationTrace` records and append-only later-
+  outcome links, preserving allocation conditions for future identifiable
+  learning without authorizing learning itself;
+- required current Information Governance `REASON` decisions for every
+  governed historical source and kept operational-use permission distinct from
+  future learning permission;
+- added a crash-recoverable, effect-free reconsideration worker using
+  content-addressed outputs, exact-head CAS, canonical replay, and generic
+  consumer checkpoints;
+- proved historical-goal non-authority, same-lineage live-intent
+  reconsideration, mandate expiry/revocation/scope/cadence/trigger/interruption
+  gates, foreground preemption, unknown-feature and negative-value silence,
+  finite-budget deferral, unchanged-scan idempotence, sequence-gap safety, and
+  proposal-only output;
+- added structural gates preventing the reconsideration core and worker from
+  creating goals, commitments, work, actions, capabilities, or effects.
+
 ## 0.6.0 — 2026-09-01
 
 - added immutable, content-addressed `Inquiry`, `IntrinsicActivity`,

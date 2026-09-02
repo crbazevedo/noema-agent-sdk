@@ -460,6 +460,110 @@ class ArchitectureFitnessTests(unittest.TestCase):
                 violations.append(f"calls {node.func.attr}")
         self.assertEqual(violations, [])
 
+    def test_reconsideration_core_is_history_only_and_cannot_mutate_agency(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        reconsideration_root = source_root / "reconsideration"
+        forbidden_modules = {
+            "adapters",
+            "agent",
+            "authority",
+            "capabilities",
+            "delivery",
+            "intent",
+            "kernel",
+            "models",
+            "reasoning",
+            "scheduler",
+            "store",
+            "system",
+            "work",
+        }
+        forbidden_calls = {
+            "authorize",
+            "deliberate",
+            "dispatch",
+            "execute",
+            "invoke",
+            "record_commitment",
+            "record_goal_revision",
+        }
+        forbidden_names = {"ActionIntent", "Capability", "Commitment", "Goal", "WorkOrder"}
+        violations: list[str] = []
+        for path in reconsideration_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    root = node.module.split(".")[0]
+                    if node.level >= 2 and root in forbidden_modules:
+                        violations.append(
+                            f"{path.relative_to(source_root)} imports {node.module}"
+                        )
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        parts = alias.name.split(".")
+                        if (
+                            len(parts) >= 2
+                            and parts[0] == "noema"
+                            and parts[1] in forbidden_modules
+                        ):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports {alias.name}"
+                            )
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in forbidden_calls
+                ):
+                    violations.append(
+                        f"{path.relative_to(source_root)} calls {node.func.attr}"
+                    )
+                if isinstance(node, ast.Name) and node.id in forbidden_names:
+                    violations.append(
+                        f"{path.relative_to(source_root)} references {node.id}"
+                    )
+        self.assertEqual(violations, [])
+
+    def test_reconsideration_worker_cannot_create_goals_work_actions_or_effects(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        path = source_root / "reconsideration_worker.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        forbidden_modules = {
+            "adapters",
+            "agent",
+            "authority",
+            "capabilities",
+            "intent",
+            "models",
+            "reasoning",
+            "scheduler",
+            "work",
+        }
+        forbidden_calls = {
+            "authorize",
+            "deliberate",
+            "dispatch",
+            "execute",
+            "invoke",
+            "record_commitment",
+            "record_goal_revision",
+        }
+        forbidden_names = {"ActionIntent", "Capability", "Commitment", "Goal", "WorkOrder"}
+        violations: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                root = node.module.split(".")[0]
+                if node.level >= 1 and root in forbidden_modules:
+                    violations.append(f"imports {node.module}")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in forbidden_calls
+            ):
+                violations.append(f"calls {node.func.attr}")
+            if isinstance(node, ast.Name) and node.id in forbidden_names:
+                violations.append(f"references {node.id}")
+        self.assertEqual(violations, [])
+
     def test_information_governance_core_is_not_authority_memory_or_effect_plane(self) -> None:
         source_root = Path(__file__).parents[1] / "src" / "noema"
         information_root = source_root / "information"

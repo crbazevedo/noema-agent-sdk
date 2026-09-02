@@ -76,19 +76,19 @@ principle they change.
 | Cognitive policy pins code semantics | Policy and DREAM state identify an immutable agenda-selector implementation; unknown versions fail closed. |
 | Competence does not grant authority | A future SkillForge may propose a capability; capability registration and authority remain independent gates. |
 
-## Accepted staged principles
+## Implemented deterministic principles and staged learning principles
 
-These principles govern the accepted v0.6.x architecture direction. They are
-normative for a future implementation but do not claim that reconsideration or
-learned allocation runtime contracts exist yet.
+These principles govern the implemented v0.6.1 deterministic reconsideration
+foundation and the staged learned-allocation direction. Learning contracts do
+not exist yet.
 
-| Principle | Required future consequence |
+| Principle | Enforced or staged consequence |
 |---|---|
 | Historical cognition loses authority, not value | Prior cognition remains immutable evidence, but old goals, selections, priorities, and authority cannot directly govern a new allocation. |
 | Reconsideration is not resumption | Historical cognition returns only as newly admitted cognition after current-basis/current-world revalidation and a fresh causal cut. |
 | Cognitive basis is explicit | Reconsideration requires current live governing intent or an explicit, unexpired, scope-matching reconsideration mandate; historical goals never supply authority. |
 | A reconsideration mandate is bounded meta-cognitive authority | The mandate pins scope, candidate classes/domains, budget, cadence/triggers, expiry, interruption, surfacing, and information-use policy; it cannot create/reactivate goals, obligations, work, or effects. |
-| Implemented and staged intent rules differ explicitly | Implemented v0.6 still requires exact `ACTIVE`/`BLOCKED` governing intent; mandate-based reconsideration is staged v0.6.x architecture only. |
+| Goal-bound and mandate-based cognition stay separate | v0.6 `Inquiry` still requires exact `ACTIVE`/`BLOCKED` governing intent; mandate-based cognition uses a separate reconsideration candidate and shadow-proposal path. |
 | Closed intent cannot self-revive | Fulfilled, failed, and cancelled goals may supply historical evidence but cannot themselves authorize a new inquiry. |
 | Cognitive identity is layered | A reconsideration candidate, inquiry, goal, work order, and action intent cannot substitute for one another. |
 | Value semantics remain distinct | Durable user-value evidence, candidate value alignment, expected outcome value, scoped preference, motivation, intent, and commitment require separate evidence and cannot substitute for one another. |
@@ -98,7 +98,7 @@ learned allocation runtime contracts exist yet.
 | Scarce cognition is multidimensional | Compute, wall time, money, user attention, interruption, privacy exposure, and opportunity cost remain hard, inspectable budget dimensions. |
 | Positive NetVOC is eligibility | A positive estimate permits portfolio consideration; it does not mandate selection or bypass any gate. |
 | Selection absence is censored evidence | `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, `EXPLICITLY_REJECTED`, and later outcomes remain distinct labels for evaluation and learning. |
-| Allocation learning requires identifiable evidence | A future cognitive-allocation trace pins provenance, features, gates, versions, budget, causal label, and applicable behavior-policy evidence before causal ranking is allowed. |
+| Allocation learning requires identifiable evidence | The deterministic cognitive-allocation trace pins provenance, features, gates, versions, budget, causal label, and applicable behavior-policy evidence before causal ranking is allowed. |
 | High-stakes exploration is separately authorized | Active exploration for high-stakes, identity-bound, or relationship-sensitive resurfacing is prohibited without explicit separate authority. |
 | Learned estimation is not sovereign utility | Estimators emit versioned outcome and cost vectors; they cannot learn or replace terminal user values. |
 | Hard gates precede learned scores | Current intent, authority, safety, information access, and user agency constrain the candidate set before learned ranking. |

@@ -1,6 +1,7 @@
 # ADR 0011: Governed allocation of scarce cognition and historical reconsideration
 
-- Status: Accepted architecture direction; implementation staged
+- Status: Accepted — deterministic v0.6.1 shadow foundation implemented;
+  learned allocation remains staged
 - Date: 2026-09-01
 - Scope: historical reconsideration, scarce-cognition allocation, learned
   outcome estimation, information-use governance, and authority boundaries
@@ -36,8 +37,9 @@ of displacing other thought. A future learned allocator may improve estimates
 of outcomes and costs, but it must not infer sovereign values, manufacture
 intent, or weaken hard constraints.
 
-The names in this ADR describe architectural roles and boundaries. They are not
-claims that runtime models, classes, allocators, or events are implemented.
+The deterministic v0.6.1 contracts, allocator, events, projection, and shadow
+worker described below are implemented. Learned estimators, exploration,
+training, and active allocation remain staged.
 
 ## Decision
 
@@ -54,18 +56,20 @@ old intent basis != current intent basis
 old authority != current authority
 ```
 
-A historical item may seed a new inquiry only after revalidation against the
+A historical item may seed new cognition only after revalidation against the
 current canonical world, current cognitive basis, current information policy,
-and current cognitive budget. The new inquiry receives a new causal cut and a
-new allocation decision. The historical item remains immutable provenance.
+and current cognitive budget. The v0.6.1 implementation creates a distinct
+`ReconsiderationCandidate` and shadow proposal with a new causal cut and
+allocation decision; it does not generalize or resume the stored v0.6 inquiry.
+The historical item remains immutable provenance.
 
 Fulfilled, cancelled, and failed goals cannot re-authorize cognition merely
-because they once governed it. Their evidence may contribute to a new inquiry
+because they once governed it. Their evidence may contribute to new cognition
 only when independently relevant to a separately current cognitive basis.
 
 ### Require a current cognitive basis
 
-The staged v0.6.x direction permits two—and only two—sources of cognitive basis:
+The v0.6.1 foundation permits two—and only two—sources of cognitive basis:
 
 ```text
 CurrentCognitiveBasis
@@ -437,7 +441,7 @@ This ADR does not authorize RDDL/MDP/RL scheduling, HabitForge, SkillForge,
 endogenous work dispatch, new effect paths, external connectors, or production
 training on governed information.
 
-## Required fitness functions for a future implementation
+## Required fitness functions
 
 - terminal historical goals cannot authorize new cognition;
 - every reconsideration cites either current live governing intent or an
@@ -461,7 +465,7 @@ training on governed information.
 - positive `NetVOC` establishes eligibility only;
 - `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, and
   `EXPLICITLY_REJECTED` remain distinct labels;
-- each future `CognitiveAllocationTrace` pins features, hard gates, policy and
+- each `CognitiveAllocationTrace` pins features, hard gates, policy and
   estimator versions, budget, causal reason, and applicable behavior-policy
   evidence;
 - subsequent response and outcome evidence links to rather than mutates its
