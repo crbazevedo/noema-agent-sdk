@@ -76,6 +76,29 @@ principle they change.
 | Cognitive policy pins code semantics | Policy and DREAM state identify an immutable agenda-selector implementation; unknown versions fail closed. |
 | Competence does not grant authority | A future SkillForge may propose a capability; capability registration and authority remain independent gates. |
 
+## Accepted staged principles
+
+These principles govern the accepted v0.6.x architecture direction. They are
+normative for a future implementation but do not claim that reconsideration or
+learned allocation runtime contracts exist yet.
+
+| Principle | Required future consequence |
+|---|---|
+| Historical cognition loses authority, not value | Prior cognition remains immutable evidence, but old goals, selections, priorities, and authority cannot directly govern a new allocation. |
+| Reconsideration is not resumption | Historical cognition returns only as newly admitted cognition after current-intent/current-world revalidation and a fresh causal cut. |
+| Closed intent cannot self-revive | Fulfilled, failed, and cancelled goals may supply historical evidence but cannot authorize a new inquiry without independently live current intent. |
+| Cognitive identity is layered | A reconsideration candidate, inquiry, goal, work order, and action intent cannot substitute for one another. |
+| Value semantics remain distinct | Value, preference, motivation, intent, and commitment require separate evidence and cannot be inferred from one another. |
+| Motivation is not authority | A strong reason to think cannot create intent, grant permission, or authorize work or effects. |
+| Epistemic and strategic conflict differ | Contradictory evidence may motivate inquiry but cannot establish goal conflict without an explicit strategic relation. |
+| Scarce cognition is multidimensional | Compute, wall time, money, user attention, interruption, privacy exposure, and opportunity cost remain hard, inspectable budget dimensions. |
+| Positive NetVOC is eligibility | A positive estimate permits portfolio consideration; it does not mandate selection or bypass any gate. |
+| Selection absence is censored evidence | Non-selection, constraint deferral, rejection, and negative outcome remain distinct labels for evaluation and learning. |
+| Learned estimation is not sovereign utility | Estimators emit versioned outcome and cost vectors; they cannot learn or replace terminal user values. |
+| Hard gates precede learned scores | Current intent, authority, safety, information access, and user agency constrain the candidate set before learned ranking. |
+| Learning use is separately governed | Permission to use information for current cognition never automatically permits training, calibration, evaluation, or benchmarking reuse. |
+| Learning stages earn authority | Deterministic allocation precedes traces, calibrated estimation, counterfactual evaluation, shadow allocation, and only then bounded active allocation. |
+
 Structural enforcement lives in `tests/test_architecture.py`, schema/replay
 tests, and distributed fault tests. Documentation alone is not considered an
 enforcement mechanism.

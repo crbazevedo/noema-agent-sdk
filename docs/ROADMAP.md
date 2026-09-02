@@ -5,7 +5,8 @@
 > **Current revision:** 2026-09-01
 >
 > **Status:** v0.1 through the deterministic v0.6 slice and the Information
-> Governance foundation implemented; later milestones are planned
+> Governance foundation implemented; v0.6.x architecture accepted and staged;
+> later milestones are planned
 
 Noema is infrastructure for agents that maintain a coherent relationship with
 a changing world. Its releases should therefore tell a story of increasing
@@ -62,6 +63,7 @@ cross-cutting release gates, not a final wave.
 | **v0.5 — Durable Work Coordination** | Goals can become dependency-aware, recoverable, verified work. | **I organize work.** | Implemented |
 | **v0.5.x — Intent & Outcome Stewardship** | Work remains connected to revisable commitments and the user's actual outcomes. | **I know what I owe, whom it serves, and what should remain human.** | Deterministic slice implemented in v0.5.1 |
 | **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Deterministic shadow slice implemented |
+| **v0.6.x — Cognitive Reconsideration & Allocation** | Historical cognition can be revalidated under current intent and compete for scarce cognitive slack without blind resumption. | **I know what may deserve thought again.** | Accepted architecture direction; implementation staged |
 | **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Planned |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
 | **v0.9 — Integrated Autonomous Runtime** | All cognitive systems operate together continuously under faults and budgets. | **I can keep going without being babysat.** | Planned |
@@ -82,7 +84,8 @@ Cross-cutting before restricted real-world context
 Information Governance and Confidential Context
 
 Arc III — developmental agency
-Endogenous Cognition → Habit Learning → Situated Presence
+Endogenous Cognition → Cognitive Reconsideration & Allocation
+                      → Habit Learning → Situated Presence
 
 Arc IV — proof
 Situated Presence → Integrated Autonomous Runtime → Durable Cognitive Agency
@@ -363,6 +366,54 @@ See [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) and
 described in [Endogenous Cognition](ENDOGENOUS_COGNITION.md) and normatively
 bounded by [ADR 0010](adr/0010-endogenous-cognition.md).
 
+## v0.6.x — Cognitive Reconsideration & Allocation
+
+Question: **What from the agent's history may deserve thought again now?**
+
+Outcome:
+
+> Historical cognition can be revalidated under current intent and compete for
+> scarce cognitive slack without blind resumption.
+
+Voice: **I know what may deserve thought again.**
+
+Status: **Accepted architecture direction; implementation staged.**
+
+Historical cognition keeps informational value but loses its former authority.
+Reconsideration creates new cognition under current intent, current world state,
+current Information Governance, and a new causal cut:
+
+```text
+historical cognition
+    → current-intent/current-world revalidation
+    → new inquiry eligibility
+    → deterministic scarce-budget allocation
+```
+
+`RECONSIDER != RESUME`. Fulfilled, cancelled, and failed goals cannot revive old
+cognition. Their evidence may seed a new inquiry only under independently live
+current intent. A reconsideration candidate remains distinct from an `Inquiry`,
+`Goal`, `WorkOrder`, and `ActionIntent`.
+
+The staged deterministic policy exposes value alignment, preference fit,
+motivation, portfolio coherence, clarity, resolvability, feasibility, meaningful
+new evidence, regret of silence, opportunity-window value, and residual
+unresolvedness. It prices compute, revalidation, attention, context switching,
+intrusion, privacy/risk, and opportunity cost against a budget that also treats
+wall time, monetary cost, and interruption as scarce. Positive `NetVOC` means
+eligible, not mandatory; non-selection and constraint deferral are not negative
+evidence.
+
+Future estimators produce an explicit vector of outcome and cost estimates, not
+a learned scalar user utility. Hard intent, authority, information-access,
+safety, and user-agency constraints run before learned ranking. Operational use
+of governed information does not automatically permit training or evaluation
+use.
+
+The normative architecture is
+[ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md).
+No v0.6.x runtime substrate is implemented by this roadmap update.
+
 ## v0.7 — Habit Learning
 
 Question: **Which cognition has the agent earned the right not to perform?**
@@ -461,6 +512,28 @@ of cognitive demand. v0.6 implements its first shadow contracts only after
 memory, orientation, work, and intent stewardship provide something grounded
 to maintain. Intrinsic activity remains subordinate, budgeted, preemptible,
 single-spend per epoch, and proposal-only.
+
+### Learned Allocation of Scarce Cognition
+
+This cross-cutting research track connects Endogenous Cognition,
+reconsideration, and Habit Learning without collapsing their meanings:
+
+```text
+deterministic allocation
+    → allocation/outcome traces
+    → calibrated estimators
+    → counterfactual evaluation
+    → shadow learned allocation
+    → bounded active allocation
+```
+
+Endogenous Cognition asks what deserves thought now; reconsideration asks what
+deserves thought again; Habit Learning asks what no longer deserves
+deliberation. The longer-term architecture is therefore Governed / Learned
+Allocation of Scarce Cognition. Learned estimators predict an inspectable
+outcome vector and never learn sovereign terminal utility. Information
+Governance separately gates live allocation features and every future training
+or evaluation corpus.
 
 ### User value
 

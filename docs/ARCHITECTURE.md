@@ -5,6 +5,9 @@
 > **Implemented through:** v0.6 deterministic Endogenous Cognition shadow slice,
 > plus the deterministic Information Governance foundation
 >
+> **Accepted next direction:** v0.6.x Governed Allocation of Scarce Cognition
+> and Historical Reconsideration; implementation staged
+>
 > **Remaining ADR-0009 stages:** production confidential artifacts, identity
 > attestation, and exhaustive sink/connector enforcement
 
@@ -57,6 +60,9 @@ Noema is a general substrate for long-running autonomous systems. It separates:
 - external workstreams from Noema-owned work graphs;
 - signals from inquiries, intrinsic cognitive allocation, durable work, and
   action proposals;
+- historical cognition from current cognitive authority;
+- value from preference, motivation, intent, and commitment;
+- epistemic contradiction from goal conflict;
 - cognition from effectful capabilities;
 - action proposals from authorization;
 - capability from competence, information access, and authority;
@@ -65,7 +71,7 @@ Noema is a general substrate for long-running autonomous systems. It separates:
 - autonomy from opacity;
 - agent identity from the cognitive policies it instantiates.
 
-The most important type boundary for the next architecture slice is:
+The most important cross-cutting identity and authority boundaries are:
 
 ```text
 Goal/GoalRevision != Roadmap/RoadmapRevision != Commitment
@@ -75,6 +81,14 @@ Goal/GoalRevision != Roadmap/RoadmapRevision != Commitment
 IntentAuthority != EffectAuthority
 
 Signal != Inquiry != IntrinsicActivity != WorkOrder != ActionIntent
+
+ReconsiderationCandidate != Inquiry != Goal != WorkOrder != ActionIntent
+
+Value != Preference != Motivation != Intent != Commitment
+
+Motivation != Authority
+
+EpistemicContradiction != GoalConflict
 ```
 
 An agent's ability to perform a task does not imply that the agent should own
@@ -654,6 +668,57 @@ foreground work, and cannot dispatch work or effects. The broader
 [Endogenous Drive Ecology](ENDOGENOUS_DRIVE_ECOLOGY.md) remains the staged
 direction for later consolidation, simulation, learning, and scheduling.
 
+### Accepted direction: historical reconsideration and scarce cognition
+
+[ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md)
+defines the staged v0.6.x architecture. Historical cognition retains
+informational value but loses the intent, selection, and authority of the
+context that produced it. Returning to an old cognitive item always creates a
+new current evaluation:
+
+```text
+historical cognition
+    --current-intent/current-world revalidation-->
+new cognition
+
+RECONSIDER != RESUME
+```
+
+Historical fulfilled, failed, and cancelled goals cannot re-authorize prior
+cognition. Their evidence may seed a new inquiry only under independently live
+current intent. A contradiction in evidence may motivate reconsideration but is
+not itself a conflict among goals.
+
+One future allocation portfolio combines foreground demand, current endogenous
+demand, and reconsideration demand. It remains constrained by compute, wall
+time, monetary cost, user attention, interruption, privacy exposure, and
+opportunity cost. Deterministic reconsideration must precede learned active
+allocation and must expose value alignment, preference fit, motivation,
+portfolio coherence, clarity, resolvability, feasibility, new evidence, regret
+of silence, opportunity-window value, and residual unresolvedness alongside
+explicit compute, revalidation, attention, context-switching, intrusion,
+privacy/risk, and opportunity costs.
+
+Positive `NetVOC` establishes eligibility only. Non-selection, deferral by a
+constraint, rejection, and negative outcome retain distinct meanings. Learned
+estimators may later emit a versioned vector of outcome and cost estimates; they
+cannot learn a sovereign terminal utility, create intent, or grant authority.
+Hard intent, authority, safety, information-access, and user-agency constraints
+run before any learned ranking.
+
+Information Governance applies independently to live cognitive use and to
+training or evaluation reuse:
+
+```text
+permitted for current cognition
+    != automatically permitted for learning
+```
+
+Feature stores, training sets, evaluation corpora, and estimator artifacts are
+governed derived views of canonical traces, never a second source of truth. No
+runtime reconsideration or allocation substrate is implemented by this
+architecture decision.
+
 ## Situation graph and agent cycle
 
 The built-in situation projection supports facts, entities, typed relations,
@@ -708,6 +773,8 @@ mutation authority.
 | Reactive compatibility | Admit a direct user, incident, maintenance, external-obligation, or inquiry `WorkOrder` without manufacturing a roadmap commitment. |
 | Human agency | Give Noema a technically executable but identity-bound decision; preserve user ownership while preparing permitted support work inside the assistance envelope. |
 | Confidentiality | Derive a summary and work plan from a protected artifact; typed policy composition blocks unauthorized internal retrieval and external disclosure, and redaction alone does not declassify it. |
+| Historical reconsideration | Encounter useful cognition created under closed intent; retain it as evidence but require current live intent, current world revalidation, a new causal cut, and a new allocation before it can return. |
+| Learned allocation governance | Train or evaluate an estimator from operational traces; include only purpose-permitted governed projections, preserve censored selection labels, and keep hard constraints ahead of scores. |
 | Modifiability | Replace a model, broker, store, planner, sensor, or optimizer; stable domain contracts and acceptance semantics remain unchanged. |
 | Auditability | Reconstruct why the system believed, refreshed, prioritized, committed, delegated, authorized, disclosed, and acted from canonical history and policy versions. |
 | Performance | Process a million-event life while keeping expensive cognition sparse and projections rebuildable; indexes and snapshots may accelerate but never become authority. |
@@ -729,11 +796,15 @@ mutation authority.
 | Abstraction | A supposedly safe abstraction may retain identifying structure. | Transformation retains source policy; only a separately authorized declassification decision may loosen it. |
 | Rebuild cost | Event-only projections can become expensive at scale. | Disposable verified snapshots and indexes pinned to canonical cursors; never a second writable source of truth. |
 | Learned habits | Compression can hide regret or bypass novelty. | Counterexamples, replay, collision analysis, shadow/canary stages, drift and novelty escape paths. |
+| Historical resumption | Old cognition can smuggle obsolete intent or priority into current behavior. | Reconsideration creates a new inquiry basis after current-intent/current-world revalidation; closed goals contribute evidence only. |
+| Learned cognitive allocation | A scalar score can collapse values into proxy utility and misread non-selection as failure. | Estimate an explicit outcome vector, preserve selection/constraint labels, and apply hard gates before ranking. |
+| Secondary information use | Operational access can silently become permission to train or evaluate. | Independently authorize learning purposes and preserve policy lineage in every derived corpus and artifact. |
 
 The most sensitive future decisions are the algebra for policy inheritance, the
 threshold for roadmap review, the intervention objective, declassification
-authority, and portfolio resource allocation. They require real execution data
-and adversarial acceptance scenarios before learned control is permitted.
+authority, reconsideration labels, learned outcome calibration, and portfolio
+resource allocation. They require real execution data and adversarial
+acceptance scenarios before learned control is permitted.
 
 ## Fitness functions and structural gates
 
@@ -799,6 +870,23 @@ The staged information-governance implementation must add gates that prove:
 - every projection rebuilds from a declared canonical cursor and emits
   byte-equivalent semantic state for identical history.
 
+The accepted but unimplemented v0.6.x architecture must not advance to active
+control until structural gates prove:
+
+- terminal historical intent cannot authorize new cognition;
+- reconsideration preserves immutable history and creates a fresh causal basis;
+- a candidate, inquiry, goal, work order, and action intent cannot substitute
+  for one another;
+- positive `NetVOC` means eligible rather than mandatory;
+- non-selection, constraint deferral, rejection, and negative outcome remain
+  distinct evidence labels;
+- learned estimators emit outcome vectors rather than sovereign terminal
+  utility;
+- intent, authority, safety, information access, and user agency gate learned
+  scores; and
+- permission for current cognition cannot silently authorize training or
+  evaluation reuse.
+
 See [Architecture principles](ARCHITECTURE_PRINCIPLES.md) for current release
 invariants.
 
@@ -861,6 +949,9 @@ policy.
   deterministic information-governance foundation implemented; confidential
   artifact and exhaustive sink integration staged;
 - [ADR 0010](adr/0010-endogenous-cognition.md): implemented deterministic,
-  finite, preemptible, shadow-first endogenous cognition.
+  finite, preemptible, shadow-first endogenous cognition;
+- [ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md):
+  accepted staged architecture for historical reconsideration and governed,
+  eventually learned allocation of scarce cognition.
 
 See the [roadmap](ROADMAP.md) for delivery order and release acceptances.
