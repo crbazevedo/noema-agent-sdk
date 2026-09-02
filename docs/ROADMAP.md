@@ -481,12 +481,14 @@ The implemented foundation proves quarantine before policy resolution, typed
 operation-specific policy composition, provenance inheritance, internal
 `InformationAccessDecision`, trust-boundary `DisclosureDecision`, explicit
 declassification after redaction/abstraction, safe governance-event envelopes,
-immutable historical context, and distinct canonical decisions versus bounded
-audit receipts. It enforces explicitly governed memory retrieval, model context,
-and worker feasibility. Production encrypted artifact retention, real restricted
-ingestion, global event-envelope retrofitting, and exhaustive gates for model
-responses, tools, agents, telemetry, traces, logs, caches, indexes, fixtures,
-errors, connectors, and outputs remain staged.
+immutable historical context, exact-head admission for material decisions,
+effective immutable declassified views, and distinct canonical decisions versus
+non-authorizing bounded audit receipts. It enforces explicitly governed memory
+retrieval, model context, and access-plus-disclosure worker feasibility.
+Production encrypted artifact retention, real restricted ingestion, global
+event-envelope retrofitting, and exhaustive gates for model responses, tools,
+agents, telemetry, traces, logs, caches, indexes, fixtures, errors, connectors,
+and outputs remain staged.
 
 ## Measures of success
 

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import cast
+from typing import Protocol, cast
 
 from ..events import Event
 from ..types import JSONObject, JSONValue, parse_datetime
@@ -21,6 +22,7 @@ INFORMATION_QUARANTINED_EVENT = "information.quarantined"
 INFORMATION_ACCESS_DECIDED_EVENT = "information.access_decided"
 DISCLOSURE_DECIDED_EVENT = "information.disclosure_decided"
 DECLASSIFICATION_DECIDED_EVENT = "information.declassification_decided"
+DECLASSIFIED_VIEW_RECORDED_EVENT = "information.declassified_view_recorded"
 SECURITY_AUDIT_RECEIPT_EVENT = "information.security_audit_receipt"
 
 INFORMATION_GOVERNANCE_EVENT_TYPES = (
@@ -31,6 +33,7 @@ INFORMATION_GOVERNANCE_EVENT_TYPES = (
     INFORMATION_ACCESS_DECIDED_EVENT,
     DISCLOSURE_DECIDED_EVENT,
     DECLASSIFICATION_DECIDED_EVENT,
+    DECLASSIFIED_VIEW_RECORDED_EVENT,
     SECURITY_AUDIT_RECEIPT_EVENT,
 )
 
@@ -71,12 +74,48 @@ def _canonical_id(prefix: str, payload: Mapping[str, JSONValue]) -> str:
     return f"{prefix}_{hashlib.sha256(encoded).hexdigest()[:32]}"
 
 
-def opaque_information_id(*, namespace: str, stable_key: str) -> str:
-    """Create an opaque fixture/reference id; ``stable_key`` must not be protected content."""
+class OpaqueInformationIdDeriver(Protocol):
+    """Boundary port for dictionary-resistant governed-information identifiers."""
 
-    _require_text(namespace, "information namespace")
-    _require_text(stable_key, "information stable key")
-    return _canonical_id("info", {"namespace": namespace, "stable_key": stable_key})
+    def derive(self, *, namespace: str, stable_key: str) -> str: ...
+
+
+@dataclass(frozen=True, slots=True)
+class HmacOpaqueInformationIdDeriver:
+    """Derive opaque identifiers with a caller-owned secret key."""
+
+    derivation_key: bytes = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if len(self.derivation_key) < 32:
+            raise ValueError("opaque identifier derivation key must contain at least 32 bytes")
+
+    def derive(self, *, namespace: str, stable_key: str) -> str:
+        _require_text(namespace, "information namespace")
+        _require_text(stable_key, "information stable key")
+        message = json.dumps(
+            {"namespace": namespace, "stable_key": stable_key},
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        digest = hmac.new(self.derivation_key, message, hashlib.sha256).hexdigest()
+        return f"info_{digest[:32]}"
+
+
+def opaque_information_id(
+    *,
+    namespace: str,
+    stable_key: str,
+    derivation_key: bytes,
+) -> str:
+    """Create a dictionary-resistant opaque id with an explicit secret key."""
+
+    return HmacOpaqueInformationIdDeriver(derivation_key).derive(
+        namespace=namespace,
+        stable_key=stable_key,
+    )
 
 
 def _require_opaque(value: str, name: str) -> None:
@@ -171,6 +210,7 @@ class DecisionReason(StrEnum):
     PURPOSE_NOT_PERMITTED = "purpose_not_permitted"
     RECIPIENT_NOT_PERMITTED = "recipient_not_permitted"
     TRUST_DOMAIN_NOT_PERMITTED = "trust_domain_not_permitted"
+    PRINCIPAL_TRUST_DOMAIN_MISMATCH = "principal_trust_domain_mismatch"
     LOCALITY_NOT_PERMITTED = "locality_not_permitted"
     PROVIDER_NOT_PERMITTED = "provider_not_permitted"
     SHARING_NOT_PERMITTED = "sharing_not_permitted"
@@ -664,8 +704,14 @@ class GovernedInformationRef:
         _require_opaque(self.information_id, "governed information id")
 
     @classmethod
-    def create(cls, *, namespace: str, stable_key: str) -> GovernedInformationRef:
-        return cls(opaque_information_id(namespace=namespace, stable_key=stable_key))
+    def create(
+        cls,
+        *,
+        namespace: str,
+        stable_key: str,
+        deriver: OpaqueInformationIdDeriver,
+    ) -> GovernedInformationRef:
+        return cls(deriver.derive(namespace=namespace, stable_key=stable_key))
 
     def to_dict(self) -> JSONObject:
         return {"information_id": self.information_id}
@@ -1208,6 +1254,7 @@ class InformationAccessDecision:
     composition_id: str
     policy_decision: PolicyDecision
     decided_at: datetime
+    causal_event_cursor: int
 
     @classmethod
     def create(
@@ -1217,12 +1264,14 @@ class InformationAccessDecision:
         composition_id: str,
         policy_decision: PolicyDecision,
         decided_at: datetime,
+        causal_event_cursor: int,
     ) -> InformationAccessDecision:
         payload: JSONObject = {
             "request": request.to_dict(),
             "composition_id": composition_id,
             "policy_decision": policy_decision.to_dict(),
             "decided_at": decided_at.isoformat(),
+            "causal_event_cursor": causal_event_cursor,
         }
         return cls(
             _canonical_id("iadecision", payload),
@@ -1230,12 +1279,15 @@ class InformationAccessDecision:
             composition_id,
             policy_decision,
             decided_at,
+            causal_event_cursor,
         )
 
     def __post_init__(self) -> None:
         _require_opaque(self.decision_id, "information access decision id")
         _require_opaque(self.composition_id, "decision composition id")
         _require_aware(self.decided_at, "access decision time")
+        if self.causal_event_cursor < 0:
+            raise ValueError("access decision causal cursor cannot be negative")
         if self.decided_at != self.request.context.decision_time:
             raise ValueError("access decision must use its immutable context time")
         if self.policy_decision.operation is not self.request.context.operation:
@@ -1252,6 +1304,7 @@ class InformationAccessDecision:
             "composition_id": self.composition_id,
             "policy_decision": self.policy_decision.to_dict(),
             "decided_at": self.decided_at.isoformat(),
+            "causal_event_cursor": self.causal_event_cursor,
         }
 
     @classmethod
@@ -1263,6 +1316,7 @@ class InformationAccessDecision:
                 cast(Mapping[str, object], data["policy_decision"])
             ),
             decided_at=_datetime(data, "decided_at"),
+            causal_event_cursor=int(cast(int, data["causal_event_cursor"])),
         )
         if value.decision_id != str(data["decision_id"]):
             raise ValueError("access decision id does not match immutable content")
@@ -1345,6 +1399,7 @@ class DisclosureDecision:
     composition_id: str
     policy_decision: PolicyDecision
     decided_at: datetime
+    causal_event_cursor: int
 
     @classmethod
     def create(
@@ -1354,12 +1409,14 @@ class DisclosureDecision:
         composition_id: str,
         policy_decision: PolicyDecision,
         decided_at: datetime,
+        causal_event_cursor: int,
     ) -> DisclosureDecision:
         payload: JSONObject = {
             "request": request.to_dict(),
             "composition_id": composition_id,
             "policy_decision": policy_decision.to_dict(),
             "decided_at": decided_at.isoformat(),
+            "causal_event_cursor": causal_event_cursor,
         }
         return cls(
             _canonical_id("disdecision", payload),
@@ -1367,12 +1424,15 @@ class DisclosureDecision:
             composition_id,
             policy_decision,
             decided_at,
+            causal_event_cursor,
         )
 
     def __post_init__(self) -> None:
         _require_opaque(self.decision_id, "disclosure decision id")
         _require_opaque(self.composition_id, "disclosure composition id")
         _require_aware(self.decided_at, "disclosure decision time")
+        if self.causal_event_cursor < 0:
+            raise ValueError("disclosure decision causal cursor cannot be negative")
         if self.decided_at != self.request.context.decision_time:
             raise ValueError("disclosure decision must use its immutable context time")
         if self.policy_decision.operation is not InformationOperation.DISCLOSE:
@@ -1389,6 +1449,7 @@ class DisclosureDecision:
             "composition_id": self.composition_id,
             "policy_decision": self.policy_decision.to_dict(),
             "decided_at": self.decided_at.isoformat(),
+            "causal_event_cursor": self.causal_event_cursor,
         }
 
     @classmethod
@@ -1400,6 +1461,7 @@ class DisclosureDecision:
                 cast(Mapping[str, object], data["policy_decision"])
             ),
             decided_at=_datetime(data, "decided_at"),
+            causal_event_cursor=int(cast(int, data["causal_event_cursor"])),
         )
         if value.decision_id != str(data["decision_id"]):
             raise ValueError("disclosure decision id does not match immutable content")
@@ -1491,6 +1553,7 @@ class DeclassificationDecision:
     composition_id: str
     policy_decision: PolicyDecision
     decided_at: datetime
+    causal_event_cursor: int
 
     @classmethod
     def create(
@@ -1500,12 +1563,14 @@ class DeclassificationDecision:
         composition_id: str,
         policy_decision: PolicyDecision,
         decided_at: datetime,
+        causal_event_cursor: int,
     ) -> DeclassificationDecision:
         payload: JSONObject = {
             "request": request.to_dict(),
             "composition_id": composition_id,
             "policy_decision": policy_decision.to_dict(),
             "decided_at": decided_at.isoformat(),
+            "causal_event_cursor": causal_event_cursor,
         }
         return cls(
             _canonical_id("declassdecision", payload),
@@ -1513,12 +1578,15 @@ class DeclassificationDecision:
             composition_id,
             policy_decision,
             decided_at,
+            causal_event_cursor,
         )
 
     def __post_init__(self) -> None:
         _require_opaque(self.decision_id, "declassification decision id")
         _require_opaque(self.composition_id, "declassification composition id")
         _require_aware(self.decided_at, "declassification decision time")
+        if self.causal_event_cursor < 0:
+            raise ValueError("declassification decision causal cursor cannot be negative")
         if self.decided_at != self.request.context.decision_time:
             raise ValueError("declassification decision must use its immutable context time")
         if self.policy_decision.operation is not InformationOperation.DECLASSIFY:
@@ -1535,6 +1603,7 @@ class DeclassificationDecision:
             "composition_id": self.composition_id,
             "policy_decision": self.policy_decision.to_dict(),
             "decided_at": self.decided_at.isoformat(),
+            "causal_event_cursor": self.causal_event_cursor,
         }
 
     @classmethod
@@ -1546,6 +1615,7 @@ class DeclassificationDecision:
                 cast(Mapping[str, object], data["policy_decision"])
             ),
             decided_at=_datetime(data, "decided_at"),
+            causal_event_cursor=int(cast(int, data["causal_event_cursor"])),
         )
         if value.decision_id != str(data["decision_id"]):
             raise ValueError("declassification decision id does not match immutable content")
@@ -1571,6 +1641,151 @@ class DeclassificationDecision:
             event_id=f"information-declassification-decided:{value.decision_id}",
             subject=value.decision_id,
             timestamp=value.decided_at,
+        )
+        return value
+
+
+@dataclass(frozen=True, slots=True)
+class DeclassifiedDisclosureView:
+    """Immutable relaxed view authorized by one canonical declassification decision."""
+
+    view_id: str
+    information_ref: GovernedInformationRef
+    source_information_ref: GovernedInformationRef
+    approved_policy_id: str
+    declassification_decision_id: str
+    source_policy_ids: tuple[str, ...]
+    source_lineage_refs: tuple[str, ...]
+    created_at: datetime
+    causal_event_cursor: int
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        decision: DeclassificationDecision,
+        created_at: datetime,
+        causal_event_cursor: int,
+    ) -> DeclassifiedDisclosureView:
+        if not decision.allowed:
+            raise ValueError("declassified view requires an allowed declassification decision")
+        if created_at < decision.decided_at:
+            raise ValueError("declassified view cannot precede its authorizing decision")
+        context = decision.request.context
+        payload: JSONObject = {
+            "source_information_ref": decision.request.information_ref.to_dict(),
+            "approved_policy_id": decision.request.proposed_policy_id,
+            "declassification_decision_id": decision.decision_id,
+            "source_policy_ids": list(context.policy_ids),
+            "source_lineage_refs": list(context.source_lineage_refs),
+            "created_at": created_at.isoformat(),
+            "causal_event_cursor": causal_event_cursor,
+        }
+        view_id = _canonical_id("declassview", payload)
+        return cls(
+            view_id=view_id,
+            information_ref=GovernedInformationRef(
+                _canonical_id("info", {"declassified_view_id": view_id})
+            ),
+            source_information_ref=decision.request.information_ref,
+            approved_policy_id=decision.request.proposed_policy_id,
+            declassification_decision_id=decision.decision_id,
+            source_policy_ids=context.policy_ids,
+            source_lineage_refs=context.source_lineage_refs,
+            created_at=created_at,
+            causal_event_cursor=causal_event_cursor,
+        )
+
+    def __post_init__(self) -> None:
+        _require_opaque(self.view_id, "declassified view id")
+        _require_opaque(self.approved_policy_id, "declassified view policy id")
+        _require_opaque(
+            self.declassification_decision_id,
+            "declassified view decision id",
+        )
+        for value in self.source_policy_ids:
+            _require_opaque(value, "declassified view source policy id")
+        for value in self.source_lineage_refs:
+            _require_opaque(value, "declassified view source lineage ref")
+        _unique(self.source_policy_ids, "declassified view source policy ids", required=True)
+        _unique(
+            self.source_lineage_refs,
+            "declassified view source lineage refs",
+            required=True,
+        )
+        _require_aware(self.created_at, "declassified view creation time")
+        if self.causal_event_cursor < 0:
+            raise ValueError("declassified view causal cursor cannot be negative")
+        expected_information_id = _canonical_id(
+            "info",
+            {"declassified_view_id": self.view_id},
+        )
+        if self.information_ref.information_id != expected_information_id:
+            raise ValueError("declassified view information id is inconsistent")
+
+    def to_dict(self) -> JSONObject:
+        return {
+            "view_id": self.view_id,
+            "information_ref": self.information_ref.to_dict(),
+            "source_information_ref": self.source_information_ref.to_dict(),
+            "approved_policy_id": self.approved_policy_id,
+            "declassification_decision_id": self.declassification_decision_id,
+            "source_policy_ids": list(self.source_policy_ids),
+            "source_lineage_refs": list(self.source_lineage_refs),
+            "created_at": self.created_at.isoformat(),
+            "causal_event_cursor": self.causal_event_cursor,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, object]) -> DeclassifiedDisclosureView:
+        value = cls(
+            view_id=str(data["view_id"]),
+            information_ref=GovernedInformationRef.from_dict(
+                cast(Mapping[str, object], data["information_ref"])
+            ),
+            source_information_ref=GovernedInformationRef.from_dict(
+                cast(Mapping[str, object], data["source_information_ref"])
+            ),
+            approved_policy_id=str(data["approved_policy_id"]),
+            declassification_decision_id=str(data["declassification_decision_id"]),
+            source_policy_ids=_strings(data, "source_policy_ids"),
+            source_lineage_refs=_strings(data, "source_lineage_refs"),
+            created_at=_datetime(data, "created_at"),
+            causal_event_cursor=int(cast(int, data["causal_event_cursor"])),
+        )
+        payload: JSONObject = {
+            "source_information_ref": value.source_information_ref.to_dict(),
+            "approved_policy_id": value.approved_policy_id,
+            "declassification_decision_id": value.declassification_decision_id,
+            "source_policy_ids": list(value.source_policy_ids),
+            "source_lineage_refs": list(value.source_lineage_refs),
+            "created_at": value.created_at.isoformat(),
+            "causal_event_cursor": value.causal_event_cursor,
+        }
+        if value.view_id != _canonical_id("declassview", payload):
+            raise ValueError("declassified view id does not match immutable content")
+        return value
+
+    def to_event(self, *, source: str) -> Event:
+        return _governance_event(
+            event_type=DECLASSIFIED_VIEW_RECORDED_EVENT,
+            event_id=f"information-declassified-view-recorded:{self.view_id}",
+            source=source,
+            subject=self.information_ref.information_id,
+            timestamp=self.created_at,
+            payload=self.to_dict(),
+        )
+
+    @classmethod
+    def from_event(cls, event: Event) -> DeclassifiedDisclosureView:
+        if event.type != DECLASSIFIED_VIEW_RECORDED_EVENT:
+            raise ValueError("event is not a declassified disclosure view")
+        value = cls.from_dict(event.payload)
+        _validate_envelope(
+            event,
+            event_id=f"information-declassified-view-recorded:{value.view_id}",
+            subject=value.information_ref.information_id,
+            timestamp=value.created_at,
         )
         return value
 
@@ -1671,6 +1886,8 @@ class SecurityAuditReceipt:
         _require_opaque(self.context_id, "audit context id")
         if self.decision_type not in {"access", "disclosure"}:
             raise ValueError("unsupported security audit receipt type")
+        if self.disposition is not DecisionDisposition.ALLOW:
+            raise ValueError("material denials require canonical decision admission")
         _require_aware(self.recorded_at, "audit receipt time")
 
     def to_dict(self) -> JSONObject:

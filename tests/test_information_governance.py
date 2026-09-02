@@ -13,9 +13,11 @@ from noema import (
     Classification,
     CompetenceBasis,
     CompetenceEstimate,
+    ConcurrentAppendError,
     DecisionDisposition,
     DecisionReason,
     DeclassificationRequest,
+    DeclassifiedDisclosureView,
     DefaultContextAssembler,
     DeliberationRequest,
     DisclosureForm,
@@ -30,14 +32,17 @@ from noema import (
     GovernedInformationRef,
     GovernedMemoryAccess,
     GovernedWorkerAccess,
+    HmacOpaqueInformationIdDeriver,
     HoldConstraint,
     InformationAccessDecision,
     InformationAccessRequest,
+    InformationGovernanceAdmission,
     InformationGovernanceEngine,
     InformationGovernanceProjection,
     InformationLineage,
     InformationOperation,
     InformationPolicy,
+    InMemoryEventStore,
     LineageTransformation,
     MemoryProjection,
     MemoryQuery,
@@ -52,8 +57,10 @@ from noema import (
     QuarantinedInformationRef,
     QuarantinePolicy,
     RetentionPolicy,
+    SecurityAuditProjection,
     SecurityAuditReceipt,
     SemanticAssertion,
+    StaleGovernanceDecisionError,
     WorkerMatcher,
     WorkNode,
     WorkNodeKind,
@@ -63,6 +70,8 @@ from noema import (
 )
 
 START = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
+TEST_DERIVATION_KEY = b"0123456789abcdef0123456789abcdef"
+TEST_ID_DERIVER = HmacOpaqueInformationIdDeriver(TEST_DERIVATION_KEY)
 
 
 def _principal(
@@ -170,12 +179,38 @@ class _CanonicalGovernance:
         )
 
 
+class _InterleavingStore(InMemoryEventStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.interleave_next_conditional_append = False
+
+    async def append_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        if self.interleave_next_conditional_append:
+            self.interleave_next_conditional_append = False
+            await super().append(Event("test.interloper", "test:race", timestamp=START))
+        return await super().append_if_head(
+            event,
+            expected_head_sequence=expected_head_sequence,
+        )
+
+
 class InformationPolicyKernelTests(unittest.TestCase):
     def setUp(self) -> None:
         self.state = _CanonicalGovernance()
-        self.source_a = GovernedInformationRef.create(namespace="test", stable_key="source-a")
-        self.source_b = GovernedInformationRef.create(namespace="test", stable_key="source-b")
-        self.derived = GovernedInformationRef.create(namespace="test", stable_key="derived-d")
+        self.source_a = GovernedInformationRef.create(
+            namespace="test", stable_key="source-a", deriver=TEST_ID_DERIVER
+        )
+        self.source_b = GovernedInformationRef.create(
+            namespace="test", stable_key="source-b", deriver=TEST_ID_DERIVER
+        )
+        self.derived = GovernedInformationRef.create(
+            namespace="test", stable_key="derived-d", deriver=TEST_ID_DERIVER
+        )
         hold = HoldConstraint.create(authority_id="court", stable_key="synthetic-hold")
         self.policy_a = _policy(
             origin_domains=("user-owned",),
@@ -448,14 +483,81 @@ class InformationPolicyKernelTests(unittest.TestCase):
                 (),
             ),
             decided_at=START,
+            causal_event_cursor=replayed.event_cursor,
         )
         with self.assertRaisesRegex(ValueError, "deterministic policy evaluation"):
             replayed.apply(
                 forged.to_event(source="test:governance").with_sequence(replayed.event_cursor + 1)
             )
 
+    def test_replay_rejects_material_decision_after_a_different_canonical_head(self) -> None:
+        decision = self.engine.decide_access(
+            InformationAccessRequest.create(
+                information_ref=self.derived,
+                context=self._context(self.derived, InformationOperation.READ),
+            )
+        )
+        replayed = InformationGovernanceProjection()
+        replayed.rebuild(self.state.events)
+        replayed.apply(
+            Event("test.intervening", "test:race", timestamp=START).with_sequence(
+                replayed.event_cursor + 1
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "exact preceding canonical head"):
+            replayed.apply(
+                decision.to_event(source="test:governance").with_sequence(
+                    replayed.event_cursor + 1
+                )
+            )
+
+    def test_routine_audit_receipt_does_not_become_authorization_state(self) -> None:
+        decision = self.engine.decide_access(
+            InformationAccessRequest.create(
+                information_ref=self.derived,
+                context=self._context(self.derived, InformationOperation.READ),
+            )
+        )
+        receipt = SecurityAuditReceipt.from_decision(decision)
+        self.state.apply(receipt.to_event(source="test:audit"))
+
+        second_decision = self.engine.decide_access(
+            InformationAccessRequest.create(
+                information_ref=self.derived,
+                context=self._context(
+                    self.derived,
+                    InformationOperation.READ,
+                    principal=_principal("internal-worker", roles=("employer-worker",)),
+                    purpose="employment-work",
+                ),
+            )
+        )
+        second_receipt = SecurityAuditReceipt.from_decision(second_decision)
+        self.state.apply(second_receipt.to_event(source="test:audit"))
+
+        self.assertEqual(self.state.projection.access_decisions, ())
+        audit = SecurityAuditProjection(max_receipts=1)
+        audit.rebuild(self.state.events)
+        self.assertEqual(audit.receipts, (second_receipt,))
+
+        denied = self.engine.decide_access(
+            InformationAccessRequest.create(
+                information_ref=self.derived,
+                context=self._context(
+                    self.derived,
+                    InformationOperation.READ,
+                    principal=_principal("user"),
+                    purpose="career-planning",
+                ),
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "material denials"):
+            SecurityAuditReceipt.from_decision(denied)
+
     def test_quarantine_allows_local_classification_but_blocks_restricted_sinks(self) -> None:
-        unknown = GovernedInformationRef.create(namespace="test", stable_key="unknown-input")
+        unknown = GovernedInformationRef.create(
+            namespace="test", stable_key="unknown-input", deriver=TEST_ID_DERIVER
+        )
         quarantine = QuarantinedInformationRef.create(
             information_id=unknown.information_id,
             policy=QuarantinePolicy(),
@@ -527,7 +629,9 @@ class InformationPolicyKernelTests(unittest.TestCase):
         self.assertTrue(resolved_read.allowed)
 
         human_only = GovernedInformationRef.create(
-            namespace="test", stable_key="human-only-quarantine"
+            namespace="test",
+            stable_key="human-only-quarantine",
+            deriver=TEST_ID_DERIVER,
         )
         self.state.apply(
             QuarantinedInformationRef.create(
@@ -546,7 +650,9 @@ class InformationPolicyKernelTests(unittest.TestCase):
 
     def test_incomplete_lineage_missing_policy_and_stale_context_fail_closed(self) -> None:
         empty = InformationGovernanceProjection()
-        incomplete_ref = GovernedInformationRef.create(namespace="test", stable_key="incomplete")
+        incomplete_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="incomplete", deriver=TEST_ID_DERIVER
+        )
         incomplete_engine = InformationGovernanceEngine(empty)
         composition = incomplete_engine.composition_for(incomplete_ref)
         self.assertIn(
@@ -611,9 +717,15 @@ class InformationPolicyKernelTests(unittest.TestCase):
 
     def test_adversarial_policy_dimensions_fail_only_affected_operations(self) -> None:
         empty_state = _CanonicalGovernance()
-        left_ref = GovernedInformationRef.create(namespace="test", stable_key="empty-left")
-        right_ref = GovernedInformationRef.create(namespace="test", stable_key="empty-right")
-        empty_ref = GovernedInformationRef.create(namespace="test", stable_key="empty-derived")
+        left_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="empty-left", deriver=TEST_ID_DERIVER
+        )
+        right_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="empty-right", deriver=TEST_ID_DERIVER
+        )
+        empty_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="empty-derived", deriver=TEST_ID_DERIVER
+        )
         left = _policy(
             purposes=("purpose-a",),
             recipients=("recipient-a",),
@@ -645,7 +757,9 @@ class InformationPolicyKernelTests(unittest.TestCase):
 
         unknown_state = _CanonicalGovernance()
         unknown_ref = GovernedInformationRef.create(
-            namespace="test", stable_key="unknown-classification"
+            namespace="test",
+            stable_key="unknown-classification",
+            deriver=TEST_ID_DERIVER,
         )
         unknown_state.record_source(
             unknown_ref,
@@ -681,7 +795,9 @@ class InformationPolicyKernelTests(unittest.TestCase):
         )
 
         guarded_state = _CanonicalGovernance()
-        guarded_ref = GovernedInformationRef.create(namespace="test", stable_key="dimension-guards")
+        guarded_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="dimension-guards", deriver=TEST_ID_DERIVER
+        )
         guarded_state.record_source(
             guarded_ref,
             _policy(
@@ -751,11 +867,247 @@ class InformationPolicyKernelTests(unittest.TestCase):
 
 
 class InformationEnforcementIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_material_admission_rechecks_state_and_uses_head_cas(self) -> None:
+        unknown = GovernedInformationRef.create(
+            namespace="test",
+            stable_key="admission-race",
+            deriver=TEST_ID_DERIVER,
+        )
+        kernel = NoemaKernel()
+        await kernel.start()
+        await kernel.emit(
+            QuarantinedInformationRef.create(
+                information_id=unknown.information_id,
+                policy=QuarantinePolicy(),
+                quarantined_at=START,
+            ).to_event(source="test:governance")
+        )
+        projection = InformationGovernanceProjection()
+        projection.rebuild(await kernel.history())
+        stale_engine = InformationGovernanceEngine(projection)
+        stale_request = InformationAccessRequest.create(
+            information_ref=unknown,
+            context=stale_engine.context_for(
+                information_ref=unknown,
+                actor_id="agent:reader",
+                principal=_principal("reader"),
+                purpose="work",
+                operation=InformationOperation.READ,
+                source_trust_domain="local",
+                destination_trust_domain=None,
+                recipient=None,
+                decision_time=START,
+                locality="local",
+            ),
+        )
+        self.assertFalse(stale_engine.decide_access(stale_request).allowed)
+
+        resolved_policy = _policy(
+            purposes=("work",),
+            recipients=("reader",),
+        )
+        lineage = InformationLineage.create(
+            information_id=unknown.information_id,
+            source_information_ids=(),
+            transformation=LineageTransformation.SOURCE,
+            recorded_at=START,
+        )
+        for event in (
+            resolved_policy.to_event(source="test:governance"),
+            lineage.to_event(source="test:governance"),
+            PolicyBinding.create(
+                information_id=unknown.information_id,
+                lineage_id=lineage.lineage_id,
+                policy_ids=(resolved_policy.policy_id,),
+                bound_at=START,
+            ).to_event(source="test:governance"),
+        ):
+            await kernel.emit(event)
+        admission = InformationGovernanceAdmission(kernel, projection)
+        with self.assertRaises(StaleGovernanceDecisionError):
+            await admission.admit_access(
+                stale_request,
+                expected_disposition=DecisionDisposition.DENY,
+            )
+        self.assertFalse(
+            any(event.type == "information.access_decided" for event in await kernel.history())
+        )
+        await kernel.stop()
+
+        store = _InterleavingStore()
+        raced_kernel = NoemaKernel(store=store)
+        await raced_kernel.start()
+        source = GovernedInformationRef.create(
+            namespace="test",
+            stable_key="cas-source",
+            deriver=TEST_ID_DERIVER,
+        )
+        policy = _policy(purposes=("work",), recipients=("reader",))
+        source_lineage = InformationLineage.create(
+            information_id=source.information_id,
+            source_information_ids=(),
+            transformation=LineageTransformation.SOURCE,
+            recorded_at=START,
+        )
+        for event in (
+            policy.to_event(source="test:governance"),
+            source_lineage.to_event(source="test:governance"),
+            PolicyBinding.create(
+                information_id=source.information_id,
+                lineage_id=source_lineage.lineage_id,
+                policy_ids=(policy.policy_id,),
+                bound_at=START,
+            ).to_event(source="test:governance"),
+        ):
+            await raced_kernel.emit(event)
+        raced_projection = InformationGovernanceProjection()
+        raced_projection.rebuild(await raced_kernel.history())
+        raced_engine = InformationGovernanceEngine(raced_projection)
+        request = InformationAccessRequest.create(
+            information_ref=source,
+            context=raced_engine.context_for(
+                information_ref=source,
+                actor_id="agent:reader",
+                principal=_principal("reader"),
+                purpose="work",
+                operation=InformationOperation.READ,
+                source_trust_domain="local",
+                destination_trust_domain=None,
+                recipient=None,
+                decision_time=START,
+                locality="local",
+            ),
+        )
+        store.interleave_next_conditional_append = True
+        with self.assertRaises(ConcurrentAppendError):
+            await InformationGovernanceAdmission(
+                raced_kernel,
+                raced_projection,
+            ).admit_access(request)
+        self.assertFalse(
+            any(
+                event.type == "information.access_decided"
+                for event in await raced_kernel.history()
+            )
+        )
+        await raced_kernel.stop()
+
+    async def test_allowed_declassification_creates_immutable_effective_view(self) -> None:
+        kernel = NoemaKernel()
+        await kernel.start()
+        source = GovernedInformationRef.create(
+            namespace="test",
+            stable_key="declassification-source",
+            deriver=TEST_ID_DERIVER,
+        )
+        restricted = _policy(
+            classification=Classification.RESTRICTED,
+            purposes=("legal-review",),
+            recipients=("legal-review",),
+            authorities=("legal-review",),
+        )
+        public = _policy(
+            classification=Classification.PUBLIC,
+            purposes=("public-use",),
+            recipients=("public",),
+            trust_domains=("public",),
+            localities=("local",),
+            providers=("local-model",),
+            forms=(DisclosureForm.FULL,),
+            authorities=("legal-review",),
+            version=2,
+        )
+        lineage = InformationLineage.create(
+            information_id=source.information_id,
+            source_information_ids=(),
+            transformation=LineageTransformation.SOURCE,
+            recorded_at=START,
+        )
+        binding = PolicyBinding.create(
+            information_id=source.information_id,
+            lineage_id=lineage.lineage_id,
+            policy_ids=(restricted.policy_id,),
+            bound_at=START,
+        )
+        for event in (
+            restricted.to_event(source="test:governance"),
+            public.to_event(source="test:governance"),
+            lineage.to_event(source="test:governance"),
+            binding.to_event(source="test:governance"),
+        ):
+            await kernel.emit(event)
+        projection = InformationGovernanceProjection()
+        projection.rebuild(await kernel.history())
+        engine = InformationGovernanceEngine(projection)
+        request = DeclassificationRequest.create(
+            information_ref=source,
+            proposed_policy_id=public.policy_id,
+            context=engine.context_for(
+                information_ref=source,
+                actor_id="agent:steward",
+                principal=_principal("reviewer", roles=("legal-review",)),
+                purpose="legal-review",
+                operation=InformationOperation.DECLASSIFY,
+                source_trust_domain="local",
+                destination_trust_domain=None,
+                recipient=None,
+                decision_time=START,
+                locality="local",
+            ),
+        )
+        admission = await InformationGovernanceAdmission(
+            kernel,
+            projection,
+        ).declassify(request, created_at=START + timedelta(seconds=1))
+        self.assertTrue(admission.decision.record.allowed)
+        self.assertIsNotNone(admission.view)
+        view_receipt = admission.view
+        if view_receipt is None:
+            self.fail("allowed declassification did not create a view")
+        view = view_receipt.record
+        self.assertEqual(view.source_information_ref, source)
+        self.assertEqual(view.source_policy_ids, (restricted.policy_id,))
+        self.assertEqual(view.source_lineage_refs, (source.information_id,))
+        self.assertEqual(
+            InformationGovernanceEngine(projection).composition_for(view.information_ref).classification,
+            Classification.PUBLIC,
+        )
+        self.assertEqual(
+            InformationGovernanceEngine(projection).composition_for(source).classification,
+            Classification.RESTRICTED,
+        )
+        self.assertEqual(projection.binding(source.information_id), binding)
+        self.assertIsNone(projection.binding(view.information_ref.information_id))
+
+        history = await kernel.history()
+        replayed = InformationGovernanceProjection()
+        replayed.rebuild(history)
+        self.assertEqual(replayed.semantic_snapshot(), projection.semantic_snapshot())
+
+        without_decision = InformationGovernanceProjection()
+        without_decision.rebuild(history[:4])
+        forged_view = DeclassifiedDisclosureView.create(
+            decision=admission.decision.record,
+            created_at=view.created_at,
+            causal_event_cursor=without_decision.event_cursor,
+        )
+        with self.assertRaisesRegex(ValueError, "canonical allowed decision"):
+            without_decision.apply(
+                forged_view.to_event(source="test:governance").with_sequence(
+                    without_decision.event_cursor + 1
+                )
+            )
+        await kernel.stop()
+
     async def test_model_context_requires_access_and_cross_boundary_disclosure(self) -> None:
         state = _CanonicalGovernance()
-        allowed_ref = GovernedInformationRef.create(namespace="test", stable_key="remote-allowed")
+        allowed_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="remote-allowed", deriver=TEST_ID_DERIVER
+        )
         disclosure_denied_ref = GovernedInformationRef.create(
-            namespace="test", stable_key="remote-disclosure-denied"
+            namespace="test",
+            stable_key="remote-disclosure-denied",
+            deriver=TEST_ID_DERIVER,
         )
         allowed_policy = _policy(
             purposes=("deliberation",),
@@ -829,7 +1181,7 @@ class InformationEnforcementIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([value.allowed for value in assembly.access_decisions], [True, True])
         self.assertEqual([value.allowed for value in assembly.disclosure_decisions], [True, False])
         serialized_events = json.dumps(
-            [value.to_dict() for value in assembly.decision_events(source="test:governance")]
+            [value.to_dict() for value in assembly.routine_audit_receipts()]
         )
         self.assertNotIn("synthetic allowed protected item", serialized_events)
         self.assertNotIn("synthetic blocked protected item", serialized_events)
@@ -896,7 +1248,9 @@ class InformationEnforcementIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
         state = _CanonicalGovernance()
         information_ref = GovernedInformationRef.create(
-            namespace="memory", stable_key=assertion.assertion_id
+            namespace="memory",
+            stable_key=assertion.assertion_id,
+            deriver=TEST_ID_DERIVER,
         )
         state.record_source(
             information_ref,
@@ -934,13 +1288,16 @@ class InformationEnforcementIntegrationTests(unittest.IsolatedAsyncioTestCase):
         kernel = NoemaKernel()
         await kernel.start()
         information_ref = GovernedInformationRef.create(
-            namespace="work", stable_key="protected-input"
+            namespace="work",
+            stable_key="protected-input",
+            deriver=TEST_ID_DERIVER,
         )
         policy = _policy(
             purposes=("governed-work",),
-            recipients=("agent-allowed",),
-            trust_domains=("local",),
+            recipients=("agent-allowed", "worker-role"),
+            trust_domains=("employer", "local"),
             sharing=True,
+            forms=(DisclosureForm.FULL,),
         )
         lineage = InformationLineage.create(
             information_id=information_ref.information_id,
@@ -965,8 +1322,16 @@ class InformationEnforcementIntegrationTests(unittest.IsolatedAsyncioTestCase):
         engine = InformationGovernanceEngine(governance)
 
         principals = {
-            "agent-allowed": _principal("agent-allowed"),
+            "agent-allowed": _principal(
+                "agent-allowed",
+                trust_domains=("employer",),
+            ),
             "agent-denied": _principal("agent-denied"),
+            "agent-vendor": _principal(
+                "agent-vendor",
+                roles=("worker-role",),
+                trust_domains=("vendor",),
+            ),
         }
         matcher = WorkerMatcher(
             GovernedWorkerAccess(
@@ -1012,7 +1377,11 @@ class InformationEnforcementIntegrationTests(unittest.IsolatedAsyncioTestCase):
             authority_ceiling=AuthorityLevel.PROPOSE,
         )
         await coordinator.record_work_order(order)
-        for agent_id, score in (("agent-denied", 0.99), ("agent-allowed", 0.80)):
+        for agent_id, score in (
+            ("agent-vendor", 1.0),
+            ("agent-denied", 0.99),
+            ("agent-allowed", 0.80),
+        ):
             await coordinator.record_presence(
                 AgentPresence(
                     agent_id,
@@ -1045,18 +1414,40 @@ class InformationEnforcementIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(leases), 1)
         self.assertEqual(leases[0].agent_id, "agent-allowed")
         self.assertEqual(len(leases[0].information_access_decision_refs), 1)
+        self.assertEqual(len(leases[0].information_disclosure_decision_refs), 1)
 
         replayed_governance = InformationGovernanceProjection()
         replayed_governance.rebuild(await kernel.history())
-        self.assertEqual(len(replayed_governance.access_decisions), 2)
+        self.assertEqual(len(replayed_governance.access_decisions), 3)
         denied_workers = {
             value.request.context.principal.principal_id
             for value in replayed_governance.access_decisions
             if not value.allowed
         }
-        self.assertEqual(denied_workers, {"agent-denied"})
+        self.assertEqual(denied_workers, {"agent-denied", "agent-vendor"})
+        vendor_access = next(
+            value
+            for value in replayed_governance.access_decisions
+            if value.request.context.principal.principal_id == "agent-vendor"
+        )
+        self.assertIn(
+            DecisionReason.TRUST_DOMAIN_NOT_PERMITTED,
+            vendor_access.policy_decision.reasons,
+        )
+        self.assertEqual(len(replayed_governance.disclosure_decisions), 2)
+        denied_disclosures = {
+            value.request.context.principal.principal_id
+            for value in replayed_governance.disclosure_decisions
+            if not value.allowed
+        }
+        self.assertEqual(denied_disclosures, {"agent-vendor"})
         self.assertIsNotNone(
             replayed_governance.access_decision(leases[0].information_access_decision_refs[0])
+        )
+        self.assertIsNotNone(
+            replayed_governance.disclosure_decision(
+                leases[0].information_disclosure_decision_refs[0]
+            )
         )
         await kernel.stop()
 
@@ -1064,7 +1455,28 @@ class InformationEnforcementIntegrationTests(unittest.IsolatedAsyncioTestCase):
 class OpaqueIdentifierTests(unittest.TestCase):
     def test_fixture_identifier_does_not_embed_the_stable_key(self) -> None:
         identifier = opaque_information_id(
-            namespace="synthetic", stable_key="descriptive-but-not-content"
+            namespace="synthetic",
+            stable_key="descriptive-but-not-content",
+            derivation_key=TEST_DERIVATION_KEY,
         )
         self.assertNotIn("descriptive", identifier)
         self.assertRegex(identifier, r"^info_[0-9a-f]{32}$")
+
+    def test_low_entropy_keys_require_keyed_dictionary_resistance(self) -> None:
+        left = opaque_information_id(
+            namespace="synthetic",
+            stable_key="yes",
+            derivation_key=TEST_DERIVATION_KEY,
+        )
+        right = opaque_information_id(
+            namespace="synthetic",
+            stable_key="yes",
+            derivation_key=b"abcdef0123456789abcdef0123456789",
+        )
+        self.assertNotEqual(left, right)
+        with self.assertRaisesRegex(ValueError, "at least 32 bytes"):
+            opaque_information_id(
+                namespace="synthetic",
+                stable_key="yes",
+                derivation_key=b"public-short-key",
+            )

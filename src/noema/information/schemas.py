@@ -7,6 +7,7 @@ from collections.abc import Callable
 from ..events import Event, EventSchemaRegistry
 from .models import (
     DECLASSIFICATION_DECIDED_EVENT,
+    DECLASSIFIED_VIEW_RECORDED_EVENT,
     DISCLOSURE_DECIDED_EVENT,
     INFORMATION_ACCESS_DECIDED_EVENT,
     INFORMATION_QUARANTINED_EVENT,
@@ -15,6 +16,7 @@ from .models import (
     POLICY_RECORDED_EVENT,
     SECURITY_AUDIT_RECEIPT_EVENT,
     DeclassificationDecision,
+    DeclassifiedDisclosureView,
     DisclosureDecision,
     InformationAccessDecision,
     InformationLineage,
@@ -32,6 +34,7 @@ _VALIDATORS: dict[str, Callable[[Event], object]] = {
     INFORMATION_ACCESS_DECIDED_EVENT: InformationAccessDecision.from_event,
     DISCLOSURE_DECIDED_EVENT: DisclosureDecision.from_event,
     DECLASSIFICATION_DECIDED_EVENT: DeclassificationDecision.from_event,
+    DECLASSIFIED_VIEW_RECORDED_EVENT: DeclassifiedDisclosureView.from_event,
     SECURITY_AUDIT_RECEIPT_EVENT: SecurityAuditReceipt.from_event,
 }
 

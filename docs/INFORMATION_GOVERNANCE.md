@@ -38,7 +38,10 @@ Every material decision pins an immutable `PrincipalSnapshot` and
 `AccessContext`. Replay recomputes decisions from the recorded actor, roles,
 groups, purpose, operation, trust domains, recipient, time, exact policy
 versions, lineage, locality, provider, and provider posture. Present-day role
-lookups are not part of replay.
+lookups are not part of replay. Material decisions also cite the exact preceding
+canonical head. `InformationGovernanceAdmission` reloads policy state,
+re-evaluates the request, and uses conditional append; replay rejects a decision
+whose cursor is not its immediate predecessor.
 
 ## Lineage, views, and quarantine
 
@@ -51,7 +54,11 @@ transformation != declassification
 ```
 
 Only a `DeclassificationDecision` whose authority is accepted by every source
-policy may approve a less restrictive policy.
+policy may approve a less restrictive policy. An allowed decision can create a
+separate immutable `DeclassifiedDisclosureView` governed by the approved policy.
+The view preserves the original source, policy, and lineage references; it never
+mutates the source binding, and replay rejects it without its canonical allowed
+decision.
 
 Unknown input is `QuarantinedInformationRef`, never implicitly public. The
 foundation permits local classification under the quarantine policy and denies
@@ -68,9 +75,12 @@ and content-bearing telemetry.
   must also allow before the item enters model context.
 - `WorkerMatcher` treats access as a hard feasibility predicate after current
   presence/capability checks and alongside competence evidence. Governed leases
-  cite canonical access-decision IDs; the coordinator appends decisions and the
-  lease against one uninterrupted canonical head. Material access denials for
-  otherwise feasible candidates remain replayable, so exclusion is explainable.
+  cite canonical access-decision IDs and, for cross-domain workers, canonical
+  disclosure-decision IDs. The worker destination must match its immutable
+  principal snapshot and policy trust domains. The coordinator admits all
+  material decisions and the lease against one uninterrupted canonical head.
+  Material denials for otherwise feasible candidates remain replayable, so
+  exclusion is explainable.
 
 Historical unbound memory and work remain compatible. Once an information
 reference is explicitly governed, missing policy, lineage, context, or access
@@ -78,18 +88,21 @@ evidence fails closed.
 
 ## Canonical meaning and bounded audit
 
-Policies, lineage, bindings, quarantine, declassification, material disclosure,
-and material access outcomes are canonical governance facts. A
-`SecurityAuditReceipt` is a non-authorizing summary of an existing access or
-disclosure decision and remains outside ordinary situation projection. The
-governance projection reads its own policy and decision records through a
-bounded privileged bootstrap path, preventing recursive decision-to-receipt
-loops.
+Policies, lineage, bindings, quarantine, effective declassified views, material
+disclosure, and material access outcomes are canonical governance facts. A
+`SecurityAuditReceipt` is a non-authorizing summary of a routine access or
+disclosure check; the decision need not first become canonical. Receipts remain
+outside `InformationGovernanceProjection` and are consumed by the separate
+size-bounded `SecurityAuditProjection`, which cannot authorize anything. The governance
+projection reads its own policy and decision records through a bounded
+privileged bootstrap path, preventing recursive decision-to-receipt loops.
 
 New governance events use opaque subjects and keep protected content out of
-IDs, subjects, correlation fields, and metadata. A reusable validator tests
-protected values against those envelope fields. Retrofitting every historical
-Noema event is intentionally deferred.
+IDs, subjects, correlation fields, and metadata. Information identifiers derived
+from caller material require an explicit caller-owned HMAC key, including for
+low-entropy values; production secret storage and rotation remain deferred. A
+reusable validator tests protected values against envelope fields. Retrofitting
+every historical Noema event is intentionally deferred.
 
 ## Deferred integration slices
 

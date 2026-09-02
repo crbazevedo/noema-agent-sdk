@@ -1,7 +1,14 @@
 """Deterministic information-policy contracts, composition, and replay."""
 
+from .admission import (
+    DeclassificationAdmission,
+    GovernanceAdmissionReceipt,
+    InformationGovernanceAdmission,
+    StaleGovernanceDecisionError,
+)
 from .models import (
     DECLASSIFICATION_DECIDED_EVENT,
+    DECLASSIFIED_VIEW_RECORDED_EVENT,
     DISCLOSURE_DECIDED_EVENT,
     INFORMATION_ACCESS_DECIDED_EVENT,
     INFORMATION_GOVERNANCE_EVENT_TYPES,
@@ -16,11 +23,13 @@ from .models import (
     DecisionReason,
     DeclassificationDecision,
     DeclassificationRequest,
+    DeclassifiedDisclosureView,
     DisclosureDecision,
     DisclosureForm,
     DisclosureRequest,
     DisclosureView,
     GovernedInformationRef,
+    HmacOpaqueInformationIdDeriver,
     HoldConstraint,
     InformationAccessDecision,
     InformationAccessRequest,
@@ -28,6 +37,7 @@ from .models import (
     InformationOperation,
     InformationPolicy,
     LineageTransformation,
+    OpaqueInformationIdDeriver,
     PolicyBinding,
     PolicyComposition,
     PolicyConflict,
@@ -43,11 +53,12 @@ from .models import (
     validate_opaque_governance_id,
 )
 from .policy import InformationGovernanceEngine, compose_policies
-from .projection import InformationGovernanceProjection
+from .projection import InformationGovernanceProjection, SecurityAuditProjection
 from .schemas import register_information_event_schemas
 
 __all__ = [
     "DECLASSIFICATION_DECIDED_EVENT",
+    "DECLASSIFIED_VIEW_RECORDED_EVENT",
     "DISCLOSURE_DECIDED_EVENT",
     "INFORMATION_ACCESS_DECIDED_EVENT",
     "INFORMATION_GOVERNANCE_EVENT_TYPES",
@@ -60,22 +71,28 @@ __all__ = [
     "Classification",
     "DecisionDisposition",
     "DecisionReason",
+    "DeclassificationAdmission",
     "DeclassificationDecision",
     "DeclassificationRequest",
+    "DeclassifiedDisclosureView",
     "DisclosureDecision",
     "DisclosureForm",
     "DisclosureRequest",
     "DisclosureView",
     "GovernedInformationRef",
+    "GovernanceAdmissionReceipt",
+    "HmacOpaqueInformationIdDeriver",
     "HoldConstraint",
     "InformationAccessDecision",
     "InformationAccessRequest",
     "InformationGovernanceEngine",
+    "InformationGovernanceAdmission",
     "InformationGovernanceProjection",
     "InformationLineage",
     "InformationOperation",
     "InformationPolicy",
     "LineageTransformation",
+    "OpaqueInformationIdDeriver",
     "PolicyBinding",
     "PolicyComposition",
     "PolicyConflict",
@@ -86,6 +103,8 @@ __all__ = [
     "QuarantinedInformationRef",
     "RetentionPolicy",
     "SecurityAuditReceipt",
+    "SecurityAuditProjection",
+    "StaleGovernanceDecisionError",
     "compose_policies",
     "opaque_information_id",
     "register_information_event_schemas",

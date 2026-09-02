@@ -961,6 +961,7 @@ class WorkLease:
     match_score: float
     competence_estimate_refs: tuple[str, ...]
     information_access_decision_refs: tuple[str, ...] = ()
+    information_disclosure_decision_refs: tuple[str, ...] = ()
 
     @classmethod
     def create(
@@ -975,6 +976,7 @@ class WorkLease:
         match_score: float,
         competence_estimate_refs: tuple[str, ...],
         information_access_decision_refs: tuple[str, ...] = (),
+        information_disclosure_decision_refs: tuple[str, ...] = (),
     ) -> WorkLease:
         return cls(
             lease_id=f"work-lease:{graph_id}:{node_id}:{fencing_token}",
@@ -987,6 +989,7 @@ class WorkLease:
             match_score=match_score,
             competence_estimate_refs=competence_estimate_refs,
             information_access_decision_refs=information_access_decision_refs,
+            information_disclosure_decision_refs=information_disclosure_decision_refs,
         )
 
     def __post_init__(self) -> None:
@@ -1021,6 +1024,15 @@ class WorkLease:
                 value,
                 "work lease information access decision ref",
             )
+        _unique_text(
+            self.information_disclosure_decision_refs,
+            "work lease information disclosure decision refs",
+        )
+        for value in self.information_disclosure_decision_refs:
+            validate_opaque_governance_id(
+                value,
+                "work lease information disclosure decision ref",
+            )
 
     def to_dict(self) -> JSONObject:
         data: JSONObject = {
@@ -1038,6 +1050,10 @@ class WorkLease:
             data["information_access_decision_refs"] = list(
                 self.information_access_decision_refs
             )
+        if self.information_disclosure_decision_refs:
+            data["information_disclosure_decision_refs"] = list(
+                self.information_disclosure_decision_refs
+            )
         return data
 
     @classmethod
@@ -1054,6 +1070,9 @@ class WorkLease:
             competence_estimate_refs=_strings(data, "competence_estimate_refs"),
             information_access_decision_refs=_strings(
                 data, "information_access_decision_refs"
+            ),
+            information_disclosure_decision_refs=_strings(
+                data, "information_disclosure_decision_refs"
             ),
         )
 

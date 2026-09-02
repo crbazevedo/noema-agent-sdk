@@ -378,9 +378,12 @@ incompatible permissions relevant to an operation fail that operation closed.
 The implemented foundation adds immutable policy/context/lineage contracts, a
 deterministic `InformationGovernanceEngine`, replay projection, quarantine,
 access/disclosure/declassification decisions, safe opaque governance envelopes,
-and narrow enforcement at memory retrieval, model-context assembly, and worker
-matching. It does not yet implement production restricted ingestion, encrypted
-artifact bytes, exhaustive sink interception, or connector/provider coverage.
+exact-head material-decision admission, a separate non-authorizing audit
+projection, immutable effective declassification views, and narrow enforcement
+at memory retrieval, model-context assembly, and worker matching. Cross-domain
+workers require both access and disclosure evidence. It does not yet implement
+production restricted ingestion, encrypted artifact bytes, exhaustive sink
+interception, or connector/provider coverage.
 
 ### Quarantine before classification
 
@@ -774,7 +777,8 @@ The staged information-governance implementation must add gates that prove:
   unrelated permitted operations;
 - unresolved inputs remain quarantined from external providers, cross-domain
   agents, shared indexes, and content-bearing telemetry;
-- worker matching cannot infer information access from competence or authority;
+- worker matching cannot infer information access from competence or authority,
+  and cross-domain worker assignment requires separately admitted disclosure;
 - derived objects cannot have a less restrictive effective policy without an
   authorized `DeclassificationDecision` satisfying every source policy;
 - redaction and abstraction initially retain the composed source policy;
@@ -786,9 +790,12 @@ The staged information-governance implementation must add gates that prove:
   and evaluation artifacts have leakage gates;
 - raw artifact bytes, credentials, and ungoverned protected content cannot enter
   any canonical event-envelope field;
-- decisions pin immutable access/principal context for replay;
+- material decisions pin immutable access/principal context and the exact
+  preceding canonical head for replay;
 - routine permitted transfers produce bounded audit receipts while durable
   grants, material disclosures, and material denials remain canonical;
+- low-entropy information identifiers require keyed derivation or a pre-opaque
+  identifier;
 - every projection rebuilds from a declared canonical cursor and emits
   byte-equivalent semantic state for identical history.
 

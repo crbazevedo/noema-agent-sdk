@@ -6,7 +6,6 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
-from ..events import Event
 from ..memory.models import SemanticAssertion
 from ..memory.retrieval import MemoryQuery
 from ..models import ContextAssembler, ModelMessage
@@ -15,12 +14,14 @@ from ..work.models import WorkGraph, WorkNode
 from .models import (
     AccessContext,
     DisclosureDecision,
+    DisclosureForm,
     DisclosureRequest,
     GovernedInformationRef,
     InformationAccessDecision,
     InformationAccessRequest,
     InformationOperation,
     PrincipalSnapshot,
+    SecurityAuditReceipt,
 )
 from .policy import InformationGovernanceEngine
 
@@ -30,6 +31,7 @@ ContextFactory = Callable[
 ]
 ContextItemProvider = Callable[[DeliberationRequest], Iterable["GovernedContextItem"]]
 PrincipalForAgent = Callable[[str], PrincipalSnapshot]
+DestinationTrustDomainForAgent = Callable[[str, PrincipalSnapshot], str]
 
 
 class GovernedMemoryAccess:
@@ -94,13 +96,20 @@ class GovernedContextAssembly:
     access_decisions: tuple[InformationAccessDecision, ...]
     disclosure_decisions: tuple[DisclosureDecision, ...]
 
-    def decision_events(self, *, source: str) -> tuple[Event, ...]:
-        """Materialize authorization facts without ever copying protected content."""
+    def routine_audit_receipts(self) -> tuple[SecurityAuditReceipt, ...]:
+        """Return bounded non-authorizing evidence for successful routine checks."""
 
-        return (
-            *(value.to_event(source=source) for value in self.access_decisions),
-            *(value.to_event(source=source) for value in self.disclosure_decisions),
+        access_receipts = tuple(
+            SecurityAuditReceipt.from_decision(value)
+            for value in self.access_decisions
+            if value.allowed
         )
+        disclosure_receipts = tuple(
+            SecurityAuditReceipt.from_decision(value)
+            for value in self.disclosure_decisions
+            if value.allowed
+        )
+        return (*access_receipts, *disclosure_receipts)
 
 
 class GovernedContextAssembler:
@@ -177,6 +186,8 @@ class GovernedWorkerAccess:
         purpose: str,
         source_trust_domain: str,
         locality: str,
+        disclosure_form: DisclosureForm = DisclosureForm.FULL,
+        destination_trust_domain_for_agent: DestinationTrustDomainForAgent | None = None,
     ) -> None:
         self._engine = engine
         self._principal_for_agent = principal_for_agent
@@ -184,6 +195,8 @@ class GovernedWorkerAccess:
         self._purpose = purpose
         self._source_trust_domain = source_trust_domain
         self._locality = locality
+        self._disclosure_form = disclosure_form
+        self._destination_trust_domain_for_agent = destination_trust_domain_for_agent
 
     @property
     def governance_state(self) -> object:
@@ -196,10 +209,11 @@ class GovernedWorkerAccess:
         agent_id: str,
         *,
         at: datetime,
-    ) -> tuple[InformationAccessDecision, ...]:
+    ) -> tuple[InformationAccessDecision | DisclosureDecision, ...]:
         del graph
         principal = self._principal_for_agent(agent_id)
-        decisions: list[InformationAccessDecision] = []
+        destination_trust_domain = self._destination_domain(agent_id, principal)
+        decisions: list[InformationAccessDecision | DisclosureDecision] = []
         for information_id in node.governed_information_refs:
             information_ref = GovernedInformationRef(information_id)
             context = self._engine.context_for(
@@ -209,10 +223,11 @@ class GovernedWorkerAccess:
                 purpose=self._purpose,
                 operation=InformationOperation.WORK_ASSIGN,
                 source_trust_domain=self._source_trust_domain,
-                destination_trust_domain=principal.trust_domains[0],
+                destination_trust_domain=destination_trust_domain,
                 recipient=agent_id,
                 decision_time=at,
                 locality=self._locality,
+                disclosure_form=self._disclosure_form,
             )
             decisions.append(
                 self._engine.decide_access(
@@ -222,4 +237,32 @@ class GovernedWorkerAccess:
                     )
                 )
             )
+            if destination_trust_domain != self._source_trust_domain:
+                decisions.append(
+                    self._engine.decide_disclosure(
+                        DisclosureRequest.create(
+                            information_ref=information_ref,
+                            context=context,
+                        )
+                    )
+                )
         return tuple(decisions)
+
+    def _destination_domain(
+        self,
+        agent_id: str,
+        principal: PrincipalSnapshot,
+    ) -> str:
+        if self._destination_trust_domain_for_agent is not None:
+            destination = self._destination_trust_domain_for_agent(agent_id, principal)
+        elif len(principal.trust_domains) == 1:
+            destination = principal.trust_domains[0]
+        else:
+            raise ValueError(
+                "worker destination trust domain must be explicit for multi-domain principals"
+            )
+        if destination not in principal.trust_domains:
+            raise ValueError(
+                "worker destination trust domain is absent from its principal snapshot"
+            )
+        return destination

@@ -13,6 +13,7 @@ from .models import (
     DecisionReason,
     DeclassificationDecision,
     DeclassificationRequest,
+    DeclassifiedDisclosureView,
     DisclosureDecision,
     DisclosureForm,
     DisclosureRequest,
@@ -64,6 +65,10 @@ _SHARING_OPERATIONS = (
     InformationOperation.SHARED_INDEX,
     InformationOperation.CROSS_AGENT_SHARE,
 )
+_PRINCIPAL_DESTINATION_OPERATIONS = (
+    InformationOperation.WORK_ASSIGN,
+    InformationOperation.CROSS_AGENT_SHARE,
+)
 _ALL_RESTRICTED_OPERATIONS = tuple(
     operation
     for operation in InformationOperation
@@ -89,6 +94,11 @@ class GovernanceState(Protocol):
     def lineage(self, information_id: str) -> InformationLineage | None: ...
 
     def quarantine(self, information_id: str) -> QuarantinedInformationRef | None: ...
+
+    def declassified_view(self, information_id: str) -> DeclassifiedDisclosureView | None: ...
+
+    @property
+    def event_cursor(self) -> int: ...
 
 
 def _intersection(values: Iterable[tuple[str, ...]]) -> tuple[str, ...]:
@@ -279,6 +289,24 @@ class InformationGovernanceEngine:
                 (_conflict(PolicyConflictKind.QUARANTINED, _ALL_RESTRICTED_OPERATIONS),),
             )
 
+        declassified_view = self._state.declassified_view(information_id)
+        if declassified_view is not None:
+            approved = self._state.policy(declassified_view.approved_policy_id)
+            if approved is None:
+                return _failed_composition(
+                    declassified_view.source_lineage_refs,
+                    (
+                        _conflict(
+                            PolicyConflictKind.MISSING_POLICY_VERSION,
+                            _ALL_RESTRICTED_OPERATIONS,
+                        ),
+                    ),
+                )
+            return compose_policies(
+                (approved,),
+                source_information_ids=declassified_view.source_lineage_refs,
+            )
+
         policy_ids: set[str] = set()
         source_ids: set[str] = set()
         conflicts: list[PolicyConflict] = []
@@ -355,6 +383,7 @@ class InformationGovernanceEngine:
             composition_id=composition.composition_id,
             policy_decision=decision,
             decided_at=request.context.decision_time,
+            causal_event_cursor=self._state.event_cursor,
         )
 
     def decide_disclosure(self, request: DisclosureRequest) -> DisclosureDecision:
@@ -380,6 +409,7 @@ class InformationGovernanceEngine:
             composition_id=composition.composition_id,
             policy_decision=decision,
             decided_at=context.decision_time,
+            causal_event_cursor=self._state.event_cursor,
         )
 
     def decide_declassification(self, request: DeclassificationRequest) -> DeclassificationDecision:
@@ -406,6 +436,7 @@ class InformationGovernanceEngine:
             composition_id=composition.composition_id,
             policy_decision=decision,
             decided_at=request.context.decision_time,
+            causal_event_cursor=self._state.event_cursor,
         )
 
     def _resolve(
@@ -462,6 +493,13 @@ class InformationGovernanceEngine:
                 composition.allowed_recipients
             ):
                 reasons.add(DecisionReason.RECIPIENT_NOT_PERMITTED)
+        if operation in _PRINCIPAL_DESTINATION_OPERATIONS:
+            if context.recipient != context.principal.principal_id:
+                reasons.add(DecisionReason.RECIPIENT_NOT_PERMITTED)
+            if context.destination_trust_domain not in context.principal.trust_domains:
+                reasons.add(DecisionReason.PRINCIPAL_TRUST_DOMAIN_MISMATCH)
+            if context.destination_trust_domain not in composition.allowed_trust_domains:
+                reasons.add(DecisionReason.TRUST_DOMAIN_NOT_PERMITTED)
         if operation in _SHARING_OPERATIONS and not composition.cross_agent_sharing:
             reasons.add(DecisionReason.SHARING_NOT_PERMITTED)
         if operation is InformationOperation.DELETE:

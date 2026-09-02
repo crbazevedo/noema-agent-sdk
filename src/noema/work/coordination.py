@@ -10,12 +10,14 @@ from typing import Protocol, cast
 
 from ..continuity import AwarenessCoverage, OrientationBarrier
 from ..events import Event
+from ..information.admission import InformationGovernanceAdmission
 from ..information.models import (
+    DISCLOSURE_DECIDED_EVENT,
     INFORMATION_ACCESS_DECIDED_EVENT,
+    DisclosureDecision,
     InformationAccessDecision,
     InformationOperation,
 )
-from ..information.policy import InformationGovernanceEngine
 from ..information.projection import InformationGovernanceProjection
 from ..kernel import NoemaKernel
 from ..store import ConcurrentAppendError
@@ -441,8 +443,11 @@ class WorkProjection:
 
     def _validate_information_access(self, lease: WorkLease, node: WorkNode) -> None:
         if not node.governed_information_refs:
-            if lease.information_access_decision_refs:
-                raise ValueError("ungoverned work cannot cite information access decisions")
+            if (
+                lease.information_access_decision_refs
+                or lease.information_disclosure_decision_refs
+            ):
+                raise ValueError("ungoverned work cannot cite information decisions")
             return
         if len(lease.information_access_decision_refs) != len(node.governed_information_refs):
             raise ValueError("work lease lacks complete information access evidence")
@@ -453,7 +458,10 @@ class WorkProjection:
             if event is None:
                 raise ValueError("work lease cites a non-canonical access decision")
             decision_events.append(event)
-            decisions.append(InformationAccessDecision.from_event(event))
+            decision = InformationAccessDecision.from_event(event)
+            if event.sequence != decision.causal_event_cursor + 1:
+                raise ValueError("work lease access decision lacks exact-head admission")
+            decisions.append(decision)
         if {value.request.information_ref.information_id for value in decisions} != set(
             node.governed_information_refs
         ):
@@ -467,10 +475,45 @@ class WorkProjection:
             for value in decisions
         ):
             raise ValueError("work lease information access evidence is inapplicable")
+        crossing_ids = {
+            value.request.information_ref.information_id
+            for value in decisions
+            if value.request.context.destination_trust_domain
+            != value.request.context.source_trust_domain
+        }
+        if len(lease.information_disclosure_decision_refs) != len(crossing_ids):
+            raise ValueError("work lease lacks required cross-domain disclosure evidence")
+        disclosure_decisions: list[DisclosureDecision] = []
+        for decision_id in lease.information_disclosure_decision_refs:
+            event = self._events.get(f"information-disclosure-decided:{decision_id}")
+            if event is None:
+                raise ValueError("work lease cites a non-canonical disclosure decision")
+            decision_events.append(event)
+            disclosure_decision = DisclosureDecision.from_event(event)
+            if event.sequence != disclosure_decision.causal_event_cursor + 1:
+                raise ValueError("work lease disclosure decision lacks exact-head admission")
+            disclosure_decisions.append(disclosure_decision)
+        if {
+            value.request.information_ref.information_id
+            for value in disclosure_decisions
+        } != crossing_ids:
+            raise ValueError("work lease disclosure evidence covers different information")
+        if any(
+            not value.allowed
+            or value.request.context.operation is not InformationOperation.WORK_ASSIGN
+            or value.request.context.principal.principal_id != lease.agent_id
+            or value.request.context.recipient != lease.agent_id
+            or value.request.context.destination_trust_domain
+            == value.request.context.source_trust_domain
+            or value.decided_at != lease.granted_at
+            for value in disclosure_decisions
+        ):
+            raise ValueError("work lease disclosure evidence is inapplicable")
         decision_cut = min(event.sequence or 0 for event in decision_events)
         if any(
             (event.sequence or 0) > decision_cut
-            and event.type != INFORMATION_ACCESS_DECIDED_EVENT
+            and event.type
+            not in {INFORMATION_ACCESS_DECIDED_EVENT, DISCLOSURE_DECIDED_EVENT}
             for event in self._events.values()
         ):
             raise ValueError(
@@ -708,6 +751,7 @@ class WorkerMatch:
     score: float
     competence_estimate_refs: tuple[str, ...]
     information_access_decisions: tuple[InformationAccessDecision, ...] = ()
+    information_disclosure_decisions: tuple[DisclosureDecision, ...] = ()
 
 
 class WorkerAccessEvaluator(Protocol):
@@ -720,7 +764,7 @@ class WorkerAccessEvaluator(Protocol):
         agent_id: str,
         *,
         at: datetime,
-    ) -> tuple[InformationAccessDecision, ...]: ...
+    ) -> tuple[InformationAccessDecision | DisclosureDecision, ...]: ...
 
 
 class WorkerMatcher:
@@ -752,11 +796,14 @@ class WorkerMatcher:
         projection: WorkProjection,
         *,
         at: datetime,
-    ) -> tuple[WorkerMatch | None, tuple[InformationAccessDecision, ...]]:
+    ) -> tuple[
+        WorkerMatch | None,
+        tuple[InformationAccessDecision | DisclosureDecision, ...],
+    ]:
         if at.tzinfo is None:
             raise ValueError("worker matching time must be timezone-aware")
         candidates: list[WorkerMatch] = []
-        access_evidence: list[InformationAccessDecision] = []
+        access_evidence: list[InformationAccessDecision | DisclosureDecision] = []
         excluded_workers = {
             worker
             for target_id in node.verification_of
@@ -787,21 +834,29 @@ class WorkerMatcher:
             if any(value.basis is not CompetenceBasis.SEEDED for value in typed_estimates):
                 continue
             access_decisions: tuple[InformationAccessDecision, ...] = ()
+            disclosure_decisions: tuple[DisclosureDecision, ...] = ()
             if node.governed_information_refs:
                 if self.access_evaluator is None:
                     continue
-                access_decisions = self.access_evaluator.evaluate(
+                evaluated = self.access_evaluator.evaluate(
                     graph,
                     node,
                     presence.agent_id,
                     at=at,
                 )
-                access_evidence.extend(access_decisions)
+                access_evidence.extend(evaluated)
+                access_decisions = tuple(
+                    value for value in evaluated if isinstance(value, InformationAccessDecision)
+                )
+                disclosure_decisions = tuple(
+                    value for value in evaluated if isinstance(value, DisclosureDecision)
+                )
                 if not self._access_is_feasible(
                     node,
                     presence.agent_id,
                     at,
                     access_decisions,
+                    disclosure_decisions,
                 ):
                     continue
             candidates.append(
@@ -816,6 +871,7 @@ class WorkerMatcher:
                         value.estimate_id for value in typed_estimates
                     ),
                     information_access_decisions=access_decisions,
+                    information_disclosure_decisions=disclosure_decisions,
                 )
             )
         if not candidates:
@@ -828,19 +884,46 @@ class WorkerMatcher:
         node: WorkNode,
         agent_id: str,
         at: datetime,
-        decisions: tuple[InformationAccessDecision, ...],
+        access_decisions: tuple[InformationAccessDecision, ...],
+        disclosure_decisions: tuple[DisclosureDecision, ...],
     ) -> bool:
-        return (
-            len(decisions) == len(node.governed_information_refs)
-            and {value.request.information_ref.information_id for value in decisions}
-            == set(node.governed_information_refs)
-            and all(
+        governed_ids = set(node.governed_information_refs)
+        if (
+            len(access_decisions) != len(governed_ids)
+            or {value.request.information_ref.information_id for value in access_decisions}
+            != governed_ids
+            or not all(
                 value.allowed
                 and value.request.context.operation is InformationOperation.WORK_ASSIGN
                 and value.request.context.principal.principal_id == agent_id
                 and value.request.context.recipient == agent_id
                 and value.decided_at == at
-                for value in decisions
+                for value in access_decisions
+            )
+        ):
+            return False
+        crossing_ids = {
+            value.request.information_ref.information_id
+            for value in access_decisions
+            if value.request.context.destination_trust_domain
+            != value.request.context.source_trust_domain
+        }
+        return (
+            len(disclosure_decisions) == len(crossing_ids)
+            and {
+                value.request.information_ref.information_id
+                for value in disclosure_decisions
+            }
+            == crossing_ids
+            and all(
+                value.allowed
+                and value.request.context.operation is InformationOperation.WORK_ASSIGN
+                and value.request.context.principal.principal_id == agent_id
+                and value.request.context.recipient == agent_id
+                and value.request.context.destination_trust_domain
+                != value.request.context.source_trust_domain
+                and value.decided_at == at
+                for value in disclosure_decisions
             )
         )
 
@@ -888,6 +971,15 @@ class DurableWorkCoordinator:
                 "worker access evaluator must share the coordinator governance projection"
             )
         self.information_projection = information_projection
+        self.information_admission = (
+            InformationGovernanceAdmission(
+                kernel,
+                information_projection,
+                source=source,
+            )
+            if information_projection is not None
+            else None
+        )
         self.lease_duration = lease_duration
         self.clock = clock
         self.source = source
@@ -997,33 +1089,49 @@ class DurableWorkCoordinator:
                 self.projection,
                 at=at,
             )
-            selected_decision_ids = {
-                value.decision_id
-                for value in (
-                    match.information_access_decisions if match is not None else ()
+            selected_decision_ids: set[str] = set()
+            if match is not None:
+                selected_decision_ids.update(
+                    value.decision_id for value in match.information_access_decisions
                 )
-            }
+                selected_decision_ids.update(
+                    value.decision_id for value in match.information_disclosure_decisions
+                )
             material_decisions = tuple(
                 value
                 for value in access_evidence
                 if not value.allowed or value.decision_id in selected_decision_ids
             )
-            if material_decisions:
-                if self.information_projection is None:
-                    raise AssertionError("governed matching lost its governance projection")
-                governance = InformationGovernanceEngine(self.information_projection)
-                if any(
-                    decision != governance.decide_access(decision.request)
-                    for decision in material_decisions
-                ):
-                    continue
             expected_head = self.projection.event_cursor
+            admitted_access: list[InformationAccessDecision] = []
+            admitted_disclosure: list[DisclosureDecision] = []
             for decision in material_decisions:
-                stored_decision = await self._emit_if_head(
-                    decision.to_event(source=self.source),
-                    expected_head_sequence=expected_head,
-                )
-                expected_head = stored_decision.sequence or expected_head
+                if self.information_admission is None:
+                    raise AssertionError("governed matching lost its admission facade")
+                if isinstance(decision, InformationAccessDecision):
+                    access_receipt = await self.information_admission.admit_access(
+                        decision.request,
+                        expected_disposition=decision.policy_decision.disposition,
+                        expected_causal_cursor=expected_head,
+                    )
+                    admitted = access_receipt.record
+                    if decision.decision_id in selected_decision_ids:
+                        admitted_access.append(admitted)
+                    canonical_event = access_receipt.canonical_event
+                    canonical_sequence = access_receipt.canonical_sequence
+                else:
+                    disclosure_receipt = await self.information_admission.admit_disclosure(
+                        decision.request,
+                        expected_disposition=decision.policy_decision.disposition,
+                        expected_causal_cursor=expected_head,
+                    )
+                    admitted_disclosure_record = disclosure_receipt.record
+                    if decision.decision_id in selected_decision_ids:
+                        admitted_disclosure.append(admitted_disclosure_record)
+                    canonical_event = disclosure_receipt.canonical_event
+                    canonical_sequence = disclosure_receipt.canonical_sequence
+                self.projection.apply(canonical_event)
+                expected_head = canonical_sequence
             if match is None:
                 continue
             lease = WorkLease.create(
@@ -1036,7 +1144,10 @@ class DurableWorkCoordinator:
                 match_score=match.score,
                 competence_estimate_refs=match.competence_estimate_refs,
                 information_access_decision_refs=tuple(
-                    value.decision_id for value in match.information_access_decisions
+                    value.decision_id for value in admitted_access
+                ),
+                information_disclosure_decision_refs=tuple(
+                    value.decision_id for value in admitted_disclosure
                 ),
             )
             lease_event = lease.to_event(

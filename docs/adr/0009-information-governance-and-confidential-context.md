@@ -229,15 +229,18 @@ data platform:
   legal-hold and retention conflicts that deny `DELETE` without globally denying
   a permitted legal-review read;
 - canonical governance events with opaque subjects, reusable envelope leakage
-  validation, deterministic decision replay, and a rebuildable governance
-  projection;
+  validation, keyed dictionary-resistant information identifiers, exact-head
+  material-decision admission, deterministic replay, and a rebuildable
+  governance projection;
 - inherited policy across multi-source derivation, with redaction and
-  abstraction remaining transformations rather than declassification;
+  abstraction remaining transformations rather than declassification, plus an
+  immutable effective view transition after canonical allowed declassification;
 - optional pre-ranking enforcement in `MemoryRetriever`, guarded
   `ContextAssembler` items with a second disclosure check on trust-boundary
   crossing, and information access as a hard `WorkerMatcher` feasibility filter;
-- access-decision references on governed work leases; head-checked appends admit
-  a lease only when no event interleaves after its access-decision sequence.
+- access- and cross-domain disclosure-decision references on governed work
+  leases; head-checked appends admit material decisions and a lease only when no
+  event interleaves after the evaluated causal cut.
 
 Compatibility is additive. Historical memory and work without explicit
 governed-information bindings retain their prior behavior; explicitly governed
@@ -248,8 +251,9 @@ paths opt in to enforcement explicitly.
 The privileged bootstrap path is deliberately bounded: policy, lineage,
 binding, and decision records are read directly by the governance projection;
 they do not recursively require access decisions about their own authorization
-records. A `SecurityAuditReceipt` summarizes an already computed decision and
-is never accepted as authorization.
+records. A `SecurityAuditReceipt` may summarize a routine check without first
+persisting its decision. It is projected separately and is never accepted as
+authorization.
 
 Still deferred are production encrypted artifact storage and real restricted
 ingestion; KMS/HSM integration, rotation, crypto-erasure, and secrets backends;

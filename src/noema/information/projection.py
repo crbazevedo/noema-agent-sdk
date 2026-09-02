@@ -9,6 +9,7 @@ from ..events import Event
 from ..types import JSONObject
 from .models import (
     DECLASSIFICATION_DECIDED_EVENT,
+    DECLASSIFIED_VIEW_RECORDED_EVENT,
     DISCLOSURE_DECIDED_EVENT,
     INFORMATION_ACCESS_DECIDED_EVENT,
     INFORMATION_QUARANTINED_EVENT,
@@ -17,6 +18,7 @@ from .models import (
     POLICY_RECORDED_EVENT,
     SECURITY_AUDIT_RECEIPT_EVENT,
     DeclassificationDecision,
+    DeclassifiedDisclosureView,
     DisclosureDecision,
     InformationAccessDecision,
     InformationLineage,
@@ -47,7 +49,7 @@ class InformationGovernanceProjection:
         self._access_decisions: dict[str, InformationAccessDecision] = {}
         self._disclosure_decisions: dict[str, DisclosureDecision] = {}
         self._declassification_decisions: dict[str, DeclassificationDecision] = {}
-        self._receipts: dict[str, SecurityAuditReceipt] = {}
+        self._declassified_views: dict[str, DeclassifiedDisclosureView] = {}
 
     @property
     def event_cursor(self) -> int:
@@ -91,8 +93,10 @@ class InformationGovernanceProjection:
         )
 
     @property
-    def audit_receipts(self) -> tuple[SecurityAuditReceipt, ...]:
-        return tuple(self._receipts[key] for key in sorted(self._receipts))
+    def declassified_views(self) -> tuple[DeclassifiedDisclosureView, ...]:
+        return tuple(
+            self._declassified_views[key] for key in sorted(self._declassified_views)
+        )
 
     def policy(self, policy_id: str) -> InformationPolicy | None:
         return self._policies.get(policy_id)
@@ -108,6 +112,19 @@ class InformationGovernanceProjection:
 
     def access_decision(self, decision_id: str) -> InformationAccessDecision | None:
         return self._access_decisions.get(decision_id)
+
+    def disclosure_decision(self, decision_id: str) -> DisclosureDecision | None:
+        return self._disclosure_decisions.get(decision_id)
+
+    def declassification_decision(
+        self, decision_id: str
+    ) -> DeclassificationDecision | None:
+        return self._declassification_decisions.get(decision_id)
+
+    def declassified_view(
+        self, information_id: str
+    ) -> DeclassifiedDisclosureView | None:
+        return self._declassified_views.get(information_id)
 
     def apply(self, event: Event) -> bool:
         existing = self._events.get(event.id)
@@ -163,6 +180,10 @@ class InformationGovernanceProjection:
             handled = True
         elif event.type == INFORMATION_ACCESS_DECIDED_EVENT:
             access_decision = InformationAccessDecision.from_event(event)
+            self._require_exact_decision_cursor(
+                access_decision.causal_event_cursor,
+                "access decision",
+            )
             expected_access = InformationGovernanceEngine(self).decide_access(
                 access_decision.request
             )
@@ -177,6 +198,10 @@ class InformationGovernanceProjection:
             handled = True
         elif event.type == DISCLOSURE_DECIDED_EVENT:
             disclosure_decision = DisclosureDecision.from_event(event)
+            self._require_exact_decision_cursor(
+                disclosure_decision.causal_event_cursor,
+                "disclosure decision",
+            )
             expected_disclosure = InformationGovernanceEngine(self).decide_disclosure(
                 disclosure_decision.request
             )
@@ -191,6 +216,10 @@ class InformationGovernanceProjection:
             handled = True
         elif event.type == DECLASSIFICATION_DECIDED_EVENT:
             declassification_decision = DeclassificationDecision.from_event(event)
+            self._require_exact_decision_cursor(
+                declassification_decision.causal_event_cursor,
+                "declassification decision",
+            )
             expected_declassification = InformationGovernanceEngine(self).decide_declassification(
                 declassification_decision.request
             )
@@ -205,16 +234,38 @@ class InformationGovernanceProjection:
                 "declassification decision",
             )
             handled = True
-        elif event.type == SECURITY_AUDIT_RECEIPT_EVENT:
-            receipt = SecurityAuditReceipt.from_event(event)
-            expected_decision = self._decision_for_receipt(receipt)
-            if expected_decision is None:
-                raise ValueError("audit receipt references an unknown material decision")
-            expected = SecurityAuditReceipt.from_decision(expected_decision)
-            if receipt != expected:
-                raise ValueError("audit receipt differs from its material decision")
-            self._put_immutable(self._receipts, receipt.receipt_id, receipt, "audit receipt")
+        elif event.type == DECLASSIFIED_VIEW_RECORDED_EVENT:
+            view = DeclassifiedDisclosureView.from_event(event)
+            self._require_exact_decision_cursor(
+                view.causal_event_cursor,
+                "declassified view",
+            )
+            decision = self._declassification_decisions.get(
+                view.declassification_decision_id
+            )
+            if decision is None or not decision.allowed:
+                raise ValueError(
+                    "declassified view requires its canonical allowed decision"
+                )
+            expected_view = DeclassifiedDisclosureView.create(
+                decision=decision,
+                created_at=view.created_at,
+                causal_event_cursor=self._last_sequence,
+            )
+            if view != expected_view:
+                raise ValueError("declassified view differs from its canonical decision")
+            if view.approved_policy_id not in self._policies:
+                raise ValueError("declassified view references an unknown approved policy")
+            self._put_immutable(
+                self._declassified_views,
+                view.information_ref.information_id,
+                view,
+                "declassified view",
+            )
             handled = True
+        elif event.type == SECURITY_AUDIT_RECEIPT_EVENT:
+            # Receipts are valid canonical records, but never authorization state.
+            SecurityAuditReceipt.from_event(event)
 
         self._events[event.id] = event
         self._last_sequence = event.sequence
@@ -242,7 +293,9 @@ class InformationGovernanceProjection:
             "declassification_decisions": [
                 value.to_dict() for value in self.declassification_decisions
             ],
-            "audit_receipts": [value.to_dict() for value in self.audit_receipts],
+            "declassified_views": [
+                value.to_dict() for value in self.declassified_views
+            ],
         }
 
     @staticmethod
@@ -252,9 +305,63 @@ class InformationGovernanceProjection:
             raise ValueError(f"conflicting {name} identity: {key}")
         mapping[key] = value
 
-    def _decision_for_receipt(
-        self, receipt: SecurityAuditReceipt
-    ) -> InformationAccessDecision | DisclosureDecision | None:
-        if receipt.decision_type == "access":
-            return self._access_decisions.get(receipt.decision_id)
-        return self._disclosure_decisions.get(receipt.decision_id)
+    def _require_exact_decision_cursor(self, cursor: int, name: str) -> None:
+        if cursor != self._last_sequence:
+            raise ValueError(f"{name} does not cite the exact preceding canonical head")
+
+
+class SecurityAuditProjection:
+    """Bounded audit evidence that is deliberately not authorization state."""
+
+    def __init__(self, *, max_receipts: int = 1024) -> None:
+        if max_receipts <= 0:
+            raise ValueError("security audit receipt bound must be positive")
+        self._max_receipts = max_receipts
+        self._reset()
+
+    def _reset(self) -> None:
+        self._events: dict[str, Event] = {}
+        self._receipts: dict[str, SecurityAuditReceipt] = {}
+        self._receipt_order: list[str] = []
+        self._last_sequence = 0
+
+    @property
+    def event_cursor(self) -> int:
+        return self._last_sequence
+
+    @property
+    def receipts(self) -> tuple[SecurityAuditReceipt, ...]:
+        return tuple(self._receipts[key] for key in self._receipt_order)
+
+    def apply(self, event: Event) -> bool:
+        existing = self._events.get(event.id)
+        if existing is not None:
+            if existing != event:
+                raise ValueError(f"conflicting canonical audit event: {event.id}")
+            return False
+        if event.sequence is None:
+            raise ValueError("security audit projection requires canonical events")
+        if event.sequence <= self._last_sequence:
+            raise ValueError("security audit events must be applied in canonical order")
+        handled = False
+        if event.type == SECURITY_AUDIT_RECEIPT_EVENT:
+            receipt = SecurityAuditReceipt.from_event(event)
+            InformationGovernanceProjection._put_immutable(
+                self._receipts,
+                receipt.receipt_id,
+                receipt,
+                "audit receipt",
+            )
+            self._receipt_order.append(receipt.receipt_id)
+            if len(self._receipt_order) > self._max_receipts:
+                expired_id = self._receipt_order.pop(0)
+                self._receipts.pop(expired_id, None)
+            handled = True
+        self._events[event.id] = event
+        self._last_sequence = event.sequence
+        return handled
+
+    def rebuild(self, events: Iterable[Event]) -> None:
+        self._reset()
+        for event in events:
+            self.apply(event)
