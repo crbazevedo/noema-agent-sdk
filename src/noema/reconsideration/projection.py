@@ -9,7 +9,8 @@ from typing import TypeVar
 from ..endogenous.models import INQUIRY_RECORDED_EVENT
 from ..endogenous.projection import EndogenousProjection
 from ..events import Event
-from ..information.models import InformationOperation
+from ..information.models import InformationOperation, LineageTransformation
+from ..information.policy import InformationGovernanceEngine
 from ..information.projection import InformationGovernanceProjection
 from ..types import JSONObject
 from .models import (
@@ -22,6 +23,7 @@ from .models import (
     POLICY_RECORDED_EVENT,
     SCAN_REQUESTED_EVENT,
     SHADOW_PROPOSAL_RECORDED_EVENT,
+    AllocationLabel,
     CognitiveAllocationOutcomeLink,
     CognitiveAllocationTrace,
     CognitiveBasisKind,
@@ -34,6 +36,7 @@ from .models import (
     ReconsiderationPolicySnapshot,
     ReconsiderationScanRequest,
     ReconsiderationShadowProposal,
+    ScarceCognitionBudget,
     ScarceCognitionCostSnapshot,
 )
 from .policy import allocate_reconsideration, ensure_allocator_supported
@@ -210,9 +213,10 @@ class ReconsiderationProjection:
         self._allocations: dict[str, ReconsiderationAllocation] = {}
         self._allocation_by_scan: dict[str, str] = {}
         self._traces: dict[str, CognitiveAllocationTrace] = {}
-        self._trace_by_candidate: dict[str, str] = {}
+        self._trace_by_decision: dict[tuple[str, str], str] = {}
         self._outcome_links: dict[str, CognitiveAllocationOutcomeLink] = {}
         self._proposals: dict[str, ReconsiderationShadowProposal] = {}
+        self._proposal_by_trace: dict[str, str] = {}
 
     @property
     def event_cursor(self) -> int:
@@ -274,15 +278,67 @@ class ReconsiderationProjection:
         return tuple(
             self._candidates[value]
             for value in sorted(self._candidates_by_scan.get(request_id, ()))
+            if value in self._candidates
         )
 
     def allocation_for_scan(self, request_id: str) -> ReconsiderationAllocation | None:
         allocation_id = self._allocation_by_scan.get(request_id)
         return self._allocations.get(allocation_id) if allocation_id else None
 
-    def trace_for_candidate(self, candidate_id: str) -> CognitiveAllocationTrace | None:
-        trace_id = self._trace_by_candidate.get(candidate_id)
+    def trace_for_decision(
+        self,
+        candidate_id: str,
+        allocation_id: str,
+    ) -> CognitiveAllocationTrace | None:
+        trace_id = self._trace_by_decision.get((candidate_id, allocation_id))
         return self._traces.get(trace_id) if trace_id else None
+
+    def proposal_for_trace(self, trace_id: str) -> ReconsiderationShadowProposal | None:
+        proposal_id = self._proposal_by_trace.get(trace_id)
+        return self._proposals.get(proposal_id) if proposal_id else None
+
+    def candidate_was_selected(self, candidate_id: str) -> bool:
+        return any(
+            decision.candidate_id == candidate_id and decision.label is AllocationLabel.SELECTED
+            for allocation in self.allocations
+            for decision in allocation.decisions
+        )
+
+    def basis_is_current(self, basis: object, *, at: datetime) -> bool:
+        try:
+            self._validate_basis(basis, at=at)
+        except (TypeError, ValueError):
+            return False
+        return True
+
+    def find_allocation_context(
+        self,
+        *,
+        basis_id: str,
+        candidate_ids: tuple[str, ...],
+        policy_id: str,
+        budget: ScarceCognitionBudget,
+        maximum_interruption_units: float,
+        trigger_event_id: str | None,
+        foreground_demand_refs: tuple[str, ...],
+    ) -> ReconsiderationAllocation | None:
+        expected_candidates = tuple(sorted(candidate_ids))
+        expected_foreground = tuple(sorted(set(foreground_demand_refs)))
+        matches = tuple(
+            allocation
+            for allocation in self.allocations
+            if (scan := self._scans[allocation.scan_request_id]).basis.basis_id == basis_id
+            and tuple(sorted(value.candidate_id for value in scan.candidate_inputs))
+            == expected_candidates
+            and scan.policy_id == policy_id
+            and scan.budget == budget
+            and scan.maximum_interruption_units == maximum_interruption_units
+            and scan.trigger_event_id == trigger_event_id
+            and allocation.foreground_demand_refs == expected_foreground
+        )
+        if len(matches) > 1:
+            raise ValueError("multiple allocations share one deterministic context")
+        return matches[0] if matches else None
 
     def find_candidate(
         self,
@@ -368,9 +424,17 @@ class ReconsiderationProjection:
                 if foreground.type not in policy.foreground_event_types:
                     raise ValueError("scan cites an event that is not configured foreground demand")
             for candidate_input in scan.candidate_inputs:
-                self._validate_access_decisions(scan, candidate_input)
+                self._validate_scan_candidate_input(
+                    scan,
+                    candidate_input,
+                    scan_sequence=event.sequence,
+                )
+                if self.candidate_was_selected(candidate_input.candidate_id):
+                    raise ValueError("a surfaced candidate is terminal for its semantic basis")
             self._put_immutable(self._scans, scan.request_id, scan, "scan")
-            self._candidates_by_scan.setdefault(scan.request_id, set())
+            self._candidates_by_scan[scan.request_id] = {
+                value.candidate_id for value in scan.candidate_inputs
+            }
             return True
         if event.type == CANDIDATE_RECORDED_EVENT:
             self._require_exact_head(event)
@@ -389,42 +453,29 @@ class ReconsiderationProjection:
                 raise ValueError("candidate references an unknown canonical scan")
             if candidate.current_causal_cursor != scan_event.sequence:
                 raise ValueError("candidate does not cite its current scan causal cut")
-            if candidate.current_basis != candidate_scan.basis:
-                raise ValueError("candidate differs from its scan cognitive basis")
-            self._validate_basis(candidate.current_basis, at=candidate.created_at)
             matching_input = next(
                 (
                     value
                     for value in candidate_scan.candidate_inputs
-                    if value.seed.inquiry_id == candidate.historical.inquiry_id
+                    if value.candidate_id == candidate.candidate_id
                 ),
                 None,
             )
             if matching_input is None:
                 raise ValueError("candidate was not declared by its scan")
-            seed = matching_input.seed
-            if (
-                candidate.domain != seed.domain
-                or candidate.current_evidence_refs != seed.current_evidence_refs
-                or candidate.information_access_decision_ids
-                != matching_input.information_access_decision_ids
-                or candidate.features != seed.features
-                or candidate.costs != seed.costs
-                or candidate.historical.governed_information_ids != seed.governed_information_ids
-            ):
+            expected_candidate = self._candidate_from_input(
+                candidate_scan,
+                matching_input,
+                scan_sequence=scan_event.sequence,
+            )
+            if candidate != expected_candidate:
                 raise ValueError("candidate differs from its deterministic scan input")
-            self._validate_historical_inquiry(candidate)
-            self._validate_current_evidence(candidate)
-            self._validate_feature_provenance(candidate)
-            self._validate_candidate_access(candidate_scan, candidate)
-            self._validate_candidate_scope(candidate)
             self._put_immutable(
                 self._candidates,
                 candidate.candidate_id,
                 candidate,
                 "candidate",
             )
-            self._candidates_by_scan[candidate_scan.request_id].add(candidate.candidate_id)
             return True
         if event.type == ALLOCATION_RECORDED_EVENT:
             self._require_exact_head(event)
@@ -444,10 +495,39 @@ class ReconsiderationProjection:
             candidates = self.candidates_for_scan(allocation_scan.request_id)
             if len(candidates) != len(allocation_scan.candidate_inputs):
                 raise ValueError("allocation requires every declared candidate")
+            scan_event = self._events[
+                f"reconsideration-scan-requested:{allocation_scan.request_id}"
+            ]
+            assert scan_event.sequence is not None
+            allocation_policy_types = set(allocation_policy.foreground_event_types)
+            for ref in allocation.foreground_demand_refs:
+                foreground = self._event_ref(ref)
+                if (
+                    foreground.type not in allocation_policy_types
+                    or foreground.sequence is None
+                    or foreground.sequence > self._last_sequence
+                ):
+                    raise ValueError("allocation foreground evidence is invalid")
+                if (
+                    ref not in allocation_scan.foreground_demand_refs
+                    and foreground.sequence <= scan_event.sequence
+                ):
+                    raise ValueError("intervening foreground evidence must follow the scan cut")
+            if not set(allocation_scan.foreground_demand_refs).issubset(
+                allocation.foreground_demand_refs
+            ):
+                raise ValueError("allocation lost foreground evidence pinned by its scan")
+            self._validate_derived_information(
+                information_id=allocation.derived_information_id,
+                source_information_ids=tuple(value.derived_information_id for value in candidates),
+                policy_ids=allocation_scan.information_policy_ids,
+            )
             expected_allocation = allocate_reconsideration(
                 scan=allocation_scan,
                 policy=allocation_policy,
                 candidates=candidates,
+                derived_information_id=allocation.derived_information_id,
+                foreground_demand_refs=allocation.foreground_demand_refs,
                 allocated_at=allocation.allocated_at,
             )
             if allocation != expected_allocation:
@@ -479,16 +559,23 @@ class ReconsiderationProjection:
             if decision is None:
                 raise ValueError("allocation trace candidate was not decided")
             expected_trace = CognitiveAllocationTrace.create(
+                derived_information_id=trace.derived_information_id,
                 allocation=trace_allocation,
                 candidate=trace_candidate,
                 decision=decision,
             )
             if trace != expected_trace:
                 raise ValueError("allocation trace differs from its canonical decision")
-            if trace.candidate_id in self._trace_by_candidate:
-                raise ValueError("candidate already has an allocation trace")
+            self._validate_derived_information(
+                information_id=trace.derived_information_id,
+                source_information_ids=(trace_allocation.derived_information_id,),
+                policy_ids=self._scans[trace_allocation.scan_request_id].information_policy_ids,
+            )
+            decision_key = (trace.candidate_id, trace.allocation_id)
+            if decision_key in self._trace_by_decision:
+                raise ValueError("candidate allocation decision already has a trace")
             self._traces[trace.trace_id] = trace
-            self._trace_by_candidate[trace.candidate_id] = trace.trace_id
+            self._trace_by_decision[decision_key] = trace.trace_id
             return True
         if event.type == ALLOCATION_OUTCOME_LINKED_EVENT:
             self._require_exact_head(event)
@@ -525,16 +612,13 @@ class ReconsiderationProjection:
             proposal_trace = self._traces.get(proposal.allocation_trace_id)
             if proposal_candidate is None or proposal_allocation is None or proposal_trace is None:
                 raise ValueError("shadow proposal references unknown reconsideration state")
+            self._validate_basis(proposal_candidate.current_basis, at=proposal.created_at)
             if proposal.candidate_id not in proposal_allocation.selected_candidate_ids:
                 raise ValueError("only a selected candidate may produce a shadow proposal")
-            inquiry = self._endogenous.inquiry(proposal_candidate.historical.inquiry_id)
-            if inquiry is None:
-                raise ValueError("shadow proposal lost its historical inquiry")
             expected_proposal = ReconsiderationShadowProposal.create(
                 candidate=proposal_candidate,
                 allocation=proposal_allocation,
                 trace=proposal_trace,
-                historical_question=inquiry.question,
             )
             if proposal != expected_proposal:
                 raise ValueError("shadow proposal differs from its selected candidate")
@@ -544,6 +628,10 @@ class ReconsiderationProjection:
                 proposal,
                 "shadow proposal",
             )
+            existing_proposal = self._proposal_by_trace.get(proposal.allocation_trace_id)
+            if existing_proposal is not None and existing_proposal != proposal.proposal_id:
+                raise ValueError("allocation trace already has a shadow proposal")
+            self._proposal_by_trace[proposal.allocation_trace_id] = proposal.proposal_id
             return True
         return False
 
@@ -572,6 +660,8 @@ class ReconsiderationProjection:
             raise ValueError("scan references an unknown mandate")
         if not scan.budget.fits_within(mandate.budget):
             raise ValueError("scan budget exceeds its mandate")
+        if scan.maximum_interruption_units != mandate.maximum_interruption_units:
+            raise ValueError("scan interruption ceiling differs from its mandate")
         if scan.information_use_purpose != mandate.information_use_purpose:
             raise ValueError("scan information purpose differs from its mandate")
         if scan.information_policy_ids != mandate.information_policy_ids:
@@ -591,12 +681,92 @@ class ReconsiderationProjection:
         assert scan.basis.mandate_revision_id is not None
         mandate = self._mandates.revision(scan.basis.mandate_revision_id)
         assert mandate is not None
-        if mandate.trigger_event_types:
-            if scan.trigger_event_id is None:
-                raise ValueError("mandate scan requires an explicit canonical trigger")
-            trigger = self._events.get(scan.trigger_event_id)
-            if trigger is None or trigger.type not in mandate.trigger_event_types:
-                raise ValueError("mandate scan trigger is absent or out of scope")
+        if not mandate.trigger_event_types:
+            if scan.trigger_event_id is not None:
+                raise ValueError("cadence-only mandate scan cannot claim a trigger")
+            return
+        if scan.trigger_event_id is None:
+            raise ValueError("mandate scan requires an explicit canonical trigger")
+        trigger = self._events.get(scan.trigger_event_id)
+        if trigger is None or trigger.type not in mandate.trigger_event_types:
+            raise ValueError("mandate scan trigger is absent or out of scope")
+        mandate_event = self._events.get(f"reconsideration-mandate-recorded:{mandate.revision_id}")
+        if (
+            mandate_event is None
+            or mandate_event.sequence is None
+            or trigger.sequence is None
+            or trigger.sequence <= mandate_event.sequence
+        ):
+            raise ValueError("mandate scan trigger predates mandate activation")
+        previous_scans = tuple(
+            value for value in self.scans if value.basis.mandate_revision_id == mandate.revision_id
+        )
+        if any(value.trigger_event_id == scan.trigger_event_id for value in previous_scans):
+            raise ValueError("mandate scan trigger was already consumed")
+        previous_scan_sequences = tuple(
+            event.sequence or 0
+            for value in previous_scans
+            if (event := self._events.get(f"reconsideration-scan-requested:{value.request_id}"))
+            is not None
+        )
+        if previous_scan_sequences and trigger.sequence <= max(previous_scan_sequences):
+            raise ValueError("mandate scan trigger is stale")
+
+    def _validate_scan_candidate_input(
+        self,
+        scan: ReconsiderationScanRequest,
+        candidate_input: object,
+        *,
+        scan_sequence: int | None,
+    ) -> None:
+        from .models import ReconsiderationCandidateInput
+
+        if not isinstance(candidate_input, ReconsiderationCandidateInput):
+            raise TypeError("invalid reconsideration candidate input")
+        if scan_sequence is None:
+            raise ValueError("reconsideration scan must be canonical")
+        candidate = self._candidate_from_input(
+            scan,
+            candidate_input,
+            scan_sequence=scan_sequence,
+        )
+        if candidate.candidate_id != candidate_input.candidate_id:
+            raise ValueError("scan candidate identity differs from its semantic input")
+        self._validate_historical_inquiry(candidate)
+        self._validate_evidence_cut(candidate, maximum_sequence=self._last_sequence)
+        self._validate_access_decisions(scan, candidate_input)
+        self._validate_candidate_scope(candidate)
+        self._validate_derived_information(
+            information_id=candidate.derived_information_id,
+            source_information_ids=candidate.historical.governed_information_ids,
+            policy_ids=scan.information_policy_ids,
+        )
+
+    @staticmethod
+    def _candidate_from_input(
+        scan: ReconsiderationScanRequest,
+        candidate_input: object,
+        *,
+        scan_sequence: int,
+    ) -> ReconsiderationCandidate:
+        from .models import ReconsiderationCandidateInput
+
+        if not isinstance(candidate_input, ReconsiderationCandidateInput):
+            raise TypeError("invalid reconsideration candidate input")
+        seed = candidate_input.seed
+        return ReconsiderationCandidate.create(
+            scan_request_id=scan.request_id,
+            derived_information_id=candidate_input.derived_information_id,
+            historical=candidate_input.historical,
+            current_basis=scan.basis,
+            domain=seed.domain,
+            current_causal_cursor=scan_sequence,
+            current_evidence_refs=seed.current_evidence_refs,
+            information_access_decision_ids=candidate_input.information_access_decision_ids,
+            features=seed.features,
+            costs=seed.costs,
+            created_at=scan.requested_at,
+        )
 
     def _validate_access_decisions(
         self,
@@ -608,10 +778,13 @@ class ReconsiderationProjection:
         if not isinstance(candidate_input, ReconsiderationCandidateInput):
             raise TypeError("invalid reconsideration candidate input")
         decisions = []
+        governance = InformationGovernanceEngine(self._information)
         for decision_id in candidate_input.information_access_decision_ids:
             decision = self._information.access_decision(decision_id)
             if decision is None or not decision.allowed:
                 raise ValueError("reconsideration requires current allowed information use")
+            if not governance.decide_access(decision.request).allowed:
+                raise ValueError("reconsideration information use is no longer allowed")
             if decision.request.context.operation is not InformationOperation.REASON:
                 raise ValueError("reconsideration information use must be admitted for reasoning")
             if decision.request.context.purpose != scan.information_use_purpose:
@@ -651,32 +824,24 @@ class ReconsiderationProjection:
                     "live-intent reconsideration requires the same stable goal lineage"
                 )
 
-    def _validate_current_evidence(self, candidate: ReconsiderationCandidate) -> None:
-        events = tuple(self._event_ref(value) for value in candidate.current_evidence_refs)
-        if not any(
-            (value.sequence or 0) > candidate.historical.historical_causal_cursor
-            for value in events
-        ):
-            raise ValueError("reconsideration requires new current-world evidence")
-
-    def _validate_feature_provenance(self, candidate: ReconsiderationCandidate) -> None:
-        for ref in candidate.features.provenance_refs:
-            self._event_ref(ref)
-        for estimate in candidate.features.estimates():
-            for ref in estimate.evidence_refs:
-                self._event_ref(ref)
-
-    def _validate_candidate_access(
+    def _validate_evidence_cut(
         self,
-        scan: ReconsiderationScanRequest,
         candidate: ReconsiderationCandidate,
+        *,
+        maximum_sequence: int,
     ) -> None:
-        matching = next(
-            value
-            for value in scan.candidate_inputs
-            if value.seed.inquiry_id == candidate.historical.inquiry_id
-        )
-        self._validate_access_decisions(scan, matching)
+        refs = {
+            *candidate.current_evidence_refs,
+            *candidate.features.provenance_refs,
+            *(ref for estimate in candidate.features.estimates() for ref in estimate.evidence_refs),
+        }
+        for ref in refs:
+            evidence = self._event_ref(ref)
+            sequence = evidence.sequence or 0
+            if sequence <= candidate.historical.historical_causal_cursor:
+                raise ValueError("reconsideration evidence does not follow the historical cut")
+            if sequence > maximum_sequence:
+                raise ValueError("reconsideration evidence postdates the scan causal cut")
 
     def _validate_candidate_scope(self, candidate: ReconsiderationCandidate) -> None:
         if candidate.current_basis.kind is not CognitiveBasisKind.RECONSIDERATION_MANDATE:
@@ -690,6 +855,28 @@ class ReconsiderationProjection:
             raise ValueError("candidate domain is outside mandate scope")
         if candidate.costs.interruption_units > mandate.maximum_interruption_units:
             raise ValueError("candidate exceeds mandate interruption ceiling")
+
+    def _validate_derived_information(
+        self,
+        *,
+        information_id: str,
+        source_information_ids: tuple[str, ...],
+        policy_ids: tuple[str, ...],
+    ) -> None:
+        lineage = self._information.lineage(information_id)
+        binding = self._information.binding(information_id)
+        if (
+            lineage is None
+            or lineage.transformation is not LineageTransformation.DERIVATION
+            or lineage.source_information_ids != tuple(sorted(set(source_information_ids)))
+        ):
+            raise ValueError("reconsideration derived information lacks exact source lineage")
+        if (
+            binding is None
+            or binding.lineage_id != lineage.lineage_id
+            or binding.policy_ids != tuple(sorted(set(policy_ids)))
+        ):
+            raise ValueError("reconsideration derived information lacks inherited policy binding")
 
     def _event_ref(self, ref: str) -> Event:
         if not ref.startswith("event:"):

@@ -9,10 +9,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from types import MappingProxyType
 from typing import cast
 
 from ..endogenous.models import GoverningIntentRef
 from ..events import Event
+from ..information.models import validate_opaque_governance_id
 from ..types import JSONObject, JSONValue, parse_datetime
 
 MANDATE_RECORDED_EVENT = "reconsideration.mandate_recorded"
@@ -200,9 +202,7 @@ class ScarceCognitionCostSnapshot:
             wall_time_seconds=float(cast(float, data.get("wall_time_seconds", 0.0))),
             monetary_cost=float(cast(float, data.get("monetary_cost", 0.0))),
             attention_units=float(cast(float, data.get("attention_units", 0.0))),
-            context_switching_units=float(
-                cast(float, data.get("context_switching_units", 0.0))
-            ),
+            context_switching_units=float(cast(float, data.get("context_switching_units", 0.0))),
             intrusion_units=float(cast(float, data.get("intrusion_units", 0.0))),
             interruption_units=float(cast(float, data.get("interruption_units", 0.0))),
             privacy_exposure_units=float(cast(float, data.get("privacy_exposure_units", 0.0))),
@@ -860,10 +860,20 @@ class ReconsiderationSeed:
 
 @dataclass(frozen=True, slots=True)
 class ReconsiderationCandidateInput:
+    candidate_id: str
+    historical: HistoricalCognitionRef
+    derived_information_id: str
     seed: ReconsiderationSeed
     information_access_decision_ids: tuple[str, ...]
 
     def __post_init__(self) -> None:
+        _require_text(self.candidate_id, "reconsideration input candidate id")
+        validate_opaque_governance_id(
+            self.derived_information_id,
+            "reconsideration candidate derived information id",
+        )
+        if self.historical.inquiry_id != self.seed.inquiry_id:
+            raise ValueError("candidate input historical Inquiry differs from its seed")
         _unique(
             self.information_access_decision_ids,
             "reconsideration access decisions",
@@ -877,6 +887,9 @@ class ReconsiderationCandidateInput:
 
     def to_dict(self) -> JSONObject:
         return {
+            "candidate_id": self.candidate_id,
+            "historical": self.historical.to_dict(),
+            "derived_information_id": self.derived_information_id,
             "seed": self.seed.to_dict(),
             "information_access_decision_ids": list(self.information_access_decision_ids),
         }
@@ -896,7 +909,18 @@ class ReconsiderationCandidateInput:
                 cast(Mapping[str, object], seed_data["costs"])
             ),
         )
-        return cls(seed, _strings(data, "information_access_decision_ids"))
+        return cls(
+            candidate_id=str(data["candidate_id"]),
+            historical=HistoricalCognitionRef.from_dict(
+                cast(Mapping[str, object], data["historical"])
+            ),
+            derived_information_id=str(data["derived_information_id"]),
+            seed=seed,
+            information_access_decision_ids=_strings(
+                data,
+                "information_access_decision_ids",
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1006,8 +1030,8 @@ class ReconsiderationPolicySnapshot:
         }
         if self.policy_id != _canonical_id("reconsideration-policy", identity):
             raise ValueError("reconsideration policy identity is inconsistent")
-        object.__setattr__(self, "feature_weights", dict(self.feature_weights))
-        object.__setattr__(self, "cost_weights", dict(self.cost_weights))
+        object.__setattr__(self, "feature_weights", MappingProxyType(dict(self.feature_weights)))
+        object.__setattr__(self, "cost_weights", MappingProxyType(dict(self.cost_weights)))
 
     def to_dict(self) -> JSONObject:
         return {
@@ -1057,6 +1081,7 @@ class ReconsiderationScanRequest:
     basis: CurrentCognitiveBasis
     policy_id: str
     budget: ScarceCognitionBudget
+    maximum_interruption_units: float
     candidate_inputs: tuple[ReconsiderationCandidateInput, ...]
     information_use_purpose: str
     information_policy_ids: tuple[str, ...]
@@ -1071,6 +1096,7 @@ class ReconsiderationScanRequest:
         basis: CurrentCognitiveBasis,
         policy_id: str,
         budget: ScarceCognitionBudget,
+        maximum_interruption_units: float,
         candidate_inputs: tuple[ReconsiderationCandidateInput, ...],
         information_use_purpose: str,
         information_policy_ids: tuple[str, ...],
@@ -1085,6 +1111,7 @@ class ReconsiderationScanRequest:
             "basis": basis.to_dict(),
             "policy_id": policy_id,
             "budget": budget.to_dict(),
+            "maximum_interruption_units": maximum_interruption_units,
             "candidate_inputs": [value.to_dict() for value in inputs],
             "information_use_purpose": information_use_purpose,
             "information_policy_ids": list(policies),
@@ -1097,6 +1124,7 @@ class ReconsiderationScanRequest:
             basis,
             policy_id,
             budget,
+            maximum_interruption_units,
             inputs,
             information_use_purpose,
             policies,
@@ -1109,10 +1137,16 @@ class ReconsiderationScanRequest:
         _require_text(self.request_id, "reconsideration scan id")
         _require_text(self.policy_id, "reconsideration scan policy")
         _require_text(self.information_use_purpose, "reconsideration information purpose")
+        _non_negative(self.maximum_interruption_units, "scan interruption ceiling")
         if not self.candidate_inputs:
             raise ValueError("reconsideration scan requires candidate inputs")
         inquiry_ids = tuple(value.seed.inquiry_id for value in self.candidate_inputs)
         _unique(inquiry_ids, "reconsideration scan inquiry ids", required=True)
+        _unique(
+            tuple(value.candidate_id for value in self.candidate_inputs),
+            "reconsideration scan candidate ids",
+            required=True,
+        )
         _unique(self.information_policy_ids, "scan information policy ids", required=True)
         _unique(self.foreground_demand_refs, "scan foreground demand refs")
         _require_aware(self.requested_at, "reconsideration requested_at")
@@ -1127,6 +1161,7 @@ class ReconsiderationScanRequest:
             "basis": self.basis.to_dict(),
             "policy_id": self.policy_id,
             "budget": self.budget.to_dict(),
+            "maximum_interruption_units": self.maximum_interruption_units,
             "candidate_inputs": [value.to_dict() for value in self.candidate_inputs],
             "information_use_purpose": self.information_use_purpose,
             "information_policy_ids": list(self.information_policy_ids),
@@ -1142,6 +1177,7 @@ class ReconsiderationScanRequest:
             basis=CurrentCognitiveBasis.from_dict(cast(Mapping[str, object], data["basis"])),
             policy_id=str(data["policy_id"]),
             budget=ScarceCognitionBudget.from_dict(cast(Mapping[str, object], data["budget"])),
+            maximum_interruption_units=float(cast(float, data["maximum_interruption_units"])),
             candidate_inputs=tuple(
                 ReconsiderationCandidateInput.from_dict(cast(Mapping[str, object], item))
                 for item in inputs
@@ -1173,6 +1209,7 @@ class ReconsiderationScanRequest:
 @dataclass(frozen=True, slots=True)
 class ReconsiderationCandidate:
     candidate_id: str
+    derived_information_id: str
     scan_request_id: str
     historical: HistoricalCognitionRef
     current_basis: CurrentCognitiveBasis
@@ -1189,6 +1226,7 @@ class ReconsiderationCandidate:
         cls,
         *,
         scan_request_id: str,
+        derived_information_id: str,
         historical: HistoricalCognitionRef,
         current_basis: CurrentCognitiveBasis,
         domain: str,
@@ -1201,16 +1239,17 @@ class ReconsiderationCandidate:
     ) -> ReconsiderationCandidate:
         evidence = tuple(sorted(set(current_evidence_refs)))
         decisions = tuple(sorted(set(information_access_decision_ids)))
-        identity: JSONObject = {
-            "historical": historical.to_dict(),
-            "current_basis": current_basis.to_dict(),
-            "domain": domain,
-            "current_evidence_refs": list(evidence),
-            "features": features.to_dict(),
-            "costs": costs.to_dict(),
-        }
+        candidate_id = cls.identity_for(
+            historical=historical,
+            current_basis=current_basis,
+            domain=domain,
+            current_evidence_refs=evidence,
+            features=features,
+            costs=costs,
+        )
         return cls(
-            _canonical_id("reconsideration-candidate", identity),
+            candidate_id,
+            derived_information_id,
             scan_request_id,
             historical,
             current_basis,
@@ -1223,6 +1262,26 @@ class ReconsiderationCandidate:
             created_at,
         )
 
+    @staticmethod
+    def identity_for(
+        *,
+        historical: HistoricalCognitionRef,
+        current_basis: CurrentCognitiveBasis,
+        domain: str,
+        current_evidence_refs: tuple[str, ...],
+        features: ReconsiderationFeatureSnapshot,
+        costs: ScarceCognitionCostSnapshot,
+    ) -> str:
+        identity: JSONObject = {
+            "historical": historical.to_dict(),
+            "current_basis": current_basis.to_dict(),
+            "domain": domain,
+            "current_evidence_refs": list(sorted(set(current_evidence_refs))),
+            "features": features.to_dict(),
+            "costs": costs.to_dict(),
+        }
+        return _canonical_id("reconsideration-candidate", identity)
+
     def __post_init__(self) -> None:
         for value, name in (
             (self.candidate_id, "reconsideration candidate id"),
@@ -1230,6 +1289,10 @@ class ReconsiderationCandidate:
             (self.domain, "reconsideration candidate domain"),
         ):
             _require_text(value, name)
+        validate_opaque_governance_id(
+            self.derived_information_id,
+            "candidate derived information id",
+        )
         if self.current_causal_cursor <= self.historical.historical_causal_cursor:
             raise ValueError("reconsideration requires a fresh current causal cut")
         _unique(self.current_evidence_refs, "candidate current evidence", required=True)
@@ -1239,20 +1302,20 @@ class ReconsiderationCandidate:
             required=True,
         )
         _require_aware(self.created_at, "candidate created_at")
-        identity: JSONObject = {
-            "historical": self.historical.to_dict(),
-            "current_basis": self.current_basis.to_dict(),
-            "domain": self.domain,
-            "current_evidence_refs": list(self.current_evidence_refs),
-            "features": self.features.to_dict(),
-            "costs": self.costs.to_dict(),
-        }
-        if self.candidate_id != _canonical_id("reconsideration-candidate", identity):
+        if self.candidate_id != self.identity_for(
+            historical=self.historical,
+            current_basis=self.current_basis,
+            domain=self.domain,
+            current_evidence_refs=self.current_evidence_refs,
+            features=self.features,
+            costs=self.costs,
+        ):
             raise ValueError("reconsideration candidate id does not match semantic basis")
 
     def to_dict(self) -> JSONObject:
         return {
             "candidate_id": self.candidate_id,
+            "derived_information_id": self.derived_information_id,
             "scan_request_id": self.scan_request_id,
             "historical": self.historical.to_dict(),
             "current_basis": self.current_basis.to_dict(),
@@ -1269,6 +1332,7 @@ class ReconsiderationCandidate:
     def from_dict(cls, data: Mapping[str, object]) -> ReconsiderationCandidate:
         value = cls.create(
             scan_request_id=str(data["scan_request_id"]),
+            derived_information_id=str(data["derived_information_id"]),
             historical=HistoricalCognitionRef.from_dict(
                 cast(Mapping[str, object], data["historical"])
             ),
@@ -1381,6 +1445,7 @@ class ReconsiderationDecision:
 @dataclass(frozen=True, slots=True)
 class ReconsiderationAllocation:
     allocation_id: str
+    derived_information_id: str
     scan_request_id: str
     policy_id: str
     policy_version: str
@@ -1389,12 +1454,14 @@ class ReconsiderationAllocation:
     consumed_candidates: int
     consumed: ScarceCognitionCostSnapshot
     remaining: ScarceCognitionCostSnapshot
+    foreground_demand_refs: tuple[str, ...]
     allocated_at: datetime
 
     @classmethod
     def create(
         cls,
         *,
+        derived_information_id: str,
         scan_request_id: str,
         policy_id: str,
         policy_version: str,
@@ -1403,9 +1470,12 @@ class ReconsiderationAllocation:
         consumed_candidates: int,
         consumed: ScarceCognitionCostSnapshot,
         remaining: ScarceCognitionCostSnapshot,
+        foreground_demand_refs: tuple[str, ...],
         allocated_at: datetime,
     ) -> ReconsiderationAllocation:
+        foreground = tuple(sorted(set(foreground_demand_refs)))
         identity: JSONObject = {
+            "derived_information_id": derived_information_id,
             "scan_request_id": scan_request_id,
             "policy_id": policy_id,
             "policy_version": policy_version,
@@ -1414,10 +1484,12 @@ class ReconsiderationAllocation:
             "consumed_candidates": consumed_candidates,
             "consumed": consumed.to_dict(),
             "remaining": remaining.to_dict(),
+            "foreground_demand_refs": list(foreground),
             "allocated_at": allocated_at.isoformat(),
         }
         return cls(
             _canonical_id("reconsideration-allocation", identity),
+            derived_information_id,
             scan_request_id,
             policy_id,
             policy_version,
@@ -1426,6 +1498,7 @@ class ReconsiderationAllocation:
             consumed_candidates,
             consumed,
             remaining,
+            foreground,
             allocated_at,
         )
 
@@ -1434,6 +1507,10 @@ class ReconsiderationAllocation:
         _require_text(self.scan_request_id, "allocation scan id")
         _require_text(self.policy_id, "allocation policy id")
         _require_text(self.policy_version, "allocation policy version")
+        validate_opaque_governance_id(
+            self.derived_information_id,
+            "allocation derived information id",
+        )
         if not self.decisions:
             raise ValueError("reconsideration allocation requires decisions")
         _unique(
@@ -1445,6 +1522,7 @@ class ReconsiderationAllocation:
         if selected != self.consumed_candidates or selected > self.budget.max_candidates:
             raise ValueError("allocation candidate consumption is inconsistent")
         _require_aware(self.allocated_at, "allocated_at")
+        _unique(self.foreground_demand_refs, "allocation foreground demand refs")
         identity = self.to_dict()
         identity.pop("allocation_id")
         if self.allocation_id != _canonical_id("reconsideration-allocation", identity):
@@ -1461,6 +1539,7 @@ class ReconsiderationAllocation:
     def to_dict(self) -> JSONObject:
         return {
             "allocation_id": self.allocation_id,
+            "derived_information_id": self.derived_information_id,
             "scan_request_id": self.scan_request_id,
             "policy_id": self.policy_id,
             "policy_version": self.policy_version,
@@ -1469,6 +1548,7 @@ class ReconsiderationAllocation:
             "consumed_candidates": self.consumed_candidates,
             "consumed": self.consumed.to_dict(),
             "remaining": self.remaining.to_dict(),
+            "foreground_demand_refs": list(self.foreground_demand_refs),
             "allocated_at": self.allocated_at.isoformat(),
         }
 
@@ -1476,6 +1556,7 @@ class ReconsiderationAllocation:
     def from_dict(cls, data: Mapping[str, object]) -> ReconsiderationAllocation:
         decisions = cast(tuple[object, ...] | list[object], data["decisions"])
         value = cls.create(
+            derived_information_id=str(data["derived_information_id"]),
             scan_request_id=str(data["scan_request_id"]),
             policy_id=str(data["policy_id"]),
             policy_version=str(data["policy_version"]),
@@ -1491,6 +1572,7 @@ class ReconsiderationAllocation:
             remaining=ScarceCognitionCostSnapshot.from_dict(
                 cast(Mapping[str, object], data["remaining"])
             ),
+            foreground_demand_refs=_strings(data, "foreground_demand_refs"),
             allocated_at=_datetime(data, "allocated_at"),
         )
         if value.allocation_id != str(data["allocation_id"]):
@@ -1512,6 +1594,7 @@ class ReconsiderationAllocation:
 @dataclass(frozen=True, slots=True)
 class CognitiveAllocationTrace:
     trace_id: str
+    derived_information_id: str
     allocation_id: str
     candidate_id: str
     candidate_provenance: HistoricalCognitionRef
@@ -1534,11 +1617,13 @@ class CognitiveAllocationTrace:
     def create(
         cls,
         *,
+        derived_information_id: str,
         allocation: ReconsiderationAllocation,
         candidate: ReconsiderationCandidate,
         decision: ReconsiderationDecision,
     ) -> CognitiveAllocationTrace:
         payload: JSONObject = {
+            "derived_information_id": derived_information_id,
             "allocation_id": allocation.allocation_id,
             "candidate_id": candidate.candidate_id,
             "candidate_provenance": candidate.historical.to_dict(),
@@ -1559,6 +1644,7 @@ class CognitiveAllocationTrace:
         }
         return cls(
             _canonical_id("cognitive-allocation-trace", payload),
+            derived_information_id,
             allocation.allocation_id,
             candidate.candidate_id,
             candidate.historical,
@@ -1589,6 +1675,10 @@ class CognitiveAllocationTrace:
             (self.causal_reason, "trace causal reason"),
         ):
             _require_text(value, name)
+        validate_opaque_governance_id(
+            self.derived_information_id,
+            "trace derived information id",
+        )
         if self.behavior_policy_probability is not None:
             _bounded(self.behavior_policy_probability, "behavior policy probability")
         _unique(self.subsequent_outcome_refs, "subsequent outcome refs")
@@ -1597,6 +1687,7 @@ class CognitiveAllocationTrace:
     def to_dict(self) -> JSONObject:
         return {
             "trace_id": self.trace_id,
+            "derived_information_id": self.derived_information_id,
             "allocation_id": self.allocation_id,
             "candidate_id": self.candidate_id,
             "candidate_provenance": self.candidate_provenance.to_dict(),
@@ -1621,6 +1712,7 @@ class CognitiveAllocationTrace:
         gates = cast(tuple[object, ...] | list[object], data["hard_gate_outcomes"])
         value = cls(
             trace_id=str(data["trace_id"]),
+            derived_information_id=str(data["derived_information_id"]),
             allocation_id=str(data["allocation_id"]),
             candidate_id=str(data["candidate_id"]),
             candidate_provenance=HistoricalCognitionRef.from_dict(
@@ -1760,7 +1852,7 @@ class ReconsiderationShadowProposal:
     allocation_id: str
     allocation_trace_id: str
     historical_inquiry_id: str
-    question: str
+    template_kind: str
     authority_ceiling: SurfacingPolicy
     created_at: datetime
 
@@ -1771,15 +1863,14 @@ class ReconsiderationShadowProposal:
         candidate: ReconsiderationCandidate,
         allocation: ReconsiderationAllocation,
         trace: CognitiveAllocationTrace,
-        historical_question: str,
     ) -> ReconsiderationShadowProposal:
-        question = f"Should this historical inquiry be reconsidered now? {historical_question}"
+        template_kind = "historical_inquiry_reconsideration"
         payload: JSONObject = {
             "candidate_id": candidate.candidate_id,
             "allocation_id": allocation.allocation_id,
             "allocation_trace_id": trace.trace_id,
             "historical_inquiry_id": candidate.historical.inquiry_id,
-            "question": question,
+            "template_kind": template_kind,
             "authority_ceiling": SurfacingPolicy.SHADOW_QUESTION_ONLY.value,
             "created_at": allocation.allocated_at.isoformat(),
         }
@@ -1789,7 +1880,7 @@ class ReconsiderationShadowProposal:
             allocation.allocation_id,
             trace.trace_id,
             candidate.historical.inquiry_id,
-            question,
+            template_kind,
             SurfacingPolicy.SHADOW_QUESTION_ONLY,
             allocation.allocated_at,
         )
@@ -1801,7 +1892,7 @@ class ReconsiderationShadowProposal:
             (self.allocation_id, "shadow proposal allocation"),
             (self.allocation_trace_id, "shadow proposal trace"),
             (self.historical_inquiry_id, "shadow proposal historical inquiry"),
-            (self.question, "shadow proposal question"),
+            (self.template_kind, "shadow proposal template kind"),
         ):
             _require_text(value, name)
         _require_aware(self.created_at, "shadow proposal created_at")
@@ -1813,7 +1904,7 @@ class ReconsiderationShadowProposal:
             "allocation_id": self.allocation_id,
             "allocation_trace_id": self.allocation_trace_id,
             "historical_inquiry_id": self.historical_inquiry_id,
-            "question": self.question,
+            "template_kind": self.template_kind,
             "authority_ceiling": self.authority_ceiling.value,
             "created_at": self.created_at.isoformat(),
         }
@@ -1826,7 +1917,7 @@ class ReconsiderationShadowProposal:
             allocation_id=str(data["allocation_id"]),
             allocation_trace_id=str(data["allocation_trace_id"]),
             historical_inquiry_id=str(data["historical_inquiry_id"]),
-            question=str(data["question"]),
+            template_kind=str(data["template_kind"]),
             authority_ceiling=SurfacingPolicy(str(data["authority_ceiling"])),
             created_at=_datetime(data, "created_at"),
         )

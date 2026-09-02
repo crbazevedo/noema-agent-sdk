@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime
 
@@ -15,7 +16,11 @@ from .information import (
     InformationAccessRequest,
     InformationGovernanceAdmission,
     InformationGovernanceEngine,
+    InformationLineage,
     InformationOperation,
+    LineageTransformation,
+    OpaqueInformationIdDeriver,
+    PolicyBinding,
     PrincipalSnapshot,
 )
 from .kernel import NoemaKernel
@@ -55,6 +60,8 @@ class ReconsiderationShadowWorker:
         *,
         authority: ReconsiderationAuthority,
         policy: ReconsiderationPolicySnapshot | None = None,
+        clock: Callable[[], datetime] = utc_now,
+        derived_information_id_deriver: OpaqueInformationIdDeriver,
         consumer_id: str = "cognitive-reconsideration-shadow",
         source: str = "reconsideration:shadow-worker",
     ) -> None:
@@ -63,6 +70,8 @@ class ReconsiderationShadowWorker:
         self.kernel = kernel
         self.authority = authority
         self.policy = policy or ReconsiderationPolicySnapshot.create(version="deterministic-v1")
+        self.clock = clock
+        self.derived_information_id_deriver = derived_information_id_deriver
         self.consumer_id = consumer_id
         self.source = source
         self._checkpoint_lock = asyncio.Lock()
@@ -97,12 +106,10 @@ class ReconsiderationShadowWorker:
         actor_id: str,
         source_trust_domain: str,
         locality: str,
-        requested_at: datetime | None = None,
         budget: ScarceCognitionBudget | None = None,
         information_use_purpose: str | None = None,
         information_policy_ids: tuple[str, ...] | None = None,
         trigger_event_id: str | None = None,
-        foreground_demand_refs: tuple[str, ...] = (),
     ) -> ReconsiderationAllocation | None:
         """Revalidate explicit historical Inquiry seeds under one current basis."""
 
@@ -110,7 +117,9 @@ class ReconsiderationShadowWorker:
             raise ValueError("reconsideration scan requires historical Inquiry seeds")
         if not self.kernel.started:
             await self.kernel.start()
-        at = requested_at or utc_now()
+        at = self.clock()
+        if at.tzinfo is None:
+            raise ValueError("reconsideration worker clock must be timezone-aware")
         projection = await self.current_projection()
         mandate = None
         if basis.kind is CognitiveBasisKind.RECONSIDERATION_MANDATE:
@@ -119,6 +128,7 @@ class ReconsiderationShadowWorker:
             if mandate is None:
                 raise ValueError("reconsideration scan references an unknown mandate")
             effective_budget = budget or mandate.budget
+            maximum_interruption_units = mandate.maximum_interruption_units
             purpose = information_use_purpose or mandate.information_use_purpose
             policies = information_policy_ids or mandate.information_policy_ids
         else:
@@ -127,40 +137,82 @@ class ReconsiderationShadowWorker:
                     "live-intent reconsideration requires explicit budget and information policy"
                 )
             effective_budget = budget
+            maximum_interruption_units = budget.ceiling.interruption_units
             purpose = information_use_purpose
             policies = information_policy_ids
-
-        novel_seeds = tuple(
-            seed
-            for seed in seeds
-            if projection.find_candidate(
-                inquiry_id=seed.inquiry_id,
-                basis_id=basis.basis_id,
-                current_evidence_refs=seed.current_evidence_refs,
-                domain=seed.domain,
+        await self.kernel.emit(self.policy.to_event(source=self.source, recorded_at=at))
+        projection = await self.current_projection()
+        if trigger_event_id is not None and any(
+            value.trigger_event_id == trigger_event_id for value in projection.scans
+        ):
+            raise ValueError("mandate scan trigger was already consumed")
+        prepared: list[
+            tuple[
+                ReconsiderationSeed,
+                HistoricalCognitionRef,
+                str,
+                str,
+            ]
+        ] = []
+        all_candidate_ids: list[str] = []
+        for seed in seeds:
+            inquiry = projection.endogenous.inquiry(seed.inquiry_id)
+            if inquiry is None:
+                raise ValueError("reconsideration seed references an unknown Inquiry")
+            historical = self._historical_ref(
+                projection,
+                inquiry,
                 governed_information_ids=seed.governed_information_ids,
+            )
+            candidate_id = ReconsiderationCandidate.identity_for(
+                historical=historical,
+                current_basis=basis,
+                domain=seed.domain,
+                current_evidence_refs=seed.current_evidence_refs,
                 features=seed.features,
                 costs=seed.costs,
             )
-            is None
-        )
-        if not novel_seeds:
-            existing = projection.find_candidate(
-                inquiry_id=seeds[0].inquiry_id,
-                basis_id=basis.basis_id,
-                current_evidence_refs=seeds[0].current_evidence_refs,
-                domain=seeds[0].domain,
-                governed_information_ids=seeds[0].governed_information_ids,
-                features=seeds[0].features,
-                costs=seeds[0].costs,
+            all_candidate_ids.append(candidate_id)
+            if projection.candidate_was_selected(candidate_id):
+                continue
+            derived_information_id = self._derived_information_id(
+                namespace="reconsideration-candidate",
+                stable_key=candidate_id,
             )
-            if existing is None:  # pragma: no cover - guarded by the filter above
-                return None
-            return projection.allocation_for_scan(existing.scan_request_id)
+            existing_candidate = projection.candidate(candidate_id)
+            if (
+                existing_candidate is not None
+                and existing_candidate.derived_information_id != derived_information_id
+            ):
+                raise ValueError("candidate derived-information identity changed")
+            prepared.append((seed, historical, candidate_id, derived_information_id))
 
-        await self.kernel.emit(self.policy.to_event(source=self.source, recorded_at=at))
+        if not prepared:
+            return self._latest_allocation_for_candidates(
+                projection,
+                tuple(all_candidate_ids),
+            )
+
+        foreground_refs = await self._canonical_foreground_refs(
+            projection,
+            basis=basis,
+            policy=self.policy,
+        )
+        candidate_ids = tuple(value[2] for value in prepared)
+        existing_context = projection.find_allocation_context(
+            basis_id=basis.basis_id,
+            candidate_ids=candidate_ids,
+            policy_id=self.policy.policy_id,
+            budget=effective_budget,
+            maximum_interruption_units=maximum_interruption_units,
+            trigger_event_id=trigger_event_id,
+            foreground_demand_refs=foreground_refs,
+        )
+        if existing_context is not None:
+            return existing_context
+
         candidate_inputs: list[ReconsiderationCandidateInput] = []
-        for seed in novel_seeds:
+        for seed, historical, candidate_id, derived_information_id in prepared:
             decisions = await self._admit_information_use(
                 seed,
                 principal=principal,
@@ -170,8 +222,17 @@ class ReconsiderationShadowWorker:
                 locality=locality,
                 at=at,
             )
+            await self._ensure_derived_governance(
+                information_id=derived_information_id,
+                source_information_ids=seed.governed_information_ids,
+                policy_ids=tuple(sorted(set(policies))),
+                recorded_at=at,
+            )
             candidate_inputs.append(
                 ReconsiderationCandidateInput(
+                    candidate_id=candidate_id,
+                    historical=historical,
+                    derived_information_id=derived_information_id,
                     seed=seed,
                     information_access_decision_ids=tuple(decisions),
                 )
@@ -180,12 +241,13 @@ class ReconsiderationShadowWorker:
             basis=basis,
             policy_id=self.policy.policy_id,
             budget=effective_budget,
+            maximum_interruption_units=maximum_interruption_units,
             candidate_inputs=tuple(candidate_inputs),
             information_use_purpose=purpose,
             information_policy_ids=tuple(sorted(set(policies))),
             requested_at=at,
             trigger_event_id=trigger_event_id,
-            foreground_demand_refs=foreground_demand_refs,
+            foreground_demand_refs=foreground_refs,
         )
         stored = await self._append_exact(scan.to_event(source=self.source))
         return await self._process_scan(stored)
@@ -196,16 +258,61 @@ class ReconsiderationShadowWorker:
         checkpoints.rebuild(history)
         checkpoint = checkpoints.get(self.consumer_id)
         after = checkpoint.last_completed_sequence if checkpoint else 0
+        projection = ReconsiderationProjection()
+        projection.rebuild(history)
+        at = self.clock()
+        if at.tzinfo is None:
+            raise ValueError("reconsideration worker clock must be timezone-aware")
         recovered: list[ReconsiderationAllocation] = []
         for event in history:
-            if event.sequence is None or event.sequence <= after:
+            if event.sequence is None:
                 continue
             if event.type != SCAN_REQUESTED_EVENT:
+                continue
+            scan = ReconsiderationScanRequest.from_dict(event.payload)
+            if event.sequence <= after and self._scan_outputs_complete(
+                projection,
+                scan,
+                at=at,
+            ):
                 continue
             allocation = await self._process_scan(event)
             if allocation is not None:
                 recovered.append(allocation)
+                projection = await self.current_projection()
         return tuple(recovered)
+
+    @staticmethod
+    def _scan_outputs_complete(
+        projection: ReconsiderationProjection,
+        scan: ReconsiderationScanRequest,
+        *,
+        at: datetime,
+    ) -> bool:
+        candidates = projection.candidates_for_scan(scan.request_id)
+        if len(candidates) != len(scan.candidate_inputs):
+            return False
+        allocation = projection.allocation_for_scan(scan.request_id)
+        if allocation is None:
+            return False
+        by_id = {value.candidate_id: value for value in candidates}
+        for decision in allocation.decisions:
+            trace = projection.trace_for_decision(
+                decision.candidate_id,
+                allocation.allocation_id,
+            )
+            if trace is None:
+                return False
+            if (
+                decision.label is AllocationLabel.SELECTED
+                and projection.proposal_for_trace(trace.trace_id) is None
+                and projection.basis_is_current(
+                    by_id[decision.candidate_id].current_basis,
+                    at=at,
+                )
+            ):
+                return False
+        return True
 
     async def link_outcome(
         self,
@@ -236,24 +343,14 @@ class ReconsiderationShadowWorker:
             raise ValueError("reconsideration scan must be canonical")
         scan = ReconsiderationScanRequest.from_dict(scan_event.payload)
         projection = await self.current_projection()
-        existing = projection.allocation_for_scan(scan.request_id)
-        if existing is not None:
-            await self._advance_checkpoint(scan_event, existing.allocation_id)
-            return existing
-
         for candidate_input in scan.candidate_inputs:
+            if projection.candidate(candidate_input.candidate_id) is not None:
+                continue
             seed = candidate_input.seed
-            inquiry = projection.endogenous.inquiry(seed.inquiry_id)
-            if inquiry is None:
-                raise ValueError("reconsideration seed references an unknown Inquiry")
-            historical = self._historical_ref(
-                projection,
-                inquiry,
-                governed_information_ids=seed.governed_information_ids,
-            )
             candidate = ReconsiderationCandidate.create(
                 scan_request_id=scan.request_id,
-                historical=historical,
+                derived_information_id=candidate_input.derived_information_id,
+                historical=candidate_input.historical,
                 current_basis=scan.basis,
                 domain=seed.domain,
                 current_causal_cursor=scan_event.sequence,
@@ -264,20 +361,12 @@ class ReconsiderationShadowWorker:
                 created_at=scan.requested_at,
             )
             await self._append_exact(candidate.to_event(source=self.source))
+            projection = await self.current_projection()
 
         projection = await self.current_projection()
-        candidates = projection.candidates_for_scan(scan.request_id)
-        policy = projection.policy(scan.policy_id)
-        if policy is None:
-            raise ValueError("reconsideration scan lost its pinned policy")
-        allocation = allocate_reconsideration(
-            scan=scan,
-            policy=policy,
-            candidates=candidates,
-            allocated_at=scan.requested_at,
-        )
-        stored_allocation = await self._append_exact(allocation.to_event(source=self.source))
-        allocation = ReconsiderationAllocation.from_dict(stored_allocation.payload)
+        allocation = projection.allocation_for_scan(scan.request_id)
+        if allocation is None:
+            allocation = await self._ensure_allocation(scan_event)
 
         projection = await self.current_projection()
         by_id = {
@@ -285,26 +374,229 @@ class ReconsiderationShadowWorker:
         }
         for decision in allocation.decisions:
             candidate = by_id[decision.candidate_id]
-            trace = CognitiveAllocationTrace.create(
-                allocation=allocation,
-                candidate=candidate,
-                decision=decision,
+            trace = projection.trace_for_decision(
+                candidate.candidate_id,
+                allocation.allocation_id,
             )
-            await self._append_exact(trace.to_event(source=self.source))
+            if trace is None:
+                trace_information_id = self._derived_information_id(
+                    namespace="reconsideration-trace",
+                    stable_key=f"{allocation.allocation_id}:{candidate.candidate_id}",
+                )
+                await self._ensure_derived_governance(
+                    information_id=trace_information_id,
+                    source_information_ids=(allocation.derived_information_id,),
+                    policy_ids=scan.information_policy_ids,
+                    recorded_at=allocation.allocated_at,
+                )
+                trace = CognitiveAllocationTrace.create(
+                    derived_information_id=trace_information_id,
+                    allocation=allocation,
+                    candidate=candidate,
+                    decision=decision,
+                )
+                stored_trace = await self._append_exact(trace.to_event(source=self.source))
+                trace = CognitiveAllocationTrace.from_dict(stored_trace.payload)
+                projection = await self.current_projection()
             if decision.label is not AllocationLabel.SELECTED:
                 continue
-            inquiry = projection.endogenous.inquiry(candidate.historical.inquiry_id)
-            if inquiry is None:  # pragma: no cover - validated by canonical projection
-                raise AssertionError("selected reconsideration lost historical inquiry")
-            proposal = ReconsiderationShadowProposal.create(
-                candidate=candidate,
-                allocation=allocation,
-                trace=trace,
-                historical_question=inquiry.question,
-            )
-            await self._append_exact(proposal.to_event(source=self.source))
+            if projection.proposal_for_trace(trace.trace_id) is None:
+                surfacing_time = self.clock()
+                if surfacing_time.tzinfo is None:
+                    raise ValueError("reconsideration worker clock must be timezone-aware")
+                if not projection.basis_is_current(
+                    candidate.current_basis,
+                    at=surfacing_time,
+                ):
+                    continue
+                proposal = ReconsiderationShadowProposal.create(
+                    candidate=candidate,
+                    allocation=allocation,
+                    trace=trace,
+                )
+                await self._append_exact(proposal.to_event(source=self.source))
+                projection = await self.current_projection()
         await self._advance_checkpoint(scan_event, allocation.allocation_id)
         return allocation
+
+    async def _ensure_allocation(
+        self,
+        scan_event: Event,
+    ) -> ReconsiderationAllocation:
+        if scan_event.sequence is None:
+            raise ValueError("reconsideration allocation requires a canonical scan")
+        scan = ReconsiderationScanRequest.from_dict(scan_event.payload)
+        projection = await self.current_projection()
+        candidates = projection.candidates_for_scan(scan.request_id)
+        if len(candidates) != len(scan.candidate_inputs):
+            raise ValueError("reconsideration allocation requires every candidate")
+        allocation_information_id = self._derived_information_id(
+            namespace="reconsideration-allocation",
+            stable_key=scan.request_id,
+        )
+        await self._ensure_derived_governance(
+            information_id=allocation_information_id,
+            source_information_ids=tuple(value.derived_information_id for value in candidates),
+            policy_ids=scan.information_policy_ids,
+            recorded_at=scan.requested_at,
+        )
+        while True:
+            history = await self._normalized_history()
+            projection = ReconsiderationProjection()
+            projection.rebuild(history)
+            existing = projection.allocation_for_scan(scan.request_id)
+            if existing is not None:
+                return existing
+            policy = projection.policy(scan.policy_id)
+            if policy is None:
+                raise ValueError("reconsideration scan lost its pinned policy")
+            candidates = projection.candidates_for_scan(scan.request_id)
+            foreground = {
+                *scan.foreground_demand_refs,
+                *(
+                    f"event:{event.id}"
+                    for event in history
+                    if event.sequence is not None
+                    and event.sequence > scan_event.sequence
+                    and event.type in policy.foreground_event_types
+                ),
+            }
+            allocation = allocate_reconsideration(
+                scan=scan,
+                policy=policy,
+                candidates=candidates,
+                derived_information_id=allocation_information_id,
+                foreground_demand_refs=tuple(sorted(foreground)),
+                allocated_at=scan.requested_at,
+            )
+            metadata: dict[str, JSONValue] = dict(allocation.to_event(source=self.source).metadata)
+            metadata["validated_at_event_cursor"] = projection.event_cursor
+            admitted = replace(
+                allocation.to_event(source=self.source),
+                metadata=metadata,
+            )
+            probe = ReconsiderationProjection()
+            probe.rebuild(history)
+            probe.apply(admitted.with_sequence(projection.event_cursor + 1))
+            try:
+                stored = await self.kernel.emit_if_head(
+                    admitted,
+                    expected_head_sequence=projection.event_cursor,
+                )
+                return ReconsiderationAllocation.from_dict(stored.payload)
+            except ConcurrentAppendError:
+                continue
+
+    async def _ensure_derived_governance(
+        self,
+        *,
+        information_id: str,
+        source_information_ids: tuple[str, ...],
+        policy_ids: tuple[str, ...],
+        recorded_at: datetime,
+    ) -> None:
+        projection = await self.current_projection()
+        existing_lineage = projection.information.lineage(information_id)
+        lineage = InformationLineage.create(
+            information_id=information_id,
+            source_information_ids=source_information_ids,
+            transformation=LineageTransformation.DERIVATION,
+            recorded_at=recorded_at,
+        )
+        if existing_lineage is None:
+            await self.kernel.emit(lineage.to_event(source=self.source))
+        elif (
+            existing_lineage.source_information_ids != lineage.source_information_ids
+            or existing_lineage.transformation is not lineage.transformation
+        ):
+            raise ValueError("derived reconsideration lineage changed in place")
+        else:
+            lineage = existing_lineage
+
+        projection = await self.current_projection()
+        existing_binding = projection.information.binding(information_id)
+        binding = PolicyBinding.create(
+            information_id=information_id,
+            lineage_id=lineage.lineage_id,
+            policy_ids=policy_ids,
+            bound_at=recorded_at,
+        )
+        if existing_binding is None:
+            await self.kernel.emit(binding.to_event(source=self.source))
+        elif (
+            existing_binding.lineage_id != binding.lineage_id
+            or existing_binding.policy_ids != binding.policy_ids
+        ):
+            raise ValueError("derived reconsideration policy binding changed in place")
+
+    def _derived_information_id(self, *, namespace: str, stable_key: str) -> str:
+        return self.derived_information_id_deriver.derive(
+            namespace=namespace,
+            stable_key=stable_key,
+        )
+
+    async def _canonical_foreground_refs(
+        self,
+        projection: ReconsiderationProjection,
+        *,
+        basis: CurrentCognitiveBasis,
+        policy: ReconsiderationPolicySnapshot,
+    ) -> tuple[str, ...]:
+        cutoff = 0
+        for allocation in projection.allocations:
+            scan = projection.scan(allocation.scan_request_id)
+            event = projection.event(
+                f"reconsideration-allocation-recorded:{allocation.allocation_id}"
+            )
+            if (
+                scan is not None
+                and scan.basis.basis_id == basis.basis_id
+                and event is not None
+                and event.sequence is not None
+            ):
+                cutoff = max(cutoff, event.sequence)
+        if cutoff == 0 and basis.mandate_revision_id is not None:
+            mandate_event = projection.event(
+                f"reconsideration-mandate-recorded:{basis.mandate_revision_id}"
+            )
+            if mandate_event is not None and mandate_event.sequence is not None:
+                cutoff = mandate_event.sequence
+        if cutoff == 0 and basis.live_intent_ref is not None:
+            intent_event = projection.event(
+                f"goal-revision-recorded:{basis.live_intent_ref.goal_revision_id}"
+            )
+            if intent_event is not None and intent_event.sequence is not None:
+                cutoff = intent_event.sequence
+        return tuple(
+            f"event:{event.id}"
+            for event in await self._normalized_history()
+            if event.sequence is not None
+            and event.sequence > cutoff
+            and event.type in policy.foreground_event_types
+        )
+
+    @staticmethod
+    def _latest_allocation_for_candidates(
+        projection: ReconsiderationProjection,
+        candidate_ids: tuple[str, ...],
+    ) -> ReconsiderationAllocation | None:
+        candidates = set(candidate_ids)
+        matching = tuple(
+            value
+            for value in projection.allocations
+            if candidates.intersection(decision.candidate_id for decision in value.decisions)
+        )
+        if not matching:
+            return None
+
+        def allocation_sequence(value: ReconsiderationAllocation) -> int:
+            event = projection.event(f"reconsideration-allocation-recorded:{value.allocation_id}")
+            return event.sequence or 0 if event is not None else 0
+
+        return max(
+            matching,
+            key=allocation_sequence,
+        )
 
     async def _admit_information_use(
         self,

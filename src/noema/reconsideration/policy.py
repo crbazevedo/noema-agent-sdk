@@ -34,6 +34,8 @@ def allocate_reconsideration(
     scan: ReconsiderationScanRequest,
     policy: ReconsiderationPolicySnapshot,
     candidates: tuple[ReconsiderationCandidate, ...],
+    derived_information_id: str,
+    foreground_demand_refs: tuple[str, ...],
     allocated_at: datetime,
 ) -> ReconsiderationAllocation:
     """Allocate a finite portfolio with an immutable deterministic v1 policy."""
@@ -45,8 +47,10 @@ def allocate_reconsideration(
         raise ValueError("reconsideration scan does not pin the supplied policy")
     if not candidates:
         raise ValueError("reconsideration allocation requires candidates")
-    if any(value.scan_request_id != scan.request_id for value in candidates):
-        raise ValueError("reconsideration candidate belongs to another scan")
+    if {value.candidate_id for value in candidates} != {
+        value.candidate_id for value in scan.candidate_inputs
+    }:
+        raise ValueError("reconsideration candidates differ from the scan portfolio")
     if len({value.candidate_id for value in candidates}) != len(candidates):
         raise ValueError("reconsideration candidates must be unique")
 
@@ -63,7 +67,7 @@ def allocate_reconsideration(
     consumed = ScarceCognitionCostSnapshot()
     selected_count = 0
     decisions: list[ReconsiderationDecision] = []
-    foreground_clear = not scan.foreground_demand_refs
+    foreground_clear = not foreground_demand_refs
     for candidate in ranked:
         benefit, cost, net_voc, features_current = terms[candidate.candidate_id]
         gates = (
@@ -131,9 +135,25 @@ def allocate_reconsideration(
             )
             continue
         proposed = consumed.plus(candidate.costs)
-        if selected_count >= scan.budget.max_candidates or not proposed.fits_within(
-            scan.budget.ceiling
+        aggregate_interruption_exceeded = (
+            proposed.interruption_units > scan.maximum_interruption_units + 1e-12
+        )
+        if (
+            selected_count >= scan.budget.max_candidates
+            or not proposed.fits_within(scan.budget.ceiling)
+            or aggregate_interruption_exceeded
         ):
+            binding_constraint = (
+                "maximum_interruption_units"
+                if aggregate_interruption_exceeded
+                else _binding_budget_dimension(
+                    candidate.costs,
+                    consumed,
+                    scan.budget.ceiling,
+                    selected_count,
+                    scan.budget.max_candidates,
+                )
+            )
             decisions.append(
                 ReconsiderationDecision(
                     candidate.candidate_id,
@@ -143,13 +163,7 @@ def allocate_reconsideration(
                     net_voc,
                     gates,
                     "finite scarce-cognition budget is exhausted",
-                    _binding_budget_dimension(
-                        candidate.costs,
-                        consumed,
-                        scan.budget.ceiling,
-                        selected_count,
-                        scan.budget.max_candidates,
-                    ),
+                    binding_constraint,
                 )
             )
             continue
@@ -168,6 +182,7 @@ def allocate_reconsideration(
             )
         )
     return ReconsiderationAllocation.create(
+        derived_information_id=derived_information_id,
         scan_request_id=scan.request_id,
         policy_id=policy.policy_id,
         policy_version=policy.version,
@@ -176,6 +191,7 @@ def allocate_reconsideration(
         consumed_candidates=selected_count,
         consumed=consumed,
         remaining=scan.budget.ceiling.minus(consumed),
+        foreground_demand_refs=foreground_demand_refs,
         allocated_at=allocated_at,
     )
 

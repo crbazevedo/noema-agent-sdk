@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -7,6 +8,10 @@ from datetime import UTC, datetime, timedelta
 from noema import (
     ALLOCATION_TRACE_RECORDED_EVENT,
     INQUIRY_RECORDED_EVENT,
+    RECONSIDERATION_ALLOCATION_RECORDED_EVENT,
+    RECONSIDERATION_CANDIDATE_RECORDED_EVENT,
+    RECONSIDERATION_EVENT_TYPES,
+    SHADOW_PROPOSAL_RECORDED_EVENT,
     AllocationLabel,
     BackgroundCognitiveBudget,
     Classification,
@@ -26,6 +31,7 @@ from noema import (
     GovernedInformationRef,
     GoverningIntentRef,
     HmacOpaqueInformationIdDeriver,
+    InformationGovernanceEngine,
     InformationLineage,
     InformationPolicy,
     Inquiry,
@@ -39,6 +45,7 @@ from noema import (
     OriginProvenance,
     PolicyBinding,
     PrincipalSnapshot,
+    ReconsiderationAllocation,
     ReconsiderationFeatureSnapshot,
     ReconsiderationMandate,
     ReconsiderationMandateRevocation,
@@ -147,6 +154,8 @@ async def seed_historical_inquiries(
     *,
     count: int = 2,
     terminal: bool = True,
+    inquiry_lifetime: timedelta = timedelta(minutes=15),
+    revise_goal: bool = True,
 ):
     origin, authority, trust = user_security()
     steward = IntentStewardCoordinator(
@@ -191,7 +200,7 @@ async def seed_historical_inquiries(
             )
         ),
         requested_at=clock(),
-        expires_at=clock() + timedelta(minutes=15),
+        expires_at=clock() + inquiry_lifetime,
     )
     request_event = await kernel.emit(request.to_event(source="fixture"))
     assert request_event.sequence is not None
@@ -230,6 +239,9 @@ async def seed_historical_inquiries(
         )
         inquiries.append(inquiry)
 
+    if not revise_goal:
+        return steward, g1, g1, tuple(inquiries)
+
     clock.advance(timedelta(minutes=20))
     next_status = GoalStatus.COMPLETED if terminal else GoalStatus.ACTIVE
     current_g1 = await record_goal(
@@ -267,11 +279,12 @@ async def record_information(
     *,
     count: int,
     purpose: str = "historical-reconsideration",
+    classification: Classification = Classification.INTERNAL,
 ) -> tuple[InformationPolicy, tuple[GovernedInformationRef, ...]]:
     policy = InformationPolicy.create(
         version=1,
         origin_domains=("synthetic",),
-        classification=Classification.INTERNAL,
+        classification=classification,
         allowed_purposes=(purpose,),
         allowed_recipients=("user:carlos",),
         allowed_trust_domains=("local",),
@@ -319,16 +332,28 @@ async def prepare_mandate_fixture(
     trigger_event_types: tuple[str, ...] = (),
     minimum_interval_seconds: float = 60.0,
     expires_in: timedelta = timedelta(days=1),
+    max_candidates: int = 1,
+    maximum_interruption_units: float = 0.25,
+    classification: Classification = Classification.INTERNAL,
+    historical_terminal: bool = True,
+    inquiry_lifetime: timedelta = timedelta(minutes=15),
+    revise_historical_goal: bool = True,
 ):
     kernel = NoemaKernel()
     clock = MutableClock(NOW)
     _steward, g1, current_g1, inquiries = await seed_historical_inquiries(
-        kernel, clock, count=count
+        kernel,
+        clock,
+        count=count,
+        terminal=historical_terminal,
+        inquiry_lifetime=inquiry_lifetime,
+        revise_goal=revise_historical_goal,
     )
     information_policy, information_refs = await record_information(
         kernel,
         count=count,
         purpose=policy_purpose,
+        classification=classification,
     )
     authorization = await kernel.emit(
         Event(
@@ -343,7 +368,21 @@ async def prepare_mandate_fixture(
         authority_id="reconsideration-authority:fixture",
         authorized_issuers=(("user:carlos", MandateIssuerKind.USER),),
     )
-    worker = ReconsiderationShadowWorker(kernel, authority=authority)
+    scan_clock = MutableClock(NOW + timedelta(hours=3, minutes=1))
+    worker = ReconsiderationShadowWorker(
+        kernel,
+        authority=authority,
+        clock=scan_clock,
+        derived_information_id_deriver=ID_DERIVER,
+    )
+    if trigger_event_types:
+        await kernel.emit(
+            Event(
+                trigger_event_types[0],
+                "fixture:pre-activation-trigger",
+                timestamp=NOW + timedelta(hours=1, minutes=59),
+            )
+        )
     mandate = ReconsiderationMandate.create(
         mandate_id="mandate:historical-review",
         revision=1,
@@ -354,12 +393,12 @@ async def prepare_mandate_fixture(
         scope="review unresolved historical inquiries without reviving intent",
         candidate_classes=("inquiry",),
         candidate_domains=domains,
-        budget=scarce_budget(max_candidates=1),
+        budget=scarce_budget(max_candidates=max_candidates),
         minimum_interval_seconds=minimum_interval_seconds,
         trigger_event_types=trigger_event_types,
         issued_at=NOW + timedelta(hours=2),
         expires_at=NOW + timedelta(hours=2) + expires_in,
-        maximum_interruption_units=0.25,
+        maximum_interruption_units=maximum_interruption_units,
         surfacing_policy=SurfacingPolicy.SHADOW_QUESTION_ONLY,
         information_use_purpose=mandate_purpose,
         information_policy_ids=(information_policy.policy_id,),
@@ -381,6 +420,7 @@ async def prepare_mandate_fixture(
         current_g1,
         inquiries,
         information_refs,
+        scan_clock,
     )
 
 
@@ -465,6 +505,7 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             _current_g1,
             inquiries,
             information_refs,
+            scan_clock,
         ) = await prepare_mandate_fixture()
         evidence = await current_evidence(kernel)
         before = await kernel.store.latest_sequence()
@@ -480,7 +521,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             actor_id="user:carlos",
             source_trust_domain="local",
             locality="local",
-            requested_at=NOW + timedelta(hours=3, minutes=1),
         )
         self.assertIsNotNone(allocation)
         assert allocation is not None
@@ -548,7 +588,32 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         replay.rebuild(kernel.schemas.normalize(event) for event in history)
         self.assertEqual(replay.semantic_snapshot(), projection.semantic_snapshot())
 
-        unchanged_count = len(history)
+        scan_clock.advance(timedelta(hours=1))
+        second = await worker.run_scan(
+            basis=basis,
+            seeds=seeds,
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        assert second is not None
+        self.assertNotEqual(second.allocation_id, allocation.allocation_id)
+        self.assertEqual(
+            second.selected_candidate_ids,
+            tuple(
+                value.candidate_id
+                for value in allocation.decisions
+                if value.label is AllocationLabel.DEFERRED_BY_CONSTRAINT
+            ),
+        )
+        projection = await worker.current_projection()
+        self.assertEqual(len(projection.candidates), 2)
+        self.assertEqual(len(projection.allocations), 2)
+        self.assertEqual(len(projection.traces), 3)
+        self.assertEqual(len(projection.proposals), 2)
+
+        unchanged_count = len(await kernel.history())
         same = await worker.run_scan(
             basis=basis,
             seeds=seeds,
@@ -556,9 +621,8 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             actor_id="user:carlos",
             source_trust_domain="local",
             locality="local",
-            requested_at=NOW + timedelta(hours=4),
         )
-        self.assertEqual(same, allocation)
+        self.assertEqual(same, second)
         self.assertEqual(len(await kernel.history()), unchanged_count)
         await kernel.stop()
 
@@ -570,8 +634,15 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 *,
                 authority: StaticReconsiderationAuthority,
                 policy: ReconsiderationPolicySnapshot,
+                clock: MutableClock,
             ) -> None:
-                super().__init__(kernel, authority=authority, policy=policy)
+                super().__init__(
+                    kernel,
+                    authority=authority,
+                    policy=policy,
+                    clock=clock,
+                    derived_information_id_deriver=ID_DERIVER,
+                )
                 self.crash_once = True
 
             async def _advance_checkpoint(
@@ -593,11 +664,13 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             _current_g1,
             inquiries,
             information_refs,
+            scan_clock,
         ) = await prepare_mandate_fixture(count=1)
         worker = CrashBeforeCheckpointWorker(
             kernel,
             authority=fixture_worker.authority,
             policy=fixture_worker.policy,
+            clock=scan_clock,
         )
         evidence = await current_evidence(kernel, suffix="crash")
         scan_seed = seed(inquiries[0], information_refs[0], evidence, strength=0.9)
@@ -609,7 +682,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 actor_id="user:carlos",
                 source_trust_domain="local",
                 locality="local",
-                requested_at=NOW + timedelta(hours=3, minutes=1),
             )
 
         before_recovery = await kernel.history()
@@ -617,6 +689,8 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             kernel,
             authority=fixture_worker.authority,
             policy=fixture_worker.policy,
+            clock=scan_clock,
+            derived_information_id_deriver=ID_DERIVER,
         ).recover()
         after_recovery = await kernel.history()
         self.assertEqual(len(recovered), 1)
@@ -632,6 +706,305 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(checkpoint.epoch_id, recovered[0].allocation_id)
         await kernel.stop()
 
+    async def test_recovery_reconciles_every_partial_output_stage(self) -> None:
+        class CrashAfterStageWorker(ReconsiderationShadowWorker):
+            def __init__(
+                self,
+                kernel: NoemaKernel,
+                *,
+                authority: StaticReconsiderationAuthority,
+                policy: ReconsiderationPolicySnapshot,
+                clock: MutableClock,
+                stage: str,
+            ) -> None:
+                super().__init__(
+                    kernel,
+                    authority=authority,
+                    policy=policy,
+                    clock=clock,
+                    derived_information_id_deriver=ID_DERIVER,
+                )
+                self.stage = stage
+                self.crashed = False
+                self.trace_count = 0
+
+            async def _append_exact(
+                self,
+                event: Event,
+                *,
+                authority_id: str | None = None,
+            ) -> Event:
+                stored = await super()._append_exact(event, authority_id=authority_id)
+                should_crash = False
+                if (
+                    self.stage == "first_candidate"
+                    and stored.type == RECONSIDERATION_CANDIDATE_RECORDED_EVENT
+                ):
+                    should_crash = True
+                elif stored.type == ALLOCATION_TRACE_RECORDED_EVENT:
+                    self.trace_count += 1
+                    if self.stage == "first_trace" and self.trace_count == 1:
+                        should_crash = True
+                    if (
+                        self.stage == "selected_trace"
+                        and stored.payload["decision"] == AllocationLabel.SELECTED.value
+                    ):
+                        should_crash = True
+                if should_crash and not self.crashed:
+                    self.crashed = True
+                    raise RuntimeError(f"simulated crash after {self.stage}")
+                return stored
+
+            async def _ensure_allocation(
+                self,
+                scan_event: Event,
+            ) -> ReconsiderationAllocation:
+                allocation = await super()._ensure_allocation(scan_event)
+                if self.stage == "allocation" and not self.crashed:
+                    self.crashed = True
+                    raise RuntimeError("simulated crash after allocation")
+                return allocation
+
+        for stage in (
+            "first_candidate",
+            "allocation",
+            "first_trace",
+            "selected_trace",
+        ):
+            with self.subTest(stage=stage):
+                (
+                    kernel,
+                    fixture_worker,
+                    mandate,
+                    principal,
+                    _g1,
+                    _current_g1,
+                    inquiries,
+                    information_refs,
+                    scan_clock,
+                ) = await prepare_mandate_fixture(count=2)
+                worker = CrashAfterStageWorker(
+                    kernel,
+                    authority=fixture_worker.authority,
+                    policy=fixture_worker.policy,
+                    clock=scan_clock,
+                    stage=stage,
+                )
+                evidence = await current_evidence(kernel, suffix=stage)
+                with self.assertRaisesRegex(RuntimeError, "simulated crash"):
+                    await worker.run_scan(
+                        basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                        seeds=(
+                            seed(
+                                inquiries[0],
+                                information_refs[0],
+                                evidence,
+                                strength=0.95,
+                            ),
+                            seed(
+                                inquiries[1],
+                                information_refs[1],
+                                evidence,
+                                strength=0.75,
+                            ),
+                        ),
+                        principal=principal,
+                        actor_id="user:carlos",
+                        source_trust_domain="local",
+                        locality="local",
+                    )
+
+                recovered = await ReconsiderationShadowWorker(
+                    kernel,
+                    authority=fixture_worker.authority,
+                    policy=fixture_worker.policy,
+                    clock=scan_clock,
+                    derived_information_id_deriver=ID_DERIVER,
+                ).recover()
+                self.assertEqual(len(recovered), 1)
+                projection = await fixture_worker.current_projection()
+                self.assertEqual(len(projection.scans), 1)
+                self.assertEqual(len(projection.candidates), 2)
+                self.assertEqual(len(projection.allocations), 1)
+                self.assertEqual(len(projection.traces), 2)
+                self.assertEqual(len(projection.proposals), 1)
+                history = await kernel.history()
+                self.assertEqual(
+                    sum(
+                        event.type == RECONSIDERATION_CANDIDATE_RECORDED_EVENT for event in history
+                    ),
+                    2,
+                )
+                self.assertEqual(
+                    sum(
+                        event.type == RECONSIDERATION_ALLOCATION_RECORDED_EVENT for event in history
+                    ),
+                    1,
+                )
+                self.assertEqual(
+                    sum(event.type == ALLOCATION_TRACE_RECORDED_EVENT for event in history),
+                    2,
+                )
+                self.assertEqual(
+                    sum(event.type == SHADOW_PROPOSAL_RECORDED_EVENT for event in history),
+                    1,
+                )
+                await kernel.stop()
+
+    async def test_recovery_does_not_surface_after_basis_expiry(self) -> None:
+        class CrashAfterSelectedTraceWorker(ReconsiderationShadowWorker):
+            async def _append_exact(
+                self,
+                event: Event,
+                *,
+                authority_id: str | None = None,
+            ) -> Event:
+                stored = await super()._append_exact(event, authority_id=authority_id)
+                if (
+                    stored.type == ALLOCATION_TRACE_RECORDED_EVENT
+                    and stored.payload["decision"] == AllocationLabel.SELECTED.value
+                ):
+                    raise RuntimeError("simulated crash before proposal")
+                return stored
+
+        (
+            kernel,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            scan_clock,
+        ) = await prepare_mandate_fixture(count=1, expires_in=timedelta(hours=2))
+        worker = CrashAfterSelectedTraceWorker(
+            kernel,
+            authority=fixture_worker.authority,
+            policy=fixture_worker.policy,
+            clock=scan_clock,
+            derived_information_id_deriver=ID_DERIVER,
+        )
+        evidence = await current_evidence(kernel, suffix="expiry-before-recovery")
+        with self.assertRaisesRegex(RuntimeError, "before proposal"):
+            await worker.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(seed(inquiries[0], information_refs[0], evidence, strength=0.9),),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+
+        scan_clock.advance(timedelta(hours=2))
+        recovered = await ReconsiderationShadowWorker(
+            kernel,
+            authority=fixture_worker.authority,
+            policy=fixture_worker.policy,
+            clock=scan_clock,
+            derived_information_id_deriver=ID_DERIVER,
+        ).recover()
+        self.assertEqual(len(recovered), 1)
+        projection = await fixture_worker.current_projection()
+        self.assertEqual(len(projection.traces), 1)
+        self.assertEqual(projection.proposals, ())
+        checkpoint = ConsumerCheckpoint.from_event((await kernel.history())[-1])
+        self.assertEqual(checkpoint.epoch_id, recovered[0].allocation_id)
+        await kernel.stop()
+
+    async def test_later_checkpoint_cannot_hide_an_earlier_partial_scan(self) -> None:
+        class CrashAfterAllocationWorker(ReconsiderationShadowWorker):
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+                self.crashed = False
+
+            async def _ensure_allocation(
+                self,
+                scan_event: Event,
+            ) -> ReconsiderationAllocation:
+                allocation = await super()._ensure_allocation(scan_event)
+                if not self.crashed:
+                    self.crashed = True
+                    raise RuntimeError("simulated earlier partial allocation")
+                return allocation
+
+        (
+            kernel,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            scan_clock,
+        ) = await prepare_mandate_fixture(count=2)
+        evidence = await current_evidence(kernel, suffix="checkpoint-overtake")
+        crashed = CrashAfterAllocationWorker(
+            kernel,
+            authority=fixture_worker.authority,
+            policy=fixture_worker.policy,
+            clock=scan_clock,
+            derived_information_id_deriver=ID_DERIVER,
+        )
+        with self.assertRaisesRegex(RuntimeError, "earlier partial"):
+            await crashed.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(seed(inquiries[0], information_refs[0], evidence, strength=0.95),),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+
+        scan_clock.advance(timedelta(minutes=2))
+        later = await fixture_worker.run_scan(
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            seeds=(seed(inquiries[1], information_refs[1], evidence, strength=0.9),),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        assert later is not None
+        checkpoint = ConsumerCheckpoint.from_event((await kernel.history())[-1])
+        partial_projection = await fixture_worker.current_projection()
+        earlier_allocation = next(
+            allocation
+            for allocation in partial_projection.allocations
+            if all(
+                partial_projection.trace_for_decision(
+                    decision.candidate_id,
+                    allocation.allocation_id,
+                )
+                is None
+                for decision in allocation.decisions
+            )
+        )
+        earlier_scan = partial_projection.scan(earlier_allocation.scan_request_id)
+        assert earlier_scan is not None
+        earlier_scan_event = next(
+            event
+            for event in await kernel.history()
+            if event.id == f"reconsideration-scan-requested:{earlier_scan.request_id}"
+        )
+        assert earlier_scan_event.sequence is not None
+        self.assertGreater(checkpoint.last_completed_sequence, earlier_scan_event.sequence)
+
+        recovered = await ReconsiderationShadowWorker(
+            kernel,
+            authority=fixture_worker.authority,
+            policy=fixture_worker.policy,
+            clock=scan_clock,
+            derived_information_id_deriver=ID_DERIVER,
+        ).recover()
+        self.assertEqual(len(recovered), 1)
+        projection = await fixture_worker.current_projection()
+        self.assertEqual(len(projection.allocations), 2)
+        self.assertEqual(len(projection.traces), 2)
+        self.assertEqual(len(projection.proposals), 2)
+        await kernel.stop()
+
     async def test_changed_current_evidence_creates_a_new_candidate(self) -> None:
         (
             kernel,
@@ -642,6 +1015,7 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             _current_g1,
             inquiries,
             information_refs,
+            scan_clock,
         ) = await prepare_mandate_fixture(count=1)
         basis = CurrentCognitiveBasis.from_mandate(mandate.revision_id)
         first_evidence = await current_evidence(kernel, suffix="first-cut")
@@ -652,8 +1026,8 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             actor_id="user:carlos",
             source_trust_domain="local",
             locality="local",
-            requested_at=NOW + timedelta(hours=3, minutes=1),
         )
+        scan_clock.advance(timedelta(minutes=2))
         second_evidence = await current_evidence(kernel, suffix="second-cut")
         second = await worker.run_scan(
             basis=basis,
@@ -662,7 +1036,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             actor_id="user:carlos",
             source_trust_domain="local",
             locality="local",
-            requested_at=NOW + timedelta(hours=3, minutes=3),
         )
         assert first is not None and second is not None
         self.assertNotEqual(first.allocation_id, second.allocation_id)
@@ -681,6 +1054,7 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             _current_g1,
             inquiries,
             information_refs,
+            _scan_clock,
         ) = await prepare_mandate_fixture()
         evidence = await current_evidence(kernel)
         expensive = ScarceCognitionCostSnapshot(
@@ -715,7 +1089,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             actor_id="user:carlos",
             source_trust_domain="local",
             locality="local",
-            requested_at=NOW + timedelta(hours=3, minutes=1),
         )
         assert allocation is not None
         self.assertTrue(
@@ -731,6 +1104,122 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         )
         await kernel.stop()
 
+    async def test_aggregate_interruption_ceiling_limits_selected_portfolio(self) -> None:
+        (
+            kernel,
+            worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            _scan_clock,
+        ) = await prepare_mandate_fixture(
+            count=2,
+            max_candidates=2,
+            maximum_interruption_units=0.15,
+        )
+        evidence = await current_evidence(kernel, suffix="aggregate-interruption")
+        allocation = await worker.run_scan(
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            seeds=(
+                seed(inquiries[0], information_refs[0], evidence, strength=0.95),
+                seed(inquiries[1], information_refs[1], evidence, strength=0.9),
+            ),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        assert allocation is not None
+        self.assertEqual(len(allocation.selected_candidate_ids), 1)
+        self.assertLessEqual(
+            allocation.consumed.interruption_units,
+            mandate.maximum_interruption_units,
+        )
+        self.assertEqual(
+            sum(
+                value.binding_constraint == "maximum_interruption_units"
+                for value in allocation.decisions
+            ),
+            1,
+        )
+        await kernel.stop()
+
+    async def test_restricted_sources_remain_governed_without_text_leakage(self) -> None:
+        (
+            kernel,
+            worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            _scan_clock,
+        ) = await prepare_mandate_fixture(
+            count=1,
+            classification=Classification.RESTRICTED,
+        )
+        evidence = await current_evidence(kernel, suffix="restricted")
+        allocation = await worker.run_scan(
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            seeds=(seed(inquiries[0], information_refs[0], evidence, strength=0.9),),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        assert allocation is not None
+        projection = await worker.current_projection()
+        candidate = projection.candidates[0]
+        trace = projection.traces[0]
+        reconsideration_events = tuple(
+            event for event in await kernel.history() if event.type in RECONSIDERATION_EVENT_TYPES
+        )
+        serialized = json.dumps(
+            [
+                {
+                    "type": event.type,
+                    "subject": event.subject,
+                    "payload": event.payload,
+                    "metadata": event.metadata,
+                }
+                for event in reconsideration_events
+            ],
+            sort_keys=True,
+        )
+        self.assertNotIn(inquiries[0].question, serialized)
+        self.assertNotIn("historical_question", serialized)
+
+        candidate_lineage = projection.information.lineage(candidate.derived_information_id)
+        allocation_lineage = projection.information.lineage(allocation.derived_information_id)
+        trace_lineage = projection.information.lineage(trace.derived_information_id)
+        self.assertIsNotNone(candidate_lineage)
+        self.assertIsNotNone(allocation_lineage)
+        self.assertIsNotNone(trace_lineage)
+        assert candidate_lineage is not None
+        assert allocation_lineage is not None
+        assert trace_lineage is not None
+        self.assertEqual(
+            candidate_lineage.source_information_ids,
+            (information_refs[0].information_id,),
+        )
+        self.assertEqual(
+            allocation_lineage.source_information_ids,
+            (candidate.derived_information_id,),
+        )
+        self.assertEqual(
+            trace_lineage.source_information_ids,
+            (allocation.derived_information_id,),
+        )
+        composition = InformationGovernanceEngine(projection.information).composition_for(
+            GovernedInformationRef(trace.derived_information_id)
+        )
+        self.assertEqual(composition.classification, Classification.RESTRICTED)
+        await kernel.stop()
+
     async def test_foreground_demand_defers_positive_reconsideration(self) -> None:
         (
             kernel,
@@ -741,9 +1230,10 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             _current_g1,
             inquiries,
             information_refs,
+            _scan_clock,
         ) = await prepare_mandate_fixture(count=1)
         evidence = await current_evidence(kernel)
-        foreground = await kernel.emit(
+        await kernel.emit(
             Event(
                 "decision.proposed",
                 "fixture",
@@ -758,8 +1248,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             actor_id="user:carlos",
             source_trust_domain="local",
             locality="local",
-            requested_at=NOW + timedelta(hours=3, minutes=1),
-            foreground_demand_refs=(f"event:{foreground.id}",),
         )
         assert allocation is not None
         self.assertIs(
@@ -771,6 +1259,181 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             "foreground_preemption",
         )
         self.assertEqual((await worker.current_projection()).proposals, ())
+        await kernel.stop()
+
+    async def test_foreground_arriving_after_scan_is_pinned_and_preempts(self) -> None:
+        class InterleavingForegroundWorker(ReconsiderationShadowWorker):
+            def __init__(self, *args: object, **kwargs: object) -> None:
+                super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+                self.inserted = False
+
+            async def _process_scan(
+                self,
+                scan_event: Event,
+            ) -> ReconsiderationAllocation | None:
+                if not self.inserted:
+                    self.inserted = True
+                    await self.kernel.emit(
+                        Event(
+                            "decision.proposed",
+                            "fixture:foreground-race",
+                            {"foreground": True},
+                            timestamp=self.clock(),
+                        )
+                    )
+                return await super()._process_scan(scan_event)
+
+        (
+            kernel,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            scan_clock,
+        ) = await prepare_mandate_fixture(count=1)
+        worker = InterleavingForegroundWorker(
+            kernel,
+            authority=fixture_worker.authority,
+            policy=fixture_worker.policy,
+            clock=scan_clock,
+            derived_information_id_deriver=ID_DERIVER,
+        )
+        evidence = await current_evidence(kernel, suffix="foreground-race")
+        scan_seed = seed(inquiries[0], information_refs[0], evidence, strength=0.9)
+        first = await worker.run_scan(
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            seeds=(scan_seed,),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        assert first is not None
+        self.assertIs(
+            first.decisions[0].label,
+            AllocationLabel.DEFERRED_BY_CONSTRAINT,
+        )
+        self.assertEqual(first.decisions[0].binding_constraint, "foreground_preemption")
+        self.assertEqual(len(first.foreground_demand_refs), 1)
+        foreground_event = next(
+            event
+            for event in await kernel.history()
+            if event.type == "decision.proposed" and event.source == "fixture:foreground-race"
+        )
+        self.assertEqual(first.foreground_demand_refs, (f"event:{foreground_event.id}",))
+
+        scan_clock.advance(timedelta(minutes=2))
+        second = await worker.run_scan(
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            seeds=(scan_seed,),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        assert second is not None
+        self.assertNotEqual(second.allocation_id, first.allocation_id)
+        self.assertEqual(second.selected_candidate_ids, (first.decisions[0].candidate_id,))
+        self.assertEqual(len((await worker.current_projection()).candidates), 1)
+        await kernel.stop()
+
+    async def test_mandate_triggers_must_be_fresh_and_single_use(self) -> None:
+        (
+            kernel,
+            worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            scan_clock,
+        ) = await prepare_mandate_fixture(
+            count=2,
+            trigger_event_types=("scheduled.reconsideration",),
+        )
+        evidence = await current_evidence(kernel, suffix="trigger")
+        first_seed = seed(inquiries[0], information_refs[0], evidence, strength=0.9)
+        second_seed = seed(inquiries[1], information_refs[1], evidence, strength=0.8)
+        pre_activation = next(
+            event
+            for event in await kernel.history()
+            if event.source == "fixture:pre-activation-trigger"
+        )
+        with self.assertRaisesRegex(ValueError, "predates mandate activation"):
+            await worker.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(first_seed,),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+                trigger_event_id=pre_activation.id,
+            )
+        self.assertEqual((await worker.current_projection()).scans, ())
+
+        older_unused = await kernel.emit(
+            Event("scheduled.reconsideration", "fixture:trigger:older", timestamp=scan_clock())
+        )
+        fresh = await kernel.emit(
+            Event("scheduled.reconsideration", "fixture:trigger:fresh", timestamp=scan_clock())
+        )
+        first = await worker.run_scan(
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            seeds=(first_seed,),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+            trigger_event_id=fresh.id,
+        )
+        self.assertIsNotNone(first)
+
+        with self.assertRaisesRegex(ValueError, "already consumed"):
+            await worker.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(second_seed,),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+                trigger_event_id=fresh.id,
+            )
+
+        scan_clock.advance(timedelta(minutes=2))
+        with self.assertRaisesRegex(ValueError, "stale"):
+            await worker.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(second_seed,),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+                trigger_event_id=older_unused.id,
+            )
+        self.assertEqual(len((await worker.current_projection()).scans), 1)
+
+        fresh_second = await kernel.emit(
+            Event(
+                "scheduled.reconsideration",
+                "fixture:trigger:second",
+                timestamp=scan_clock(),
+            )
+        )
+        second = await worker.run_scan(
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            seeds=(second_seed,),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+            trigger_event_id=fresh_second.id,
+        )
+        self.assertIsNotNone(second)
+        self.assertEqual(len((await worker.current_projection()).scans), 2)
         await kernel.stop()
 
     async def test_expired_revoked_scope_trigger_cadence_and_interruption_fail_closed(self) -> None:
@@ -786,6 +1449,7 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 _current_g1,
                 inquiries,
                 information_refs,
+                _scan_clock,
             ) = await prepare_mandate_fixture(
                 count=1,
                 trigger_event_types=trigger_types,
@@ -823,7 +1487,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                         revoked_at=revocation_auth.timestamp,
                     )
                 )
-            requested = NOW + timedelta(hours=3) if case != "expired" else NOW + timedelta(hours=3)
             with self.assertRaises(ValueError, msg=case):
                 await worker.run_scan(
                     basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
@@ -832,9 +1495,10 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                     actor_id="user:carlos",
                     source_trust_domain="local",
                     locality="local",
-                    requested_at=requested,
                 )
-            self.assertEqual((await worker.current_projection()).candidates, ())
+            projection = await worker.current_projection()
+            self.assertEqual(projection.scans, ())
+            self.assertEqual(await worker.recover(), ())
             await kernel.stop()
 
         for case in ("expired", "revoked", "scope", "trigger", "interruption"):
@@ -850,6 +1514,7 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             _current_g1,
             inquiries,
             information_refs,
+            scan_clock,
         ) = await prepare_mandate_fixture(count=2, minimum_interval_seconds=600.0)
         first_evidence = await current_evidence(kernel, suffix="cadence-one")
         await worker.run_scan(
@@ -859,8 +1524,8 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             actor_id="user:carlos",
             source_trust_domain="local",
             locality="local",
-            requested_at=NOW + timedelta(hours=3, minutes=1),
         )
+        scan_clock.advance(timedelta(minutes=1))
         second_evidence = await current_evidence(kernel, suffix="cadence-two")
         with self.assertRaisesRegex(ValueError, "cadence"):
             await worker.run_scan(
@@ -870,7 +1535,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 actor_id="user:carlos",
                 source_trust_domain="local",
                 locality="local",
-                requested_at=NOW + timedelta(hours=3, minutes=2),
             )
         await kernel.stop()
 
@@ -884,6 +1548,7 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             _current_g1,
             inquiries,
             information_refs,
+            _scan_clock,
         ) = await prepare_mandate_fixture(
             count=1,
             policy_purpose="unrelated-purpose",
@@ -898,14 +1563,132 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 actor_id="user:carlos",
                 source_trust_domain="local",
                 locality="local",
-                requested_at=NOW + timedelta(hours=3, minutes=1),
             )
-        self.assertEqual((await worker.current_projection()).candidates, ())
+        projection = await worker.current_projection()
+        self.assertEqual(projection.scans, ())
+        self.assertEqual(await worker.recover(), ())
         with self.assertRaisesRegex(ValueError, "must not be empty"):
             replace(
                 seed(inquiries[0], information_refs[0], evidence, strength=0.9),
                 current_evidence_refs=(),
             )
+        await kernel.stop()
+
+    async def test_invalid_candidate_inputs_never_admit_a_poison_scan(self) -> None:
+        (
+            kernel,
+            worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            _scan_clock,
+        ) = await prepare_mandate_fixture(count=1)
+        evidence = await current_evidence(kernel, suffix="valid-cut")
+        valid = seed(inquiries[0], information_refs[0], evidence, strength=0.9)
+        invalid_seeds = (
+            replace(valid, inquiry_id="inquiry:unknown"),
+            replace(valid, current_evidence_refs=("event:missing-current-evidence",)),
+            replace(
+                valid,
+                features=replace(
+                    valid.features,
+                    provenance_refs=("event:missing-feature-provenance",),
+                ),
+            ),
+            replace(valid, current_evidence_refs=inquiries[0].evidence_refs),
+        )
+        for invalid in invalid_seeds:
+            with self.subTest(inquiry_id=invalid.inquiry_id):
+                with self.assertRaises(ValueError):
+                    await worker.run_scan(
+                        basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                        seeds=(invalid,),
+                        principal=principal,
+                        actor_id="user:carlos",
+                        source_trust_domain="local",
+                        locality="local",
+                    )
+                self.assertEqual((await worker.current_projection()).scans, ())
+                self.assertEqual(await worker.recover(), ())
+        await kernel.stop()
+
+        (
+            kernel,
+            worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            _scan_clock,
+        ) = await prepare_mandate_fixture(
+            count=1,
+            historical_terminal=False,
+            inquiry_lifetime=timedelta(hours=6),
+            revise_historical_goal=False,
+        )
+        evidence = await current_evidence(kernel, suffix="current-inquiry")
+        with self.assertRaisesRegex(ValueError, "current inquiry"):
+            await worker.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(seed(inquiries[0], information_refs[0], evidence, strength=0.9),),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+        self.assertEqual((await worker.current_projection()).scans, ())
+        self.assertEqual(await worker.recover(), ())
+        await kernel.stop()
+
+        (
+            kernel,
+            worker,
+            _mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            _scan_clock,
+        ) = await prepare_mandate_fixture(count=1)
+        origin, authority, trust = user_security()
+        other_goal = await record_goal(
+            IntentStewardCoordinator(
+                kernel,
+                validator=StrategicValidator(trust),
+                clock=MutableClock(NOW + timedelta(hours=3)),
+            ),
+            goal_id="goal:unrelated-live",
+            status=GoalStatus.ACTIVE,
+            origin=origin,
+            authority=authority,
+            reason="prove same-goal reconsideration boundary",
+        )
+        evidence = await current_evidence(kernel, suffix="wrong-goal")
+        policies = tuple(
+            value.policy_id for value in (await worker.current_projection()).information.policies
+        )
+        with self.assertRaisesRegex(ValueError, "same stable goal lineage"):
+            await worker.run_scan(
+                basis=CurrentCognitiveBasis.from_live_intent(
+                    GoverningIntentRef(other_goal.goal_id, other_goal.revision_id)
+                ),
+                seeds=(seed(inquiries[0], information_refs[0], evidence, strength=0.9),),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+                budget=scarce_budget(),
+                information_use_purpose="historical-reconsideration",
+                information_policy_ids=policies,
+            )
+        self.assertEqual((await worker.current_projection()).scans, ())
+        self.assertEqual(await worker.recover(), ())
         await kernel.stop()
 
     async def test_terminal_and_stale_intent_cannot_self_authorize_reconsideration(self) -> None:
@@ -918,6 +1701,7 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             _current_g1,
             inquiries,
             information_refs,
+            _scan_clock,
         ) = await prepare_mandate_fixture(count=1)
         evidence = await current_evidence(kernel)
         with self.assertRaisesRegex(ValueError, "ACTIVE or BLOCKED"):
@@ -930,7 +1714,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 actor_id="user:carlos",
                 source_trust_domain="local",
                 locality="local",
-                requested_at=NOW + timedelta(hours=3, minutes=1),
                 budget=scarce_budget(),
                 information_use_purpose="historical-reconsideration",
                 information_policy_ids=tuple(
@@ -955,7 +1738,12 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             "reconsideration-authority:fixture",
             (("user:carlos", MandateIssuerKind.USER),),
         )
-        worker = ReconsiderationShadowWorker(kernel, authority=authority)
+        worker = ReconsiderationShadowWorker(
+            kernel,
+            authority=authority,
+            clock=MutableClock(NOW + timedelta(hours=3, minutes=1)),
+            derived_information_id_deriver=ID_DERIVER,
+        )
         principal = PrincipalSnapshot.create(
             principal_id="user:carlos",
             roles=(),
@@ -973,7 +1761,6 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             actor_id="user:carlos",
             source_trust_domain="local",
             locality="local",
-            requested_at=NOW + timedelta(hours=3, minutes=1),
             budget=scarce_budget(),
             information_use_purpose="historical-reconsideration",
             information_policy_ids=(policy.policy_id,),
@@ -1026,7 +1813,12 @@ class ReconsiderationDurabilityTests(unittest.IsolatedAsyncioTestCase):
             "authority:gapped",
             (("user:carlos", MandateIssuerKind.USER),),
         )
-        worker = ReconsiderationShadowWorker(kernel, authority=authority)
+        worker = ReconsiderationShadowWorker(
+            kernel,
+            authority=authority,
+            clock=MutableClock(NOW + timedelta(minutes=2)),
+            derived_information_id_deriver=ID_DERIVER,
+        )
         mandate = ReconsiderationMandate.create(
             mandate_id="mandate:gapped",
             revision=1,
@@ -1075,6 +1867,13 @@ class ReconsiderationModelTests(unittest.TestCase):
                 "EXPLICITLY_REJECTED",
             ),
         )
+
+    def test_policy_weight_mappings_are_immutable(self) -> None:
+        policy = ReconsiderationPolicySnapshot.create(version="immutable-fixture")
+        with self.assertRaises(TypeError):
+            policy.feature_weights["unresolvedness"] = 99.0
+        with self.assertRaises(TypeError):
+            policy.cost_weights["compute_units"] = 99.0
 
     def test_unauthorized_mandate_cannot_be_admitted(self) -> None:
         authority = StaticReconsiderationAuthority(
