@@ -459,7 +459,10 @@ class WorkProjection:
                 raise ValueError("work lease cites a non-canonical access decision")
             decision_events.append(event)
             decision = InformationAccessDecision.from_event(event)
-            if event.sequence != decision.causal_event_cursor + 1:
+            if not self._has_exact_predecessor_head(
+                event,
+                decision.causal_event_cursor,
+            ):
                 raise ValueError("work lease access decision lacks exact-head admission")
             decisions.append(decision)
         if {value.request.information_ref.information_id for value in decisions} != set(
@@ -490,7 +493,10 @@ class WorkProjection:
                 raise ValueError("work lease cites a non-canonical disclosure decision")
             decision_events.append(event)
             disclosure_decision = DisclosureDecision.from_event(event)
-            if event.sequence != disclosure_decision.causal_event_cursor + 1:
+            if not self._has_exact_predecessor_head(
+                event,
+                disclosure_decision.causal_event_cursor,
+            ):
                 raise ValueError("work lease disclosure decision lacks exact-head admission")
             disclosure_decisions.append(disclosure_decision)
         if {
@@ -519,6 +525,20 @@ class WorkProjection:
             raise ValueError(
                 "work lease access evidence is stale across an intervening canonical event"
             )
+
+    def _has_exact_predecessor_head(self, event: Event, causal_cursor: int) -> bool:
+        sequence = event.sequence
+        if sequence is None or sequence <= causal_cursor:
+            return False
+        predecessor = max(
+            (
+                stored.sequence or 0
+                for stored in self._events.values()
+                if (stored.sequence or 0) < sequence
+            ),
+            default=0,
+        )
+        return predecessor == causal_cursor
 
     def _apply_lease_expiration(self, event: Event) -> None:
         lease_id = str(event.payload["lease_id"])

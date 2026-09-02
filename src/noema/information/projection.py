@@ -39,7 +39,7 @@ class InformationGovernanceProjection:
         self._reset()
 
     def _reset(self) -> None:
-        self._events: dict[str, Event] = {}
+        self._last_event_id: str | None = None
         self._last_sequence = 0
         self._policies: dict[str, InformationPolicy] = {}
         self._lineages: dict[str, InformationLineage] = {}
@@ -127,14 +127,11 @@ class InformationGovernanceProjection:
         return self._declassified_views.get(information_id)
 
     def apply(self, event: Event) -> bool:
-        existing = self._events.get(event.id)
-        if existing is not None:
-            if existing != event:
-                raise ValueError(f"conflicting canonical governance event: {event.id}")
-            return False
         if event.sequence is None:
             raise ValueError("information governance requires canonical sequenced events")
         if event.sequence <= self._last_sequence:
+            if event.sequence == self._last_sequence and event.id == self._last_event_id:
+                return False
             raise ValueError("governance events must be applied in canonical order")
 
         handled = False
@@ -267,7 +264,7 @@ class InformationGovernanceProjection:
             # Receipts are valid canonical records, but never authorization state.
             SecurityAuditReceipt.from_event(event)
 
-        self._events[event.id] = event
+        self._last_event_id = event.id
         self._last_sequence = event.sequence
         return handled
 
@@ -320,7 +317,7 @@ class SecurityAuditProjection:
         self._reset()
 
     def _reset(self) -> None:
-        self._events: dict[str, Event] = {}
+        self._last_event_id: str | None = None
         self._receipts: dict[str, SecurityAuditReceipt] = {}
         self._receipt_order: list[str] = []
         self._last_sequence = 0
@@ -334,14 +331,11 @@ class SecurityAuditProjection:
         return tuple(self._receipts[key] for key in self._receipt_order)
 
     def apply(self, event: Event) -> bool:
-        existing = self._events.get(event.id)
-        if existing is not None:
-            if existing != event:
-                raise ValueError(f"conflicting canonical audit event: {event.id}")
-            return False
         if event.sequence is None:
             raise ValueError("security audit projection requires canonical events")
         if event.sequence <= self._last_sequence:
+            if event.sequence == self._last_sequence and event.id == self._last_event_id:
+                return False
             raise ValueError("security audit events must be applied in canonical order")
         handled = False
         if event.type == SECURITY_AUDIT_RECEIPT_EVENT:
@@ -357,7 +351,7 @@ class SecurityAuditProjection:
                 expired_id = self._receipt_order.pop(0)
                 self._receipts.pop(expired_id, None)
             handled = True
-        self._events[event.id] = event
+        self._last_event_id = event.id
         self._last_sequence = event.sequence
         return handled
 

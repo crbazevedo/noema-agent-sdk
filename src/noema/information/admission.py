@@ -39,10 +39,11 @@ class StaleGovernanceDecisionError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class GovernanceAdmissionReceipt(Generic[RecordT]):
-    """Proof that a governance record immediately followed its evaluated head."""
+    """Proof that a governance record was admitted against its evaluated head."""
 
     record: RecordT
     canonical_event: Event
+    validated_predecessor_head: int
 
     def __post_init__(self) -> None:
         if self.canonical_event.sequence is None:
@@ -50,7 +51,9 @@ class GovernanceAdmissionReceipt(Generic[RecordT]):
         expected_event = self.record.to_event(source=self.canonical_event.source)
         if replace(self.canonical_event, sequence=None) != expected_event:
             raise ValueError("governance admission receipt event differs from its record")
-        if self.canonical_event.sequence != self.record.causal_event_cursor + 1:
+        if self.validated_predecessor_head != self.record.causal_event_cursor:
+            raise ValueError("governance admission receipt cites a different predecessor head")
+        if self.canonical_event.sequence <= self.validated_predecessor_head:
             raise ValueError("governance admission receipt is not exact-head evidence")
 
     @property
@@ -102,7 +105,7 @@ class InformationGovernanceAdmission:
         event = decision.to_event(source=self._source)
         stored = await self._emit_if_head(event, decision.causal_event_cursor)
         self._projection.apply(stored)
-        return GovernanceAdmissionReceipt(decision, stored)
+        return GovernanceAdmissionReceipt(decision, stored, decision.causal_event_cursor)
 
     async def admit_disclosure(
         self,
@@ -123,7 +126,7 @@ class InformationGovernanceAdmission:
         event = decision.to_event(source=self._source)
         stored = await self._emit_if_head(event, decision.causal_event_cursor)
         self._projection.apply(stored)
-        return GovernanceAdmissionReceipt(decision, stored)
+        return GovernanceAdmissionReceipt(decision, stored, decision.causal_event_cursor)
 
     async def admit_declassification(
         self,
@@ -145,7 +148,7 @@ class InformationGovernanceAdmission:
         event = decision.to_event(source=self._source)
         stored = await self._emit_if_head(event, decision.causal_event_cursor)
         self._projection.apply(stored)
-        return GovernanceAdmissionReceipt(decision, stored)
+        return GovernanceAdmissionReceipt(decision, stored, decision.causal_event_cursor)
 
     async def declassify(
         self,
@@ -182,7 +185,7 @@ class InformationGovernanceAdmission:
             view.causal_event_cursor,
         )
         self._projection.apply(stored)
-        return GovernanceAdmissionReceipt(view, stored)
+        return GovernanceAdmissionReceipt(view, stored, view.causal_event_cursor)
 
     async def record_audit_receipt(
         self,

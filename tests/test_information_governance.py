@@ -554,6 +554,45 @@ class InformationPolicyKernelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "material denials"):
             SecurityAuditReceipt.from_decision(denied)
 
+    def test_security_audit_projection_retains_only_its_bounded_window(self) -> None:
+        governance = InformationGovernanceProjection()
+        audit = SecurityAuditProjection(max_receipts=5)
+        receipts: list[SecurityAuditReceipt] = []
+        sequence = 0
+
+        for index in range(40):
+            sequence += 1
+            unrelated = Event(
+                f"test.audit.unrelated.{index}",
+                "test:unrelated",
+                timestamp=START + timedelta(seconds=sequence),
+            ).with_sequence(sequence)
+            self.assertFalse(governance.apply(unrelated))
+            self.assertFalse(audit.apply(unrelated))
+
+            receipt = SecurityAuditReceipt(
+                receipt_id=f"audit_{index:032x}",
+                decision_type="access",
+                decision_id=f"iadec_{index:032x}",
+                context_id=f"access_{index:032x}",
+                disposition=DecisionDisposition.ALLOW,
+                recorded_at=START + timedelta(seconds=sequence + 1),
+            )
+            receipts.append(receipt)
+            sequence += 1
+            receipt_event = receipt.to_event(source="test:audit").with_sequence(sequence)
+            self.assertFalse(governance.apply(receipt_event))
+            self.assertTrue(audit.apply(receipt_event))
+
+        self.assertEqual(audit.receipts, tuple(receipts[-5:]))
+        self.assertEqual(audit.event_cursor, sequence)
+        self.assertEqual(governance.event_cursor, sequence)
+        self.assertNotIn("_events", vars(audit))
+        self.assertNotIn("_events", vars(governance))
+        self.assertFalse(any(isinstance(value, Event) for value in vars(audit).values()))
+        self.assertFalse(any(isinstance(value, Event) for value in vars(governance).values()))
+        self.assertEqual(governance.access_decisions, ())
+
     def test_quarantine_allows_local_classification_but_blocks_restricted_sinks(self) -> None:
         unknown = GovernedInformationRef.create(
             namespace="test", stable_key="unknown-input", deriver=TEST_ID_DERIVER
