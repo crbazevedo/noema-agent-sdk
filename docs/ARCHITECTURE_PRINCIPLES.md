@@ -85,15 +85,21 @@ learned allocation runtime contracts exist yet.
 | Principle | Required future consequence |
 |---|---|
 | Historical cognition loses authority, not value | Prior cognition remains immutable evidence, but old goals, selections, priorities, and authority cannot directly govern a new allocation. |
-| Reconsideration is not resumption | Historical cognition returns only as newly admitted cognition after current-intent/current-world revalidation and a fresh causal cut. |
-| Closed intent cannot self-revive | Fulfilled, failed, and cancelled goals may supply historical evidence but cannot authorize a new inquiry without independently live current intent. |
+| Reconsideration is not resumption | Historical cognition returns only as newly admitted cognition after current-basis/current-world revalidation and a fresh causal cut. |
+| Cognitive basis is explicit | Reconsideration requires current live governing intent or an explicit, unexpired, scope-matching reconsideration mandate; historical goals never supply authority. |
+| A reconsideration mandate is bounded meta-cognitive authority | The mandate pins scope, candidate classes/domains, budget, cadence/triggers, expiry, interruption, surfacing, and information-use policy; it cannot create/reactivate goals, obligations, work, or effects. |
+| Implemented and staged intent rules differ explicitly | Implemented v0.6 still requires exact `ACTIVE`/`BLOCKED` governing intent; mandate-based reconsideration is staged v0.6.x architecture only. |
+| Closed intent cannot self-revive | Fulfilled, failed, and cancelled goals may supply historical evidence but cannot themselves authorize a new inquiry. |
 | Cognitive identity is layered | A reconsideration candidate, inquiry, goal, work order, and action intent cannot substitute for one another. |
-| Value semantics remain distinct | Value, preference, motivation, intent, and commitment require separate evidence and cannot be inferred from one another. |
-| Motivation is not authority | A strong reason to think cannot create intent, grant permission, or authorize work or effects. |
+| Value semantics remain distinct | Durable user-value evidence, candidate value alignment, expected outcome value, scoped preference, motivation, intent, and commitment require separate evidence and cannot substitute for one another. |
+| Motivation is temporal evidence | A motivation estimate carries evidence, confidence, provenance, and valid/fresh intervals; explicit evidence outranks voluntary reengagement, repeated interest, and inference. |
+| Motivation is neither authority nor commitment | Motivation cannot create intent, grant permission, authorize work/effects, or cancel an obligation; low motivation may only suppress discretionary resurfacing. |
 | Epistemic and strategic conflict differ | Contradictory evidence may motivate inquiry but cannot establish goal conflict without an explicit strategic relation. |
 | Scarce cognition is multidimensional | Compute, wall time, money, user attention, interruption, privacy exposure, and opportunity cost remain hard, inspectable budget dimensions. |
 | Positive NetVOC is eligibility | A positive estimate permits portfolio consideration; it does not mandate selection or bypass any gate. |
-| Selection absence is censored evidence | Non-selection, constraint deferral, rejection, and negative outcome remain distinct labels for evaluation and learning. |
+| Selection absence is censored evidence | `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, `EXPLICITLY_REJECTED`, and later outcomes remain distinct labels for evaluation and learning. |
+| Allocation learning requires identifiable evidence | A future cognitive-allocation trace pins provenance, features, gates, versions, budget, causal label, and applicable behavior-policy evidence before causal ranking is allowed. |
+| High-stakes exploration is separately authorized | Active exploration for high-stakes, identity-bound, or relationship-sensitive resurfacing is prohibited without explicit separate authority. |
 | Learned estimation is not sovereign utility | Estimators emit versioned outcome and cost vectors; they cannot learn or replace terminal user values. |
 | Hard gates precede learned scores | Current intent, authority, safety, information access, and user agency constrain the candidate set before learned ranking. |
 | Learning use is separately governed | Permission to use information for current cognition never automatically permits training, calibration, evaluation, or benchmarking reuse. |

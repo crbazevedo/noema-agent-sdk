@@ -380,35 +380,62 @@ Voice: **I know what may deserve thought again.**
 Status: **Accepted architecture direction; implementation staged.**
 
 Historical cognition keeps informational value but loses its former authority.
-Reconsideration creates new cognition under current intent, current world state,
-current Information Governance, and a new causal cut:
+Reconsideration creates new cognition under a current cognitive basis, current
+world state, current Information Governance, and a new causal cut:
 
 ```text
 historical cognition
-    → current-intent/current-world revalidation
+    → current-basis/current-world revalidation
     → new inquiry eligibility
     → deterministic scarce-budget allocation
 ```
 
 `RECONSIDER != RESUME`. Fulfilled, cancelled, and failed goals cannot revive old
-cognition. Their evidence may seed a new inquiry only under independently live
-current intent. A reconsideration candidate remains distinct from an `Inquiry`,
-`Goal`, `WorkOrder`, and `ActionIntent`.
+cognition. Their evidence may seed a new inquiry only under current live intent
+or an explicit standing `ReconsiderationMandate`. The mandate is staged user or
+constitutional authorization for bounded meta-cognition. It pins scope,
+candidate classes/domains, budget, cadence or triggers, expiry, interruption
+ceiling, surfacing policy, and information-use policy. It may inspect,
+revalidate, estimate, form a candidate, and prepare a question or proposal; it
+cannot reactivate a goal, invent terminal values, create obligations, dispatch
+work, or execute effects. A reconsideration candidate remains distinct from an
+`Inquiry`, `Goal`, `Commitment`, `WorkOrder`, and `ActionIntent`.
 
-The staged deterministic policy exposes value alignment, preference fit,
-motivation, portfolio coherence, clarity, resolvability, feasibility, meaningful
-new evidence, regret of silence, opportunity-window value, and residual
-unresolvedness. It prices compute, revalidation, attention, context switching,
-intrusion, privacy/risk, and opportunity cost against a budget that also treats
-wall time, monetary cost, and interruption as scarce. Positive `NetVOC` means
-eligible, not mandatory; non-selection and constraint deferral are not negative
-evidence.
+This does not change implemented v0.6: current endogenous inquiries still
+require exact `ACTIVE` or recovery-oriented `BLOCKED` governing intent. The
+mandate is accepted v0.6.x architecture only.
+
+The staged deterministic policy keeps comparatively durable `UserValue`,
+candidate `ValueAlignmentEstimate`, and `ExpectedOutcomeValue` distinct. A
+scoped `Preference` differs from a temporally volatile `MotivationEstimate`,
+which carries evidence, confidence, provenance, and valid/fresh intervals and is
+neither authority nor commitment. Explicit motivation evidence has stronger
+standing than voluntary reengagement, repeated interest, or inference; low
+motivation may suppress discretionary resurfacing but cannot cancel an
+obligation.
+
+Allocation also exposes portfolio coherence, clarity, resolvability,
+feasibility, meaningful new evidence, regret of silence, opportunity-window
+value, and residual unresolvedness. It prices compute, revalidation, attention,
+context switching, intrusion, privacy/risk, and opportunity cost against a
+budget that also treats wall time, monetary cost, and interruption as scarce.
+Positive `NetVOC` means eligible, not mandatory; non-selection and constraint
+deferral are not negative evidence.
 
 Future estimators produce an explicit vector of outcome and cost estimates, not
 a learned scalar user utility. Hard intent, authority, information-access,
 safety, and user-agency constraints run before learned ranking. Operational use
 of governed information does not automatically permit training or evaluation
 use.
+
+A future `CognitiveAllocationTrace` must make learning identifiable by pinning
+candidate provenance, features, hard gates, estimator/policy versions, budget,
+one of `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, or
+`EXPLICITLY_REJECTED`, its causal reason, applicable behavior-policy evidence,
+and later user/outcome evidence. Counterfactual learning cannot equate selection
+with value or non-selection with failure. High-stakes, identity-bound, or
+relationship-sensitive exploration requires separate authorization; no
+bandit/RL algorithm is chosen here.
 
 The normative architecture is
 [ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md).
@@ -527,13 +554,18 @@ deterministic allocation
     → bounded active allocation
 ```
 
-Endogenous Cognition asks what deserves thought now; reconsideration asks what
-deserves thought again; Habit Learning asks what no longer deserves
-deliberation. The longer-term architecture is therefore Governed / Learned
-Allocation of Scarce Cognition. Learned estimators predict an inspectable
-outcome vector and never learn sovereign terminal utility. Information
-Governance separately gates live allocation features and every future training
-or evaluation corpus.
+Endogenous Cognition asks what deserves thought now; Historical Reconsideration
+asks what may deserve thought again; Governed Allocation asks which eligible
+thought deserves scarce cognition now; Habit Learning asks what has earned the
+right not to require deliberation anymore. Learned Allocation sits inside—not
+above—Governed Allocation of Scarce Cognition. Learned estimators predict an
+inspectable outcome vector and never learn sovereign terminal utility.
+Information Governance separately gates live allocation features and every
+future training or evaluation corpus. A future `CognitiveAllocationTrace` must
+retain allocation labels, binding constraints, behavior-policy evidence when
+applicable, and later outcomes so counterfactual evaluation is identifiable.
+Active exploration for high-stakes or identity-sensitive resurfacing remains
+separately authorized.
 
 ### User value
 

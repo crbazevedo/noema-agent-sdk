@@ -84,9 +84,21 @@ Signal != Inquiry != IntrinsicActivity != WorkOrder != ActionIntent
 
 ReconsiderationCandidate != Inquiry != Goal != WorkOrder != ActionIntent
 
-Value != Preference != Motivation != Intent != Commitment
+CurrentCognitiveBasis = LiveGoverningIntent OR ExplicitReconsiderationMandate
 
-Motivation != Authority
+ReconsiderationMandate
+    != Goal
+    != Commitment
+    != WorkOrder
+    != EffectAuthority
+
+UserValue != ValueAlignmentEstimate != ExpectedOutcomeValue
+
+Preference != MotivationEstimate != Intent != Commitment
+
+MotivationEstimate != Authority
+
+MotivationEstimate != Commitment
 
 EpistemicContradiction != GoalConflict
 ```
@@ -678,16 +690,42 @@ new current evaluation:
 
 ```text
 historical cognition
-    --current-intent/current-world revalidation-->
+    --current-basis/current-world revalidation-->
 new cognition
 
 RECONSIDER != RESUME
 ```
 
 Historical fulfilled, failed, and cancelled goals cannot re-authorize prior
-cognition. Their evidence may seed a new inquiry only under independently live
-current intent. A contradiction in evidence may motivate reconsideration but is
-not itself a conflict among goals.
+cognition. Their evidence may seed a new inquiry only under current live intent
+or an explicit `ReconsiderationMandate`. The mandate is staged user or
+constitutional authorization for bounded meta-cognition when no live goal
+supplies the basis. It pins scope, candidate classes/domains, budget, cadence or
+triggers, expiry, maximum interruption, surfacing policy, and information-use
+policy. It may authorize inspection, revalidation, estimation, candidate
+formation, and preparation of a question or proposal. It cannot reactivate a
+goal, manufacture terminal values, accept a commitment, dispatch work, or
+execute effects.
+
+```text
+CurrentCognitiveBasis
+    = LiveGoverningIntent
+      OR ExplicitReconsiderationMandate
+```
+
+The implemented v0.6 rule remains stricter: current endogenous inquiries
+require exact active or recovery-oriented blocked governing intent. The mandate
+is staged v0.6.x architecture only. A contradiction in evidence may motivate
+reconsideration but is not itself a conflict among goals.
+
+`UserValue` is comparatively durable evidence of outcomes or principles that
+matter. `ValueAlignmentEstimate` measures candidate alignment with it, while
+`ExpectedOutcomeValue` estimates contribution to a particular outcome.
+`Preference` is scoped. `MotivationEstimate` is volatile evidence with
+confidence, provenance, and valid/fresh intervals; explicit evidence has
+stronger standing than voluntary reengagement, repeated interest, or inference.
+Motivation can suppress discretionary resurfacing but cannot grant authority,
+become commitment, or cancel an obligation.
 
 One future allocation portfolio combines foreground demand, current endogenous
 demand, and reconsideration demand. It remains constrained by compute, wall
@@ -718,6 +756,26 @@ Feature stores, training sets, evaluation corpora, and estimator artifacts are
 governed derived views of canonical traces, never a second source of truth. No
 runtime reconsideration or allocation substrate is implemented by this
 architecture decision.
+
+A future `CognitiveAllocationTrace` makes allocation evidence identifiable. It
+pins candidate provenance, features, hard-gate outcomes, policy and estimator
+versions, budget, one of `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, or
+`EXPLICITLY_REJECTED`, its causal reason or binding constraint, and selection
+probability or other behavior-policy evidence when applicable. Later user
+response, voluntary revisit, decision change, goal/commitment conversion,
+completion, correction, interruption, regret, and missed opportunity link to
+rather than rewrite that decision. Learned causal ranking requires identifiable
+selection data; non-selection is never negative feedback by default. Active
+exploration for high-stakes, identity-bound, or relationship-sensitive
+resurfacing is prohibited without separate authorization, and no bandit/RL
+algorithm is selected by ADR 0011.
+
+The four responsibilities remain distinct: Endogenous Cognition identifies
+what deserves thought now; Historical Reconsideration identifies what may
+deserve thought again; Governed Allocation chooses which eligible thought fits
+scarce cognition now; Habit Learning identifies what has earned the right not
+to require deliberation anymore. Learned Allocation is a future mechanism
+inside the Governed Allocation envelope, never a replacement for it.
 
 ## Situation graph and agent cycle
 
@@ -773,8 +831,8 @@ mutation authority.
 | Reactive compatibility | Admit a direct user, incident, maintenance, external-obligation, or inquiry `WorkOrder` without manufacturing a roadmap commitment. |
 | Human agency | Give Noema a technically executable but identity-bound decision; preserve user ownership while preparing permitted support work inside the assistance envelope. |
 | Confidentiality | Derive a summary and work plan from a protected artifact; typed policy composition blocks unauthorized internal retrieval and external disclosure, and redaction alone does not declassify it. |
-| Historical reconsideration | Encounter useful cognition created under closed intent; retain it as evidence but require current live intent, current world revalidation, a new causal cut, and a new allocation before it can return. |
-| Learned allocation governance | Train or evaluate an estimator from operational traces; include only purpose-permitted governed projections, preserve censored selection labels, and keep hard constraints ahead of scores. |
+| Historical reconsideration | Encounter useful cognition after the live agenda closes; retain it as evidence but require current live intent or an explicit bounded reconsideration mandate, current-world revalidation, a new causal cut, and a new allocation before it can return. |
+| Learned allocation governance | Train or evaluate an estimator from operational traces; include only purpose-permitted governed projections, preserve identifiable selection evidence and censored labels, and keep hard constraints ahead of scores. |
 | Modifiability | Replace a model, broker, store, planner, sensor, or optimizer; stable domain contracts and acceptance semantics remain unchanged. |
 | Auditability | Reconstruct why the system believed, refreshed, prioritized, committed, delegated, authorized, disclosed, and acted from canonical history and policy versions. |
 | Performance | Process a million-event life while keeping expensive cognition sparse and projections rebuildable; indexes and snapshots may accelerate but never become authority. |
@@ -796,8 +854,12 @@ mutation authority.
 | Abstraction | A supposedly safe abstraction may retain identifying structure. | Transformation retains source policy; only a separately authorized declassification decision may loosen it. |
 | Rebuild cost | Event-only projections can become expensive at scale. | Disposable verified snapshots and indexes pinned to canonical cursors; never a second writable source of truth. |
 | Learned habits | Compression can hide regret or bypass novelty. | Counterexamples, replay, collision analysis, shadow/canary stages, drift and novelty escape paths. |
-| Historical resumption | Old cognition can smuggle obsolete intent or priority into current behavior. | Reconsideration creates a new inquiry basis after current-intent/current-world revalidation; closed goals contribute evidence only. |
+| Historical resumption | Old cognition can smuggle obsolete intent or priority into current behavior. | Reconsideration creates a new inquiry basis after current-basis/current-world revalidation; closed goals contribute evidence only. |
+| Standing reconsideration | A broad mandate can become ambient intent or an indirect effect authority. | Pin scope, candidate classes, budget, cadence/triggers, expiry, interruption, surfacing, and information-use policy; prohibit goal, commitment, work, and effect transitions. |
+| Motivation inference | Behavioral activity can be mistaken for durable value, intent, or obligation. | Keep value, alignment, expected outcome, preference, and motivation distinct; preserve provenance/freshness and give explicit evidence stronger standing. |
 | Learned cognitive allocation | A scalar score can collapse values into proxy utility and misread non-selection as failure. | Estimate an explicit outcome vector, preserve selection/constraint labels, and apply hard gates before ranking. |
+| Selection bias | Selected candidates reveal outcomes while deferred or suppressed candidates are censored. | Record versioned allocation traces with causal labels and behavior-policy evidence; require an identifiable counterfactual design. |
+| High-stakes exploration | Exploration can intrude on identity, relationships, or consequential decisions. | Prohibit active exploration in those domains unless separately authorized; begin with deterministic and shadow evaluation. |
 | Secondary information use | Operational access can silently become permission to train or evaluate. | Independently authorize learning purposes and preserve policy lineage in every derived corpus and artifact. |
 
 The most sensitive future decisions are the algebra for policy inheritance, the
@@ -874,12 +936,28 @@ The accepted but unimplemented v0.6.x architecture must not advance to active
 control until structural gates prove:
 
 - terminal historical intent cannot authorize new cognition;
+- reconsideration cites current live intent or an unexpired, scope-matching
+  explicit mandate, never authority inherited from a historical goal;
+- mandate-based cognition fails closed outside its candidate domain, budget,
+  cadence/trigger, interruption, surfacing, or information-use bounds;
+- a mandate cannot create/reactivate goals, accept commitments, dispatch work,
+  grant effect authority, or execute effects;
 - reconsideration preserves immutable history and creates a fresh causal basis;
 - a candidate, inquiry, goal, work order, and action intent cannot substitute
   for one another;
+- user value, value alignment, expected outcome value, preference, motivation,
+  intent, and commitment remain separately evidenced;
+- motivation evidence carries confidence, provenance, and temporal validity;
+  explicit evidence outranks weaker behavioral inference, and low motivation
+  cannot cancel an obligation or grant authority;
 - positive `NetVOC` means eligible rather than mandatory;
-- non-selection, constraint deferral, rejection, and negative outcome remain
-  distinct evidence labels;
+- `SELECTED`, `DEFERRED_BY_CONSTRAINT`, `SUPPRESSED`, and
+  `EXPLICITLY_REJECTED` remain distinct evidence labels;
+- future allocation traces pin provenance, features, gates, policy/estimator
+  versions, budget, causal reason, and applicable behavior-policy evidence;
+- learned causal ranking rejects unidentifiable selection data;
+- high-stakes, identity-bound, or relationship-sensitive active exploration
+  fails closed without separate authorization;
 - learned estimators emit outcome vectors rather than sovereign terminal
   utility;
 - intent, authority, safety, information access, and user agency gate learned
