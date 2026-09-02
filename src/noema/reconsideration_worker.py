@@ -451,6 +451,9 @@ class ReconsiderationShadowWorker:
             if policy is None:
                 raise ValueError("reconsideration scan lost its pinned policy")
             candidates = projection.candidates_for_scan(scan.request_id)
+            allocated_at = self.clock()
+            if allocated_at.tzinfo is None:
+                raise ValueError("reconsideration worker clock must be timezone-aware")
             foreground = {
                 *scan.foreground_demand_refs,
                 *(
@@ -467,7 +470,12 @@ class ReconsiderationShadowWorker:
                 candidates=candidates,
                 derived_information_id=allocation_information_id,
                 foreground_demand_refs=tuple(sorted(foreground)),
-                allocated_at=scan.requested_at,
+                terminal_constraints=projection.allocation_terminal_constraints(
+                    scan,
+                    candidates,
+                    at=allocated_at,
+                ),
+                allocated_at=allocated_at,
             )
             metadata: dict[str, JSONValue] = dict(allocation.to_event(source=self.source).metadata)
             metadata["validated_at_event_cursor"] = projection.event_cursor
@@ -495,39 +503,81 @@ class ReconsiderationShadowWorker:
         policy_ids: tuple[str, ...],
         recorded_at: datetime,
     ) -> None:
-        projection = await self.current_projection()
-        existing_lineage = projection.information.lineage(information_id)
-        lineage = InformationLineage.create(
-            information_id=information_id,
-            source_information_ids=source_information_ids,
-            transformation=LineageTransformation.DERIVATION,
-            recorded_at=recorded_at,
-        )
-        if existing_lineage is None:
-            await self.kernel.emit(lineage.to_event(source=self.source))
-        elif (
-            existing_lineage.source_information_ids != lineage.source_information_ids
-            or existing_lineage.transformation is not lineage.transformation
-        ):
-            raise ValueError("derived reconsideration lineage changed in place")
-        else:
-            lineage = existing_lineage
+        sources = tuple(sorted(set(source_information_ids)))
+        policies = tuple(sorted(set(policy_ids)))
+        while True:
+            history = await self._normalized_history()
+            projection = ReconsiderationProjection()
+            projection.rebuild(history)
+            lineage = projection.information.lineage(information_id)
+            if lineage is not None:
+                if (
+                    lineage.source_information_ids != sources
+                    or lineage.transformation is not LineageTransformation.DERIVATION
+                ):
+                    raise ValueError("derived reconsideration lineage changed in place")
+                break
+            proposed_lineage = InformationLineage.create(
+                information_id=information_id,
+                source_information_ids=sources,
+                transformation=LineageTransformation.DERIVATION,
+                recorded_at=recorded_at,
+            )
+            lineage_event = proposed_lineage.to_event(source=self.source)
+            admitted_lineage = replace(
+                lineage_event,
+                metadata={
+                    **lineage_event.metadata,
+                    "validated_at_event_cursor": projection.event_cursor,
+                },
+            )
+            probe = ReconsiderationProjection()
+            probe.rebuild(history)
+            probe.apply(admitted_lineage.with_sequence(projection.event_cursor + 1))
+            try:
+                stored = await self.kernel.emit_if_head(
+                    admitted_lineage,
+                    expected_head_sequence=projection.event_cursor,
+                )
+                lineage = InformationLineage.from_event(stored)
+                break
+            except ConcurrentAppendError:
+                continue
 
-        projection = await self.current_projection()
-        existing_binding = projection.information.binding(information_id)
-        binding = PolicyBinding.create(
-            information_id=information_id,
-            lineage_id=lineage.lineage_id,
-            policy_ids=policy_ids,
-            bound_at=recorded_at,
-        )
-        if existing_binding is None:
-            await self.kernel.emit(binding.to_event(source=self.source))
-        elif (
-            existing_binding.lineage_id != binding.lineage_id
-            or existing_binding.policy_ids != binding.policy_ids
-        ):
-            raise ValueError("derived reconsideration policy binding changed in place")
+        while True:
+            history = await self._normalized_history()
+            projection = ReconsiderationProjection()
+            projection.rebuild(history)
+            binding = projection.information.binding(information_id)
+            if binding is not None:
+                if binding.lineage_id != lineage.lineage_id or binding.policy_ids != policies:
+                    raise ValueError("derived reconsideration policy binding changed in place")
+                return
+            proposed_binding = PolicyBinding.create(
+                information_id=information_id,
+                lineage_id=lineage.lineage_id,
+                policy_ids=policies,
+                bound_at=recorded_at,
+            )
+            binding_event = proposed_binding.to_event(source=self.source)
+            admitted_binding = replace(
+                binding_event,
+                metadata={
+                    **binding_event.metadata,
+                    "validated_at_event_cursor": projection.event_cursor,
+                },
+            )
+            probe = ReconsiderationProjection()
+            probe.rebuild(history)
+            probe.apply(admitted_binding.with_sequence(projection.event_cursor + 1))
+            try:
+                await self.kernel.emit_if_head(
+                    admitted_binding,
+                    expected_head_sequence=projection.event_cursor,
+                )
+                return
+            except ConcurrentAppendError:
+                continue
 
     def _derived_information_id(self, *, namespace: str, stable_key: str) -> str:
         return self.derived_information_id_deriver.derive(

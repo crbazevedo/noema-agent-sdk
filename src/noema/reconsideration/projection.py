@@ -492,6 +492,8 @@ class ReconsiderationProjection:
             allocation_policy = self._policies.get(allocation.policy_id)
             if allocation_scan is None or allocation_policy is None:
                 raise ValueError("allocation references an unknown scan or policy")
+            if allocation.allocated_at < allocation_scan.requested_at:
+                raise ValueError("allocation cannot predate its canonical scan")
             candidates = self.candidates_for_scan(allocation_scan.request_id)
             if len(candidates) != len(allocation_scan.candidate_inputs):
                 raise ValueError("allocation requires every declared candidate")
@@ -528,6 +530,11 @@ class ReconsiderationProjection:
                 candidates=candidates,
                 derived_information_id=allocation.derived_information_id,
                 foreground_demand_refs=allocation.foreground_demand_refs,
+                terminal_constraints=self.allocation_terminal_constraints(
+                    allocation_scan,
+                    candidates,
+                    at=allocation.allocated_at,
+                ),
                 allocated_at=allocation.allocated_at,
             )
             if allocation != expected_allocation:
@@ -711,6 +718,21 @@ class ReconsiderationProjection:
         )
         if previous_scan_sequences and trigger.sequence <= max(previous_scan_sequences):
             raise ValueError("mandate scan trigger is stale")
+
+    def allocation_terminal_constraints(
+        self,
+        scan: ReconsiderationScanRequest,
+        candidates: tuple[ReconsiderationCandidate, ...],
+        *,
+        at: datetime,
+    ) -> dict[str, str]:
+        if not self.basis_is_current(scan.basis, at=at):
+            return {candidate.candidate_id: "basis_no_longer_current" for candidate in candidates}
+        return {
+            candidate.candidate_id: "candidate_already_selected"
+            for candidate in candidates
+            if self.candidate_was_selected(candidate.candidate_id)
+        }
 
     def _validate_scan_candidate_input(
         self,

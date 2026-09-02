@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 
 from .models import (
@@ -36,6 +37,7 @@ def allocate_reconsideration(
     candidates: tuple[ReconsiderationCandidate, ...],
     derived_information_id: str,
     foreground_demand_refs: tuple[str, ...],
+    terminal_constraints: Mapping[str, str],
     allocated_at: datetime,
 ) -> ReconsiderationAllocation:
     """Allocate a finite portfolio with an immutable deterministic v1 policy."""
@@ -53,6 +55,11 @@ def allocate_reconsideration(
         raise ValueError("reconsideration candidates differ from the scan portfolio")
     if len({value.candidate_id for value in candidates}) != len(candidates):
         raise ValueError("reconsideration candidates must be unique")
+    unknown_constraints = set(terminal_constraints).difference(
+        value.candidate_id for value in candidates
+    )
+    if unknown_constraints:
+        raise ValueError("allocation terminal constraints reference unknown candidates")
 
     terms = {value.candidate_id: _terms(value, policy, allocated_at) for value in candidates}
     ranked = sorted(
@@ -70,6 +77,34 @@ def allocate_reconsideration(
     foreground_clear = not foreground_demand_refs
     for candidate in ranked:
         benefit, cost, net_voc, features_current = terms[candidate.candidate_id]
+        terminal_constraint = terminal_constraints.get(candidate.candidate_id)
+        if terminal_constraint is not None:
+            terminal_reasons = {
+                "basis_no_longer_current": (
+                    "current cognitive basis is no longer valid at the allocation head"
+                ),
+                "candidate_already_selected": (
+                    "candidate was already selected by a prior canonical allocation"
+                ),
+            }
+            if terminal_constraint not in terminal_reasons:
+                raise ValueError(
+                    f"unsupported allocation terminal constraint: {terminal_constraint}"
+                )
+            reason = terminal_reasons[terminal_constraint]
+            decisions.append(
+                ReconsiderationDecision(
+                    candidate.candidate_id,
+                    AllocationLabel.SUPPRESSED,
+                    benefit,
+                    cost,
+                    net_voc,
+                    (HardGateOutcome("allocation_legality", False, reason),),
+                    reason,
+                    terminal_constraint,
+                )
+            )
+            continue
         gates = (
             HardGateOutcome(
                 "current_basis",

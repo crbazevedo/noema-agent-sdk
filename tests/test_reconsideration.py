@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
 from dataclasses import replace
@@ -8,6 +9,8 @@ from datetime import UTC, datetime, timedelta
 from noema import (
     ALLOCATION_TRACE_RECORDED_EVENT,
     INQUIRY_RECORDED_EVENT,
+    LINEAGE_RECORDED_EVENT,
+    POLICY_BOUND_EVENT,
     RECONSIDERATION_ALLOCATION_RECORDED_EVENT,
     RECONSIDERATION_CANDIDATE_RECORDED_EVENT,
     RECONSIDERATION_EVENT_TYPES,
@@ -1005,6 +1008,174 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(projection.proposals), 2)
         await kernel.stop()
 
+    async def test_concurrent_scans_can_select_one_semantic_candidate_only_once(self) -> None:
+        release = asyncio.Event()
+        arrival_lock = asyncio.Lock()
+        arrivals = 0
+
+        class PausedAfterScanWorker(ReconsiderationShadowWorker):
+            async def _process_scan(
+                self,
+                scan_event: Event,
+            ) -> ReconsiderationAllocation | None:
+                nonlocal arrivals
+                async with arrival_lock:
+                    arrivals += 1
+                    if arrivals == 2:
+                        release.set()
+                await release.wait()
+                return await super()._process_scan(scan_event)
+
+        (
+            kernel,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            scan_clock,
+        ) = await prepare_mandate_fixture(count=1, minimum_interval_seconds=0.0)
+        evidence = await current_evidence(kernel, suffix="concurrent-selection")
+        candidate_seed = seed(inquiries[0], information_refs[0], evidence, strength=0.9)
+        second_kernel = NoemaKernel(store=kernel.store)
+        await second_kernel.start()
+        first = PausedAfterScanWorker(
+            kernel,
+            authority=fixture_worker.authority,
+            policy=fixture_worker.policy,
+            clock=scan_clock,
+            derived_information_id_deriver=ID_DERIVER,
+        )
+        second = PausedAfterScanWorker(
+            second_kernel,
+            authority=fixture_worker.authority,
+            policy=fixture_worker.policy,
+            clock=MutableClock(scan_clock() + timedelta(seconds=1)),
+            derived_information_id_deriver=ID_DERIVER,
+        )
+        allocations = await asyncio.gather(
+            first.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(candidate_seed,),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            ),
+            second.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(candidate_seed,),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            ),
+        )
+        self.assertTrue(all(value is not None for value in allocations))
+        projection = await fixture_worker.current_projection()
+        self.assertEqual(len(projection.scans), 2)
+        self.assertEqual(len(projection.candidates), 1)
+        self.assertEqual(len(projection.allocations), 2)
+        self.assertEqual(len(projection.traces), 2)
+        self.assertEqual(len(projection.proposals), 1)
+        decisions = tuple(
+            decision for allocation in projection.allocations for decision in allocation.decisions
+        )
+        self.assertEqual(
+            sum(value.label is AllocationLabel.SELECTED for value in decisions),
+            1,
+        )
+        loser = next(value for value in decisions if value.label is AllocationLabel.SUPPRESSED)
+        self.assertEqual(loser.binding_constraint, "candidate_already_selected")
+
+        replay = ReconsiderationProjection()
+        replay.rebuild(kernel.schemas.normalize(event) for event in await kernel.history())
+        self.assertEqual(replay.semantic_snapshot(), projection.semantic_snapshot())
+        await kernel.stop()
+        await second_kernel.stop()
+
+    async def test_revocation_between_scan_and_allocation_terminates_without_surface(self) -> None:
+        scan_admitted = asyncio.Event()
+        release = asyncio.Event()
+
+        class PausedAfterScanWorker(ReconsiderationShadowWorker):
+            async def _process_scan(
+                self,
+                scan_event: Event,
+            ) -> ReconsiderationAllocation | None:
+                scan_admitted.set()
+                await release.wait()
+                return await super()._process_scan(scan_event)
+
+        (
+            kernel,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current_g1,
+            inquiries,
+            information_refs,
+            scan_clock,
+        ) = await prepare_mandate_fixture(count=1)
+        worker = PausedAfterScanWorker(
+            kernel,
+            authority=fixture_worker.authority,
+            policy=fixture_worker.policy,
+            clock=scan_clock,
+            derived_information_id_deriver=ID_DERIVER,
+        )
+        evidence = await current_evidence(kernel, suffix="revoked-after-scan")
+        task = asyncio.create_task(
+            worker.run_scan(
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                seeds=(seed(inquiries[0], information_refs[0], evidence, strength=0.9),),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+        )
+        await scan_admitted.wait()
+        revocation_authorization = await kernel.emit(
+            Event(
+                "user.reconsideration_revoked",
+                "fixture:user",
+                timestamp=scan_clock(),
+            )
+        )
+        await fixture_worker.revoke_mandate(
+            ReconsiderationMandateRevocation.create(
+                mandate_id=mandate.mandate_id,
+                mandate_revision_id=mandate.revision_id,
+                issuer_id="user:carlos",
+                authority_id=mandate.authority_id,
+                authorization_ref=f"event:{revocation_authorization.id}",
+                reason="close allocation-time revocation race",
+                revoked_at=scan_clock(),
+            )
+        )
+        release.set()
+        allocation = await task
+        assert allocation is not None
+        self.assertEqual(allocation.selected_candidate_ids, ())
+        self.assertEqual(
+            allocation.decisions[0].binding_constraint,
+            "basis_no_longer_current",
+        )
+        projection = await fixture_worker.current_projection()
+        self.assertEqual(len(projection.traces), 1)
+        self.assertEqual(projection.proposals, ())
+        checkpoint = ConsumerCheckpoint.from_event((await kernel.history())[-1])
+        self.assertEqual(checkpoint.epoch_id, allocation.allocation_id)
+
+        replay = ReconsiderationProjection()
+        replay.rebuild(kernel.schemas.normalize(event) for event in await kernel.history())
+        self.assertEqual(replay.semantic_snapshot(), projection.semantic_snapshot())
+        await kernel.stop()
+
     async def test_changed_current_evidence_creates_a_new_candidate(self) -> None:
         (
             kernel,
@@ -1770,6 +1941,39 @@ class CognitiveReconsiderationAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         await kernel.stop()
 
 
+class DerivedGovernanceRaceStore(InMemoryEventStore):
+    """Hold matching CAS writers until both observed the same missing state."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.target_information_id: str | None = None
+        self.arrivals = {
+            LINEAGE_RECORDED_EVENT: 0,
+            POLICY_BOUND_EVENT: 0,
+        }
+        self._barriers = {
+            LINEAGE_RECORDED_EVENT: asyncio.Event(),
+            POLICY_BOUND_EVENT: asyncio.Event(),
+        }
+
+    async def append_if_head(
+        self,
+        event: Event,
+        *,
+        expected_head_sequence: int,
+    ) -> Event:
+        if event.subject == self.target_information_id and event.type in self._barriers:
+            self.arrivals[event.type] += 1
+            barrier = self._barriers[event.type]
+            if self.arrivals[event.type] >= 2:
+                barrier.set()
+            await asyncio.wait_for(barrier.wait(), timeout=5.0)
+        return await super().append_if_head(
+            event,
+            expected_head_sequence=expected_head_sequence,
+        )
+
+
 class GappedSequenceStore(InMemoryEventStore):
     """Test store whose canonical sequences are monotonic but deliberately non-contiguous."""
 
@@ -1804,6 +2008,87 @@ class GappedSequenceStore(InMemoryEventStore):
 
 
 class ReconsiderationDurabilityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_concurrent_derived_governance_writers_reuse_one_lineage_and_binding(
+        self,
+    ) -> None:
+        store = DerivedGovernanceRaceStore()
+        first_kernel = NoemaKernel(store=store)
+        await first_kernel.start()
+        policy, information_refs = await record_information(first_kernel, count=1)
+        second_kernel = NoemaKernel(store=store)
+        await second_kernel.start()
+        derived_information_id = ID_DERIVER.derive(
+            namespace="reconsideration-concurrent-derived",
+            stable_key="same-semantic-information",
+        )
+        store.target_information_id = derived_information_id
+        authority = StaticReconsiderationAuthority(
+            "authority:derived-governance-race",
+            (("user:carlos", MandateIssuerKind.USER),),
+        )
+        first = ReconsiderationShadowWorker(
+            first_kernel,
+            authority=authority,
+            clock=MutableClock(NOW + timedelta(hours=3)),
+            derived_information_id_deriver=ID_DERIVER,
+        )
+        second = ReconsiderationShadowWorker(
+            second_kernel,
+            authority=authority,
+            clock=MutableClock(NOW + timedelta(hours=3, seconds=1)),
+            derived_information_id_deriver=ID_DERIVER,
+        )
+        await asyncio.wait_for(
+            asyncio.gather(
+                first._ensure_derived_governance(
+                    information_id=derived_information_id,
+                    source_information_ids=(information_refs[0].information_id,),
+                    policy_ids=(policy.policy_id,),
+                    recorded_at=NOW + timedelta(hours=3),
+                ),
+                second._ensure_derived_governance(
+                    information_id=derived_information_id,
+                    source_information_ids=(information_refs[0].information_id,),
+                    policy_ids=(policy.policy_id,),
+                    recorded_at=NOW + timedelta(hours=3, seconds=1),
+                ),
+            ),
+            timeout=10.0,
+        )
+
+        history = await first_kernel.history()
+        self.assertEqual(store.arrivals[LINEAGE_RECORDED_EVENT], 2)
+        self.assertEqual(store.arrivals[POLICY_BOUND_EVENT], 2)
+        self.assertEqual(
+            sum(
+                event.type == LINEAGE_RECORDED_EVENT and event.subject == derived_information_id
+                for event in history
+            ),
+            1,
+        )
+        self.assertEqual(
+            sum(
+                event.type == POLICY_BOUND_EVENT and event.subject == derived_information_id
+                for event in history
+            ),
+            1,
+        )
+        replay = ReconsiderationProjection()
+        replay.rebuild(first_kernel.schemas.normalize(event) for event in history)
+        lineage = replay.information.lineage(derived_information_id)
+        binding = replay.information.binding(derived_information_id)
+        self.assertIsNotNone(lineage)
+        self.assertIsNotNone(binding)
+        assert lineage is not None and binding is not None
+        self.assertEqual(
+            lineage.source_information_ids,
+            (information_refs[0].information_id,),
+        )
+        self.assertEqual(binding.lineage_id, lineage.lineage_id)
+        self.assertEqual(binding.policy_ids, (policy.policy_id,))
+        await first_kernel.stop()
+        await second_kernel.stop()
+
     async def test_exact_head_admission_is_safe_with_noncontiguous_sequences(self) -> None:
         kernel = NoemaKernel(store=GappedSequenceStore())
         authorization = await kernel.emit(
