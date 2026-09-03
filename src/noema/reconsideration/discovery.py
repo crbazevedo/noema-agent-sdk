@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -15,6 +16,7 @@ from ..memory.projection import MemoryProjection
 from ..situation import GoalStatus
 from .discovery_models import (
     DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION,
+    EVIDENCE_QUALIFICATION_BOUND_EVENT,
     DiscoveryReason,
     DormancyReason,
     DormantInquiryDescriptor,
@@ -177,6 +179,15 @@ class DiscoveryNomination:
     evidence_refs: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class DiscoveryAddress:
+    """Cheap projected address used before scarce semantic evaluation is spent."""
+
+    descriptor: DormantInquiryDescriptor
+    preliminary_reason_rank: int
+    address_kind_rank: int
+
+
 def qualification_is_current(
     memory: MemoryProjection,
     binding: EvidenceQualificationBinding,
@@ -192,6 +203,59 @@ def qualification_is_current(
         valid_at=at,
         known_at=at,
     )
+
+
+def validate_qualification_temporality(
+    *,
+    events_by_id: Mapping[str, Event],
+    memory: MemoryProjection,
+    binding: EvidenceQualificationBinding,
+    inquiry: Inquiry,
+    evaluation_cut: int,
+) -> None:
+    """Require current applicability while allowing old durable source evidence."""
+
+    assertion = memory.get_assertion(binding.assertion_ref)
+    assertion_event = events_by_id.get(f"memory-assertion:{binding.assertion_ref}")
+    binding_event = events_by_id.get(
+        f"reconsideration-evidence-qualified:{binding.qualification_id}"
+    )
+    if (
+        assertion is None
+        or assertion_event is None
+        or assertion_event.sequence is None
+        or binding_event is None
+        or binding_event.sequence is None
+        or assertion_event.sequence > evaluation_cut
+        or binding_event.sequence > evaluation_cut
+    ):
+        raise ValueError("qualification evidence is outside its evaluation cut")
+    if binding_event.sequence <= inquiry.causal_cursor:
+        raise ValueError("qualification must currently re-attest its historical Inquiry")
+    if assertion_event.sequence <= inquiry.causal_cursor:
+        raise ValueError(f"{binding.role.value} assertion must follow the historical Inquiry")
+    if binding.role in {
+        EvidenceQualificationRole.DURABLE_VALUE,
+        EvidenceQualificationRole.PREFERENCE,
+    }:
+        return
+    source_sequences = tuple(
+        event.sequence
+        for ref in assertion.source_refs
+        if ref.startswith("event:")
+        and (event := events_by_id.get(ref.removeprefix("event:"))) is not None
+        and event.sequence is not None
+    )
+    derivation_sequences = tuple(
+        event.sequence
+        for ref in assertion.derivation_refs
+        if (event := events_by_id.get(f"memory-assertion:{ref}")) is not None
+        and event.sequence is not None
+    )
+    if not any(
+        value > inquiry.causal_cursor for value in (*source_sequences, *derivation_sequences)
+    ):
+        raise ValueError(f"{binding.role.value} lacks a post-Inquiry evidence basis")
 
 
 def signal_is_valid_discovery_evidence(
@@ -286,11 +350,6 @@ class DeterministicDormantInquiryDetector:
             at=at,
         )
         scopes = {value.inquiry_id: value for value in scope_bindings}
-        current_qualifications = tuple(
-            value
-            for value in qualification_bindings
-            if qualification_is_current(memory, value, at=at)
-        )
         current_context = _allocation_context(
             reconsideration=reconsideration,
             basis=basis,
@@ -304,54 +363,21 @@ class DeterministicDormantInquiryDetector:
             reconsideration=reconsideration,
             trigger=trigger,
             basis=basis,
-            qualifications=current_qualifications,
-            current_context=current_context,
-            at=at,
+            policy=policy,
         )
         precedence = {value: index for index, value in enumerate(policy.reason_precedence)}
-        eligible: list[
-            tuple[int, int, str, DormantInquiryDescriptor]
-        ] = []
-        for descriptor in addressed:
-            inquiry = endogenous.inquiry(descriptor.inquiry_id)
-            if inquiry is None or descriptor.inquiry_id not in scopes:
-                continue
-            qualifications = tuple(
-                value
-                for value in current_qualifications
-                if self._targets_inquiry(value.target_refs, inquiry)
-            )
-            reasons = self._reasons(
-                inquiry=inquiry,
-                trigger=trigger,
-                policy=policy,
-                qualifications=qualifications,
-                endogenous=endogenous,
-                canonical_events=canonical_events,
-            )
-            existing = self._deferred_candidate(
-                reconsideration,
-                inquiry_id=inquiry.inquiry_id,
-                basis_id=basis.basis_id,
-                current_context=current_context,
-                at=at,
-            )
-            if existing is not None:
-                reasons = (*reasons, DiscoveryReason.DEFERRED_ALLOCATION_CONTEXT_CHANGED)
-            elif not self._critical_roles_are_separate(qualifications, inquiry=inquiry):
-                continue
-            ordered = self._ordered_reasons(reasons, policy)
-            if ordered:
-                eligible.append(
-                    (
-                        min(precedence[reason] for reason in ordered),
-                        descriptor.last_considered_cut,
-                        descriptor.inquiry_id,
-                        descriptor,
-                    )
-                )
         relevant = tuple(
-            value[3] for value in sorted(eligible)
+            value.descriptor
+            for value in sorted(
+                addressed,
+                key=lambda value: (
+                    value.preliminary_reason_rank,
+                    value.address_kind_rank,
+                    value.descriptor.last_considered_cut,
+                    value.descriptor.inquiry_id,
+                ),
+            )
+            if value.descriptor.inquiry_id in scopes
         )[: policy.max_dormant_inquiries_examined]
         inquiries = {
             descriptor.inquiry_id: endogenous.inquiry(descriptor.inquiry_id)
@@ -360,21 +386,44 @@ class DeterministicDormantInquiryDetector:
         batch_qualifications = self._bounded_qualifications(
             descriptors=relevant,
             inquiries=tuple(value for value in inquiries.values() if value is not None),
-            qualifications=current_qualifications,
+            qualifications=qualification_bindings,
             trigger=trigger,
             limit=policy.max_qualification_bindings_consumed,
         )
+        current_qualifications = tuple(
+            value
+            for value in batch_qualifications
+            if self._qualification_is_current(memory, value, at=at)
+        )
+        events_by_id = {event.id: event for event in canonical_events}
+        qualifications_by_inquiry: dict[str, tuple[EvidenceQualificationBinding, ...]] = {}
+        for descriptor in relevant:
+            inquiry = inquiries[descriptor.inquiry_id]
+            if inquiry is None:
+                continue
+            valid: list[EvidenceQualificationBinding] = []
+            for binding in current_qualifications:
+                if not self._targets_inquiry(binding.target_refs, inquiry):
+                    continue
+                try:
+                    validate_qualification_temporality(
+                        events_by_id=events_by_id,
+                        memory=memory,
+                        binding=binding,
+                        inquiry=inquiry,
+                        evaluation_cut=trigger.sequence,
+                    )
+                except ValueError:
+                    continue
+                valid.append(binding)
+            qualifications_by_inquiry[descriptor.inquiry_id] = tuple(valid)
         nominations: list[DiscoveryNomination] = []
         for descriptor in relevant:
             inquiry = inquiries[descriptor.inquiry_id]
             scope = scopes.get(descriptor.inquiry_id)
             if inquiry is None or scope is None:
                 continue
-            qualifications = tuple(
-                value
-                for value in batch_qualifications
-                if self._targets_inquiry(value.target_refs, inquiry)
-            )
+            qualifications = qualifications_by_inquiry.get(descriptor.inquiry_id, ())
             reasons = self._reasons(
                 inquiry=inquiry,
                 trigger=trigger,
@@ -440,61 +489,69 @@ class DeterministicDormantInquiryDetector:
         reconsideration: ReconsiderationProjection,
         trigger: Event,
         basis: CurrentCognitiveBasis,
-        qualifications: tuple[EvidenceQualificationBinding, ...],
-        current_context: str,
-        at: datetime,
-    ) -> tuple[DormantInquiryDescriptor, ...]:
-        """Narrow by deterministic causal addresses before applying scan bounds."""
+        policy: ReconsiderationDiscoveryPolicySnapshot,
+    ) -> tuple[DiscoveryAddress, ...]:
+        """Produce cheap deterministic addresses before semantic evaluation."""
 
         trigger_targets = set(self._trigger_targets(trigger))
         raw_signal = trigger.payload.get("signal_would_emit")
         if isinstance(raw_signal, dict) and isinstance(raw_signal.get("subject"), str):
             trigger_targets.add(str(raw_signal["subject"]))
-        triggered_qualifications = tuple(
-            value
-            for value in qualifications
-            if trigger.id == f"reconsideration-evidence-qualified:{value.qualification_id}"
-        )
         deferred_inquiry_ids = {
-            inquiry_id
-            for inquiry_id in {
-                value.historical.inquiry_id
-                for value in reconsideration.candidates
-                if value.current_basis.basis_id == basis.basis_id
-            }
-            if self._deferred_candidate(
-                reconsideration,
-                inquiry_id=inquiry_id,
-                basis_id=basis.basis_id,
-                current_context=current_context,
-                at=at,
-            )
-            is not None
+            value.historical.inquiry_id
+            for value in reconsideration.candidates
+            if value.current_basis.basis_id == basis.basis_id
         }
-        relevant: list[DormantInquiryDescriptor] = []
+        reason_rank = {value: index for index, value in enumerate(policy.reason_precedence)}
+        relevant: list[DiscoveryAddress] = []
         for descriptor in index.dormant:
             inquiry = endogenous.inquiry(descriptor.inquiry_id)
             if inquiry is None:
                 continue
             directly_addressed = self._targets_inquiry(tuple(trigger_targets), inquiry)
-            qualification_addressed = any(
-                self._targets_inquiry(value.target_refs, inquiry)
-                for value in triggered_qualifications
-            )
             lineage_addressed = self._same_goal_lineage_reactivated(
                 trigger,
                 inquiry,
                 endogenous,
             )
             deferred_addressed = inquiry.inquiry_id in deferred_inquiry_ids
+            preliminary: list[tuple[int, int]] = []
+            if directly_addressed:
+                direct_reason = self._direct_reason_class(trigger, policy)
+                if direct_reason is not None and direct_reason in reason_rank:
+                    preliminary.append((reason_rank[direct_reason], 0))
             if (
-                directly_addressed
-                or qualification_addressed
-                or lineage_addressed
-                or deferred_addressed
+                lineage_addressed
+                and DiscoveryReason.SAME_GOAL_LINEAGE_REACTIVATED in reason_rank
             ):
-                relevant.append(descriptor)
+                preliminary.append((reason_rank[DiscoveryReason.SAME_GOAL_LINEAGE_REACTIVATED], 1))
+            if (
+                deferred_addressed
+                and DiscoveryReason.DEFERRED_ALLOCATION_CONTEXT_CHANGED in reason_rank
+            ):
+                preliminary.append(
+                    (reason_rank[DiscoveryReason.DEFERRED_ALLOCATION_CONTEXT_CHANGED], 2)
+                )
+            if preliminary:
+                rank, kind = min(preliminary)
+                relevant.append(DiscoveryAddress(descriptor, rank, kind))
         return tuple(relevant)
+
+    @staticmethod
+    def _direct_reason_class(
+        trigger: Event,
+        policy: ReconsiderationDiscoveryPolicySnapshot,
+    ) -> DiscoveryReason | None:
+        if trigger.type in policy.explicit_user_event_types:
+            return DiscoveryReason.EXPLICIT_USER_REENGAGEMENT
+        if trigger.type in policy.explicit_relevance_event_types or trigger.type in {
+            EVIDENCE_QUALIFICATION_BOUND_EVENT,
+            "rule.evaluation_traced",
+        }:
+            return DiscoveryReason.EXPLICIT_RELEVANCE_SIGNAL
+        if trigger.type in policy.opportunity_event_types:
+            return DiscoveryReason.OPPORTUNITY_WINDOW_OPENED
+        return None
 
     def _bounded_qualifications(
         self,
@@ -509,20 +566,6 @@ class DeterministicDormantInquiryDetector:
 
         descriptor_order = {
             descriptor.inquiry_id: position for position, descriptor in enumerate(descriptors)
-        }
-        role_order = {
-            role: position
-            for position, role in enumerate(
-                (
-                    EvidenceQualificationRole.CURRENT_REVALIDATION,
-                    EvidenceQualificationRole.DURABLE_VALUE,
-                    EvidenceQualificationRole.VALUE_ALIGNMENT,
-                    EvidenceQualificationRole.MOTIVATION,
-                    EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
-                    EvidenceQualificationRole.OPPORTUNITY,
-                    EvidenceQualificationRole.PREFERENCE,
-                )
-            )
         }
         addressed: list[tuple[int, EvidenceQualificationBinding]] = []
         for binding in qualifications:
@@ -540,11 +583,19 @@ class DeterministicDormantInquiryDetector:
                 if trigger.id
                 == f"reconsideration-evidence-qualified:{item[1].qualification_id}"
                 else 1,
-                role_order[item[1].role],
                 item[1].qualification_id,
             )
         )
         return tuple(value for _position, value in addressed[:limit])
+
+    @staticmethod
+    def _qualification_is_current(
+        memory: MemoryProjection,
+        binding: EvidenceQualificationBinding,
+        *,
+        at: datetime,
+    ) -> bool:
+        return qualification_is_current(memory, binding, at=at)
 
     @staticmethod
     def _agenda_has_slack(

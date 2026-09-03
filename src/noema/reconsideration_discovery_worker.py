@@ -376,6 +376,7 @@ class ReconsiderationDiscoveryWorker:
         checkpoint = checkpoints.get(self.consumer_id)
         lower_bound = checkpoint.last_completed_sequence if checkpoint is not None else 0
         recognized_types = self._recognized_trigger_types()
+        recovery_time = self._now()
         trigger_ids = {
             event.id
             for event in history
@@ -383,8 +384,28 @@ class ReconsiderationDiscoveryWorker:
         }
         for trigger_id in {value.trigger_event_id for value in projection.opportunities}:
             opportunities = projection.opportunities_for_trigger(trigger_id)
-            if self._existing_allocation(projection.reconsideration, opportunities) is None:
-                trigger_ids.add(trigger_id)
+            allocation = self._existing_allocation(projection.reconsideration, opportunities)
+            basis_is_current = any(
+                projection.reconsideration.basis_is_current(
+                    value.current_cognitive_basis,
+                    at=recovery_time,
+                )
+                for value in opportunities
+            )
+            if allocation is None:
+                if basis_is_current:
+                    trigger_ids.add(trigger_id)
+                continue
+            scan = projection.reconsideration.scan(allocation.scan_request_id)
+            if scan is None:  # pragma: no cover - allocation replay enforces this relation
+                raise AssertionError("reconsideration allocation lost its originating scan")
+            if not self.reconsideration_worker.scan_outputs_complete(
+                projection.reconsideration,
+                scan,
+                at=recovery_time,
+            ):
+                await self.reconsideration_worker.recover()
+                projection = await self.current_projection()
         recovered: list[DiscoveryRunResult] = []
 
         def trigger_sequence(event_id: str) -> int:

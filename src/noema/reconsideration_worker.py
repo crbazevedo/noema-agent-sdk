@@ -270,7 +270,7 @@ class ReconsiderationShadowWorker:
             if event.type != SCAN_REQUESTED_EVENT:
                 continue
             scan = ReconsiderationScanRequest.from_dict(event.payload)
-            if event.sequence <= after and self._scan_outputs_complete(
+            if event.sequence <= after and self.scan_outputs_complete(
                 projection,
                 scan,
                 at=at,
@@ -283,12 +283,14 @@ class ReconsiderationShadowWorker:
         return tuple(recovered)
 
     @staticmethod
-    def _scan_outputs_complete(
+    def scan_outputs_complete(
         projection: ReconsiderationProjection,
         scan: ReconsiderationScanRequest,
         *,
         at: datetime,
     ) -> bool:
+        """Report whether the established allocation/trace/proposal graph is complete."""
+
         candidates = projection.candidates_for_scan(scan.request_id)
         if len(candidates) != len(scan.candidate_inputs):
             return False

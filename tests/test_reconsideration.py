@@ -328,6 +328,7 @@ async def record_information(
 
 async def prepare_mandate_fixture(
     *,
+    kernel: NoemaKernel | None = None,
     count: int = 2,
     policy_purpose: str = "historical-reconsideration",
     mandate_purpose: str = "historical-reconsideration",
@@ -342,7 +343,7 @@ async def prepare_mandate_fixture(
     inquiry_lifetime: timedelta = timedelta(minutes=15),
     revise_historical_goal: bool = True,
 ):
-    kernel = NoemaKernel()
+    kernel = kernel or NoemaKernel()
     clock = MutableClock(NOW)
     _steward, g1, current_g1, inquiries = await seed_historical_inquiries(
         kernel,

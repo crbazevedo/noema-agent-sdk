@@ -5,10 +5,14 @@ import json
 import unittest
 from dataclasses import replace
 from datetime import timedelta
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from noema import (
+    ALLOCATION_TRACE_RECORDED_EVENT,
     EVIDENCE_QUALIFICATION_BOUND_EVENT,
     OPPORTUNITY_RECORDED_EVENT,
+    SHADOW_PROPOSAL_RECORDED_EVENT,
     AllocationLabel,
     CognitiveAllocationOutcomeLink,
     ConsumerCheckpoint,
@@ -16,16 +20,20 @@ from noema import (
     DeterministicDormantInquiryDetector,
     DiscoveryReason,
     DormancyReason,
+    DormantInquiryDescriptor,
     DormantInquiryIndex,
     EpistemicType,
     Event,
     EvidenceQualificationRole,
+    MemoryProjection,
+    NoemaKernel,
     ReconsiderationDiscoveryPolicySnapshot,
     ReconsiderationDiscoveryProjection,
     ReconsiderationDiscoveryWorker,
     ReconsiderationOpportunityKind,
     ReconsiderationPolicySnapshot,
     ReconsiderationProjection,
+    ReconsiderationShadowWorker,
     ScarceCognitionCostSnapshot,
     SemanticAssertion,
     StaticReconsiderationDiscoveryAuthority,
@@ -65,7 +73,12 @@ def discovery_policy(
     )
 
 
-async def prepare_discovery(*, count: int = 1, max_candidates: int = 1):
+async def prepare_discovery(
+    *,
+    count: int = 1,
+    max_candidates: int = 1,
+    kernel: NoemaKernel | None = None,
+):
     (
         kernel,
         reconsideration_worker,
@@ -80,6 +93,7 @@ async def prepare_discovery(*, count: int = 1, max_candidates: int = 1):
         count=count,
         max_candidates=max_candidates,
         minimum_interval_seconds=0.0,
+        kernel=kernel,
     )
     authorization = await kernel.emit(
         Event(
@@ -765,6 +779,114 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
         self.assertEqual(features.value_alignment_estimate.confidence, 0.2)
         await kernel.stop()
 
+    async def test_old_evidence_requires_a_post_inquiry_applicability_assertion(self) -> None:
+        async def attempt(*, reattest: bool):
+            kernel = NoemaKernel()
+            old_source = await kernel.emit(
+                Event(
+                    "user.value_reported",
+                    "fixture:user",
+                    subject="user:carlos",
+                    timestamp=NOW - timedelta(days=2),
+                )
+            )
+            old_value = SemanticAssertion.create(
+                subject="user:carlos",
+                predicate="user_value.durable_exploration",
+                value=0.95,
+                epistemic_type=EpistemicType.REPORTED,
+                confidence=0.95,
+                valid_from=NOW - timedelta(days=2),
+                recorded_at=NOW - timedelta(days=2),
+                source_refs=(f"event:{old_source.id}",),
+            )
+            old_event = await kernel.emit(old_value.to_event(source="fixture:memory"))
+            (
+                kernel,
+                _rw,
+                worker,
+                mandate,
+                principal,
+                _g1,
+                _current,
+                inquiries,
+                information_refs,
+                clock,
+                authorization,
+            ) = await prepare_discovery(kernel=kernel)
+            inquiry = inquiries[0]
+            for role in (
+                EvidenceQualificationRole.VALUE_ALIGNMENT,
+                EvidenceQualificationRole.MOTIVATION,
+                EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
+            ):
+                await qualify(
+                    worker,
+                    inquiry_id=inquiry.inquiry_id,
+                    information_id=information_refs[0].information_id,
+                    mandate=mandate,
+                    principal=principal,
+                    clock=clock,
+                    authorization=authorization,
+                    role=role,
+                    value=0.9,
+                )
+            if reattest:
+                current_value, durable = await qualify(
+                    worker,
+                    inquiry_id=inquiry.inquiry_id,
+                    information_id=information_refs[0].information_id,
+                    mandate=mandate,
+                    principal=principal,
+                    clock=clock,
+                    authorization=authorization,
+                    role=EvidenceQualificationRole.DURABLE_VALUE,
+                    value=0.95,
+                    derivation_refs=(old_value.assertion_id,),
+                    source_refs=(f"event:{old_source.id}",),
+                )
+            else:
+                current_value = old_value
+                durable = await worker.bind_evidence_qualification(
+                    assertion_ref=old_value.assertion_id,
+                    role=EvidenceQualificationRole.DURABLE_VALUE,
+                    target_refs=(inquiry.inquiry_id,),
+                    qualifier_id="fixture-qualifier",
+                    qualifier_version="1",
+                    authorization_ref=f"event:{authorization.id}",
+                    governed_information_ids=(information_refs[0].information_id,),
+                    information_use_purpose=mandate.information_use_purpose,
+                    information_policy_ids=mandate.information_policy_ids,
+                    principal=principal,
+                    actor_id="user:carlos",
+                    source_trust_domain="local",
+                    locality="local",
+                    bound_at=clock(),
+                )
+            result = await worker.run_trigger(
+                trigger_event_id=f"reconsideration-evidence-qualified:{durable.qualification_id}",
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+            assert old_event.sequence is not None
+            self.assertLessEqual(old_event.sequence, inquiry.causal_cursor)
+            await kernel.stop()
+            return result, old_value, current_value
+
+        rejected, _old, _same = await attempt(reattest=False)
+        self.assertEqual(rejected.seeds, ())
+
+        accepted, old_value, current_value = await attempt(reattest=True)
+        self.assertEqual(len(accepted.seeds), 1)
+        self.assertIn(old_value.assertion_id, current_value.derivation_refs)
+        current_ref = f"event:memory-assertion:{current_value.assertion_id}"
+        old_ref = f"event:memory-assertion:{old_value.assertion_id}"
+        self.assertIn(current_ref, accepted.seeds[0].current_evidence_refs)
+        self.assertNotIn(old_ref, accepted.seeds[0].current_evidence_refs)
+
     async def test_explicit_target_is_narrowed_before_dormant_examination_budget(self) -> None:
         (
             kernel,
@@ -812,6 +934,112 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
             (target.inquiry_id,),
         )
         await kernel.stop()
+
+    def test_discovery_budgets_bound_semantic_evaluation_before_it_is_spent(self) -> None:
+        class FakeEndogenous:
+            def __init__(self, inquiries):  # type: ignore[no-untyped-def]
+                self._inquiries = inquiries
+                self.strategy = SimpleNamespace(goal_revisions=())
+
+            def inquiry(self, inquiry_id):  # type: ignore[no-untyped-def]
+                return self._inquiries.get(inquiry_id)
+
+        class FakeReconsideration:
+            latest_policy = None
+            allocations = ()
+
+            def __init__(self, candidates):  # type: ignore[no-untyped-def]
+                self.candidates = candidates
+
+            @staticmethod
+            def candidate_was_selected(_candidate_id):  # type: ignore[no-untyped-def]
+                return False
+
+        class CheapBinding:
+            def __init__(self, ordinal: int, target: str) -> None:
+                self.qualification_id = f"qualification:{ordinal:05d}"
+                self.target_refs = (target,)
+
+        class CountingDetector(DeterministicDormantInquiryDetector):
+            def __init__(self) -> None:
+                self.evaluated_inquiries: list[str] = []
+                self.qualification_checks = 0
+
+            def _reasons(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.evaluated_inquiries.append(kwargs["inquiry"].inquiry_id)
+                return super()._reasons(**kwargs)
+
+            def _qualification_is_current(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+                self.qualification_checks += 1
+                return False
+
+        count = 10_000
+        inquiry_ids = tuple(f"inquiry:{index:05d}" for index in range(count))
+        explicit_target = inquiry_ids[-1]
+        inquiries = {
+            inquiry_id: SimpleNamespace(
+                inquiry_id=inquiry_id,
+                target_refs=(f"target:{inquiry_id}",),
+                governing_intent_refs=(),
+            )
+            for inquiry_id in inquiry_ids
+        }
+        descriptors = tuple(
+            DormantInquiryDescriptor(
+                inquiry_id=inquiry_id,
+                epoch_id=f"epoch:{inquiry_id}",
+                historical_causal_cursor=1,
+                reasons=(DormancyReason.INQUIRY_EXPIRED,),
+                target_refs=(f"target:{inquiry_id}",),
+                dream_status=None,
+                last_considered_cut=0,
+            )
+            for inquiry_id in inquiry_ids
+        )
+        basis = CurrentCognitiveBasis.from_mandate("mandate:budget-fixture")
+        deferred = tuple(
+            SimpleNamespace(
+                candidate_id=f"candidate:{inquiry_id}",
+                historical=SimpleNamespace(inquiry_id=inquiry_id),
+                current_basis=basis,
+                features=SimpleNamespace(estimates=lambda: ()),
+            )
+            for inquiry_id in inquiry_ids[:-1]
+        )
+        trigger = Event(
+            "user.reconsideration_requested",
+            "fixture:user",
+            subject=explicit_target,
+            timestamp=NOW,
+        ).with_sequence(10_001)
+        detector = CountingDetector()
+        with patch(
+            "noema.reconsideration.discovery.DormantInquiryIndex.derive",
+            return_value=DormantInquiryIndex(descriptors),
+        ):
+            nominations = detector.discover(
+                endogenous=FakeEndogenous(inquiries),  # type: ignore[arg-type]
+                reconsideration=FakeReconsideration(deferred),  # type: ignore[arg-type]
+                memory=MemoryProjection(),
+                trigger=trigger,
+                basis=basis,
+                policy=discovery_policy(max_dormant=8, max_qualifications=12),
+                scope_bindings=tuple(
+                    SimpleNamespace(inquiry_id=inquiry_id) for inquiry_id in inquiry_ids
+                ),  # type: ignore[arg-type]
+                qualification_bindings=tuple(
+                    CheapBinding(index, explicit_target) for index in range(1_000)
+                ),  # type: ignore[arg-type]
+                current_budget=scarce_budget(max_candidates=8),
+                current_maximum_interruption_units=0.25,
+                current_foreground_refs=(),
+                canonical_events=(trigger,),
+                at=NOW,
+            )
+        self.assertEqual(nominations, ())
+        self.assertLessEqual(len(detector.evaluated_inquiries), 8)
+        self.assertEqual(detector.evaluated_inquiries[0], explicit_target)
+        self.assertLessEqual(detector.qualification_checks, 12)
 
     async def test_qualification_limit_is_one_discovery_batch_budget(self) -> None:
         (
@@ -961,6 +1189,216 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
             and value.subject == fixture_worker.consumer_id
         ]
         self.assertTrue(checkpoints)
+        await kernel.stop()
+
+    async def test_recovery_repairs_allocation_trace_and_proposal_handoff_gaps(self) -> None:
+        async def attempt(crash_event_type: str) -> None:
+            class CrashAtOutput(ReconsiderationShadowWorker):
+                crashed = False
+
+                async def _append_exact(self, event, **kwargs):  # type: ignore[no-untyped-def]
+                    if event.type == crash_event_type and not self.crashed:
+                        self.crashed = True
+                        raise RuntimeError(f"simulated crash before {crash_event_type}")
+                    return await super()._append_exact(event, **kwargs)
+
+            (
+                kernel,
+                reconsideration_worker,
+                fixture_worker,
+                mandate,
+                principal,
+                _g1,
+                _current,
+                inquiries,
+                information_refs,
+                clock,
+                authorization,
+            ) = await prepare_discovery()
+            *_, expected = await critical_qualifications(
+                fixture_worker,
+                inquiry_id=inquiries[0].inquiry_id,
+                information_id=information_refs[0].information_id,
+                mandate=mandate,
+                principal=principal,
+                clock=clock,
+                authorization=authorization,
+            )
+            crashing_reconsideration = CrashAtOutput(
+                kernel,
+                authority=reconsideration_worker.authority,
+                policy=reconsideration_worker.policy,
+                clock=clock,
+                derived_information_id_deriver=ID_DERIVER,
+            )
+            crashing_discovery = ReconsiderationDiscoveryWorker(
+                kernel,
+                reconsideration_worker=crashing_reconsideration,
+                authority=fixture_worker.authority,
+                derived_information_id_deriver=ID_DERIVER,
+                policy=fixture_worker.policy,
+                clock=clock,
+            )
+            with self.assertRaisesRegex(RuntimeError, "simulated crash"):
+                await crashing_discovery.run_trigger(
+                    trigger_event_id=(
+                        f"reconsideration-evidence-qualified:{expected[1].qualification_id}"
+                    ),
+                    basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                    principal=principal,
+                    actor_id="user:carlos",
+                    source_trust_domain="local",
+                    locality="local",
+                )
+            partial = await fixture_worker.current_projection()
+            self.assertEqual(len(partial.reconsideration.allocations), 1)
+            if crash_event_type == ALLOCATION_TRACE_RECORDED_EVENT:
+                self.assertEqual(partial.reconsideration.traces, ())
+            else:
+                self.assertEqual(len(partial.reconsideration.traces), 1)
+                self.assertEqual(partial.reconsideration.proposals, ())
+
+            later_no_op = await kernel.emit(
+                Event(
+                    "user.reconsideration_requested",
+                    "fixture:user",
+                    subject="inquiry:unrelated",
+                    timestamp=clock(),
+                )
+            )
+            await fixture_worker.run_trigger(
+                trigger_event_id=later_no_op.id,
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+            await fixture_worker.recover(
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+            repaired = await fixture_worker.current_projection()
+            self.assertEqual(len(repaired.reconsideration.traces), 1)
+            self.assertEqual(len(repaired.reconsideration.proposals), 1)
+            before_retry = tuple(
+                value.type
+                for value in await kernel.history()
+                if value.type in {ALLOCATION_TRACE_RECORDED_EVENT, SHADOW_PROPOSAL_RECORDED_EVENT}
+            )
+            await fixture_worker.recover(
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+            after_retry = tuple(
+                value.type
+                for value in await kernel.history()
+                if value.type in {ALLOCATION_TRACE_RECORDED_EVENT, SHADOW_PROPOSAL_RECORDED_EVENT}
+            )
+            self.assertEqual(after_retry, before_retry)
+            self.assertEqual(before_retry.count(ALLOCATION_TRACE_RECORDED_EVENT), 1)
+            self.assertEqual(before_retry.count(SHADOW_PROPOSAL_RECORDED_EVENT), 1)
+            await kernel.stop()
+
+        for crash_event_type in (
+            ALLOCATION_TRACE_RECORDED_EVENT,
+            SHADOW_PROPOSAL_RECORDED_EVENT,
+        ):
+            with self.subTest(crash_event_type=crash_event_type):
+                await attempt(crash_event_type)
+
+    async def test_expired_unallocated_opportunity_is_terminal_for_recovery(self) -> None:
+        class CrashBeforeHandoff(ReconsiderationDiscoveryWorker):
+            async def _handoff(self, **_kwargs):  # type: ignore[no-untyped-def]
+                raise RuntimeError("simulated crash after opportunity")
+
+        class CountingWorker(ReconsiderationDiscoveryWorker):
+            trigger_calls = 0
+
+            async def run_trigger(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.trigger_calls += 1
+                return await super().run_trigger(**kwargs)
+
+        (
+            kernel,
+            reconsideration_worker,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current,
+            inquiries,
+            information_refs,
+            clock,
+            authorization,
+        ) = await prepare_discovery()
+        *_, expected = await critical_qualifications(
+            fixture_worker,
+            inquiry_id=inquiries[0].inquiry_id,
+            information_id=information_refs[0].information_id,
+            mandate=mandate,
+            principal=principal,
+            clock=clock,
+            authorization=authorization,
+        )
+        crashed = CrashBeforeHandoff(
+            kernel,
+            reconsideration_worker=reconsideration_worker,
+            authority=fixture_worker.authority,
+            derived_information_id_deriver=ID_DERIVER,
+            policy=fixture_worker.policy,
+            clock=clock,
+        )
+        with self.assertRaisesRegex(RuntimeError, "after opportunity"):
+            await crashed.run_trigger(
+                trigger_event_id=f"reconsideration-evidence-qualified:{expected[1].qualification_id}",
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+        later_no_op = await kernel.emit(
+            Event(
+                "user.reconsideration_requested",
+                "fixture:user",
+                subject="inquiry:unrelated",
+                timestamp=clock(),
+            )
+        )
+        await fixture_worker.run_trigger(
+            trigger_event_id=later_no_op.id,
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        clock.advance(timedelta(days=2))
+        recovered_worker = CountingWorker(
+            kernel,
+            reconsideration_worker=reconsideration_worker,
+            authority=fixture_worker.authority,
+            derived_information_id_deriver=ID_DERIVER,
+            policy=fixture_worker.policy,
+            clock=clock,
+        )
+        for _attempt in range(2):
+            recovered = await recovered_worker.recover(
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+            self.assertEqual(recovered, ())
+        self.assertEqual(recovered_worker.trigger_calls, 0)
+        projection = await recovered_worker.current_projection()
+        self.assertEqual(projection.reconsideration.allocations, ())
+        self.assertEqual(projection.reconsideration.proposals, ())
         await kernel.stop()
 
     async def test_foreground_arrival_between_evaluation_and_admission_fails_closed(

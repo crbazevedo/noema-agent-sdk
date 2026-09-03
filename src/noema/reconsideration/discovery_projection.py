@@ -19,6 +19,7 @@ from .discovery import (
     DormantInquiryIndex,
     qualification_is_current,
     signal_is_valid_discovery_evidence,
+    validate_qualification_temporality,
 )
 from .discovery_models import (
     DISCOVERY_POLICY_RECORDED_EVENT,
@@ -644,43 +645,13 @@ class ReconsiderationDiscoveryProjection:
         inquiry: Inquiry,
         evaluation_cut: int,
     ) -> None:
-        assertion = self._memory.get_assertion(binding.assertion_ref)
-        assertion_event = self._events.get(f"memory-assertion:{binding.assertion_ref}")
-        binding_event = self._events.get(
-            f"reconsideration-evidence-qualified:{binding.qualification_id}"
+        validate_qualification_temporality(
+            events_by_id=self._events,
+            memory=self._memory,
+            binding=binding,
+            inquiry=inquiry,
+            evaluation_cut=evaluation_cut,
         )
-        if (
-            assertion is None
-            or assertion_event is None
-            or assertion_event.sequence is None
-            or binding_event is None
-            or binding_event.sequence is None
-            or assertion_event.sequence > evaluation_cut
-            or binding_event.sequence > evaluation_cut
-        ):
-            raise ValueError("qualification evidence is outside its evaluation cut")
-        if binding_event.sequence <= inquiry.causal_cursor:
-            raise ValueError("qualification must currently re-attest its historical Inquiry")
-        roles_requiring_post_cut_basis = {
-            EvidenceQualificationRole.CURRENT_REVALIDATION,
-            EvidenceQualificationRole.VALUE_ALIGNMENT,
-            EvidenceQualificationRole.MOTIVATION,
-            EvidenceQualificationRole.OPPORTUNITY,
-            EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
-        }
-        if binding.role not in roles_requiring_post_cut_basis:
-            return
-        if assertion_event.sequence <= inquiry.causal_cursor:
-            raise ValueError(f"{binding.role.value} assertion must follow the historical Inquiry")
-        source_sequences = tuple(
-            event.sequence
-            for ref in assertion.source_refs
-            if ref.startswith("event:")
-            and (event := self._events.get(ref.removeprefix("event:"))) is not None
-            and event.sequence is not None
-        )
-        if not any(value > inquiry.causal_cursor for value in source_sequences):
-            raise ValueError(f"{binding.role.value} lacks a post-Inquiry evidence basis")
 
     def _foreground_refs(
         self,

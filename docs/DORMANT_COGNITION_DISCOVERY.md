@@ -63,11 +63,12 @@ Cadence, elapsed time, an unrelated event, idle capacity, and a generic user
 value create no opportunity. Structured trigger `target_refs` are identifiers;
 the detector never infers targets or domains from prose.
 
-The detector first narrows the dormant corpus by those structured targets,
-qualification targets, stable goal lineage, or an existing deferred candidate.
-Only then does it apply the dormant-Inquiry examination bound. Qualification
-consumption is one bound across that narrowed discovery batch, not a per-
-Inquiry multiplier.
+The detector first derives cheap structured addresses and preliminary reason
+precedence from trigger targets, stable goal lineage, or an existing candidate.
+It applies the dormant-Inquiry examination bound before full reason or role
+eligibility. It then applies one shared qualification-inspection bound before
+currentness, temporality, critical-role, or target-coherence evaluation. The
+limits therefore bound semantic work, not merely retained outputs.
 
 Autonomic `rule.evaluation_traced` events may be evidence only when their typed
 signal is active, target-specific, from the exact canonical rule/version, and
@@ -105,11 +106,12 @@ its own nomination.
 
 A current qualification assertion may derive from older durable evidence. The
 old assertion retains its original timestamp and remains reachable through
-provenance, while the new assertion and role binding prove current,
-target-specific applicability. The durable assertion itself may predate the
-Inquiry when it remains current; its qualification is a later, explicit
-applicability claim. Volatile, candidate-specific, and ex ante roles require
-post-Inquiry evidence and current validity.
+provenance, while a new post-Inquiry assertion and its role binding prove
+current, target-specific applicability. Every qualification used by a new seed
+points to that post-Inquiry applicability assertion. For `DURABLE_VALUE` and
+`PREFERENCE`, the new assertion may derive from sources recorded before the
+Inquiry. Volatile, candidate-specific, and ex ante roles require both the
+assertion and a relevant evidentiary basis after the Inquiry cut.
 
 The `deterministic-seed-v1` feature formulas are deliberately mechanical:
 
@@ -192,7 +194,11 @@ recognized trigger, including a no-op, advances the checkpoint. Normal recovery
 starts after that watermark, while a separate audit of already materialized
 opportunities below it reconciles any incomplete handoff. Thus old no-op
 history is skipped without allowing a later checkpoint to hide partial
-material work.
+material work. Handoff completeness reuses v0.6.1's graph invariant: an
+allocation requires one trace per decision and every still-legally-surfaceable
+selected trace requires a proposal. Discovery invokes v0.6.1 recovery to fill
+those outputs exactly once. An unallocated opportunity whose basis has since
+expired or been revoked is derivably closed and is not retried or surfaced.
 
 `CognitiveAllocationOutcomeLink` now accepts a downstream outcome only when the
 outcome event's canonical sequence follows the allocation trace and its
