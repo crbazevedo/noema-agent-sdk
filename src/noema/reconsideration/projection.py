@@ -239,6 +239,20 @@ class ReconsiderationProjection:
         return tuple(self._policies[key] for key in sorted(self._policies))
 
     @property
+    def latest_policy(self) -> ReconsiderationPolicySnapshot | None:
+        """Return the policy recorded latest in canonical event order."""
+
+        if not self._policies:
+            return None
+        return max(
+            self._policies.values(),
+            key=lambda value: (
+                self._events[f"reconsideration-policy-recorded:{value.policy_id}"].sequence
+                or 0
+            ),
+        )
+
+    @property
     def scans(self) -> tuple[ReconsiderationScanRequest, ...]:
         return tuple(self._scans[key] for key in sorted(self._scans))
 

@@ -11,6 +11,7 @@ from .discovery import (
     qualification_is_current,
 )
 from .discovery_models import (
+    DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION,
     DISCOVERY_POLICY_RECORDED_EVENT,
     EVIDENCE_QUALIFICATION_BOUND_EVENT,
     INQUIRY_SCOPE_BOUND_EVENT,
@@ -72,6 +73,7 @@ from .policy import allocate_reconsideration, ensure_allocator_supported
 from .projection import ReconsiderationMandateProjection, ReconsiderationProjection
 
 __all__ = [
+    "DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION",
     "DISCOVERY_POLICY_RECORDED_EVENT",
     "EVIDENCE_QUALIFICATION_BOUND_EVENT",
     "INQUIRY_SCOPE_BOUND_EVENT",

@@ -89,7 +89,7 @@ allocation direction. Learning contracts do not exist yet.
 | Slack is a gate, not a reason | Idle cognitive capacity permits bounded inspection but cannot make a specific historical Inquiry relevant. |
 | Discovery, revalidation, allocation, and surfacing differ | A target-specific reason may justify bounded revalidation; only the existing allocator may select cognition, and selection can produce at most a shadow proposal. |
 | Memory owns epistemology | Qualification bindings point to current `SemanticAssertion` state; they do not duplicate confidence, validity, freshness, provenance, supersession, or contradiction semantics. |
-| Subjective qualification cannot self-bootstrap | Discovery consumes authenticated current value, preference, motivation, and expected-outcome evidence but cannot manufacture those claims to justify itself. |
+| Subjective qualification cannot self-bootstrap | Discovery consumes authenticated current value, candidate alignment, preference, motivation, and expected-outcome evidence but cannot manufacture or substitute those claims to justify itself. |
 | Evaluation and admission cuts differ | Dormancy and reasons replay at the trigger sequence; current basis, foreground, scope, candidate state, and information legality are rechecked against the actual CAS predecessor. |
 | Reconsideration is not resumption | Historical cognition returns only as newly admitted cognition after current-basis/current-world revalidation and a fresh causal cut. |
 | Cognitive basis is explicit | Reconsideration requires current live governing intent or an explicit, unexpired, scope-matching reconsideration mandate; historical goals never supply authority. |

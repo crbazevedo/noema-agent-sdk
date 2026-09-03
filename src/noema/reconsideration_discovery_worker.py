@@ -346,8 +346,11 @@ class ReconsiderationDiscoveryWorker:
             information_policy_ids=information_policy_ids,
             opportunities=tuple(opportunities),
         )
-        if opportunities:
-            await self._advance_checkpoint(trigger, opportunities[-1].opportunity_id)
+        if trigger.type in self._recognized_trigger_types():
+            await self._advance_checkpoint(
+                trigger,
+                opportunities[-1].opportunity_id if opportunities else None,
+            )
         return DiscoveryRunResult(
             trigger_event_id=trigger.id,
             opportunities=tuple(opportunities),
@@ -363,21 +366,25 @@ class ReconsiderationDiscoveryWorker:
         source_trust_domain: str,
         locality: str,
     ) -> tuple[DiscoveryRunResult, ...]:
-        """Reconcile every material trigger; checkpoints are acceleration only."""
+        """Resume after the checkpoint while auditing older partial handoffs."""
 
         history = await self._normalized_history()
         projection = ReconsiderationDiscoveryProjection()
         projection.rebuild(history)
-        trigger_ids = {value.trigger_event_id for value in projection.opportunities}
-        recognized_types = {
-            *self.policy.explicit_user_event_types,
-            *self.policy.explicit_relevance_event_types,
-            *self.policy.opportunity_event_types,
-            EVIDENCE_QUALIFICATION_BOUND_EVENT,
-            "intent.goal_revision_recorded",
-            "rule.evaluation_traced",
+        checkpoints = ConsumerCheckpointProjection()
+        checkpoints.rebuild(history)
+        checkpoint = checkpoints.get(self.consumer_id)
+        lower_bound = checkpoint.last_completed_sequence if checkpoint is not None else 0
+        recognized_types = self._recognized_trigger_types()
+        trigger_ids = {
+            event.id
+            for event in history
+            if event.type in recognized_types and (event.sequence or 0) > lower_bound
         }
-        trigger_ids.update(event.id for event in history if event.type in recognized_types)
+        for trigger_id in {value.trigger_event_id for value in projection.opportunities}:
+            opportunities = projection.opportunities_for_trigger(trigger_id)
+            if self._existing_allocation(projection.reconsideration, opportunities) is None:
+                trigger_ids.add(trigger_id)
         recovered: list[DiscoveryRunResult] = []
 
         def trigger_sequence(event_id: str) -> int:
@@ -411,6 +418,16 @@ class ReconsiderationDiscoveryWorker:
                 recovered.append(result)
                 projection = await self.current_projection()
         return tuple(recovered)
+
+    def _recognized_trigger_types(self) -> set[str]:
+        return {
+            *self.policy.explicit_user_event_types,
+            *self.policy.explicit_relevance_event_types,
+            *self.policy.opportunity_event_types,
+            EVIDENCE_QUALIFICATION_BOUND_EVENT,
+            "intent.goal_revision_recorded",
+            "rule.evaluation_traced",
+        }
 
     async def current_projection(self) -> ReconsiderationDiscoveryProjection:
         projection = ReconsiderationDiscoveryProjection()

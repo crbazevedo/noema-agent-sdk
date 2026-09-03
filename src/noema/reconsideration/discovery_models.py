@@ -20,6 +20,7 @@ DISCOVERY_POLICY_RECORDED_EVENT = "reconsideration.discovery_policy_recorded"
 INQUIRY_SCOPE_BOUND_EVENT = "reconsideration.inquiry_scope_bound"
 EVIDENCE_QUALIFICATION_BOUND_EVENT = "reconsideration.evidence_qualification_bound"
 OPPORTUNITY_RECORDED_EVENT = "reconsideration.opportunity_recorded"
+DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION = "deterministic-seed-v1"
 
 RECONSIDERATION_DISCOVERY_EVENT_TYPES = (
     DISCOVERY_POLICY_RECORDED_EVENT,
@@ -47,6 +48,7 @@ class DiscoveryReason(StrEnum):
 class EvidenceQualificationRole(StrEnum):
     CURRENT_REVALIDATION = "CURRENT_REVALIDATION"
     DURABLE_VALUE = "DURABLE_VALUE"
+    VALUE_ALIGNMENT = "VALUE_ALIGNMENT"
     PREFERENCE = "PREFERENCE"
     MOTIVATION = "MOTIVATION"
     OPPORTUNITY = "OPPORTUNITY"
@@ -166,7 +168,7 @@ class ReconsiderationDiscoveryPolicySnapshot:
             "decision.proposed",
         ),
         permitted_signal_kinds: tuple[str, ...] = ("reconsideration_relevance",),
-        seed_policy_version: str = "deterministic-seed-v1",
+        seed_policy_version: str = DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION,
         seed_costs: ScarceCognitionCostSnapshot | None = None,
     ) -> ReconsiderationDiscoveryPolicySnapshot:
         reasons = tuple(reason_precedence)

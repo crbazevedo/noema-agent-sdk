@@ -23,6 +23,15 @@
 - proved proposal-only behavior, replay, crash recovery, concurrency,
   sequence-gap safety, target qualification, and structural separation from
   goals, work, actions, capabilities, models, and effects.
+- separated durable user-value evidence from candidate-specific value
+  alignment, required a common target anchor for critical estimates, and
+  pinned semantically honest v1 seed-feature formulas;
+- applied Inquiry and qualification budgets only after structured relevance
+  narrowing and resolved the current allocation policy by canonical event
+  order rather than identifier order;
+- made trigger-cut foreground evaluation causal, advanced checkpoints for
+  recognized no-op triggers, and bounded normal recovery while retaining an
+  audit path for pre-checkpoint incomplete handoffs.
 
 ## 0.6.1 — 2026-09-02
 

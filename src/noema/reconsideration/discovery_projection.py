@@ -341,7 +341,16 @@ class ReconsiderationDiscoveryProjection:
             qualifications = tuple(
                 self._require_qualification(value) for value in opportunity.qualification_ids
             )
-            if len(qualifications) > discovery_policy.max_qualification_bindings_consumed:
+            consumed_qualification_ids = {
+                qualification_id
+                for existing in self.opportunities_for_trigger(trigger.id)
+                for qualification_id in existing.qualification_ids
+            }
+            consumed_qualification_ids.update(opportunity.qualification_ids)
+            if (
+                len(consumed_qualification_ids)
+                > discovery_policy.max_qualification_bindings_consumed
+            ):
                 raise ValueError("opportunity exceeds its qualification-consumption budget")
             for qualification in qualifications:
                 self._require_event_at_or_before(
@@ -381,12 +390,14 @@ class ReconsiderationDiscoveryProjection:
             self._validate_kind(
                 opportunity,
                 qualifications,
+                inquiry=inquiry,
                 reconsideration=evaluation_reconsideration,
                 through_sequence=opportunity.evaluation_cut,
             )
             self._validate_kind(
                 opportunity,
                 qualifications,
+                inquiry=inquiry,
                 reconsideration=self._reconsideration,
                 through_sequence=opportunity.admitted_at_head,
             )
@@ -564,23 +575,38 @@ class ReconsiderationDiscoveryProjection:
         opportunity: ReconsiderationOpportunity,
         qualifications: tuple[EvidenceQualificationBinding, ...],
         *,
+        inquiry: Inquiry,
         reconsideration: ReconsiderationProjection,
         through_sequence: int,
     ) -> None:
         if opportunity.kind is ReconsiderationOpportunityKind.NEW_REVALIDATION:
             required = (
-                EvidenceQualificationRole.DURABLE_VALUE,
+                EvidenceQualificationRole.VALUE_ALIGNMENT,
                 EvidenceQualificationRole.MOTIVATION,
                 EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
             )
-            refs: list[str] = []
+            selected: list[EvidenceQualificationBinding] = []
             for role in required:
                 matches = tuple(value for value in qualifications if value.role is role)
                 if len(matches) != 1:
                     raise ValueError("new revalidation requires one binding per critical role")
-                refs.append(matches[0].assertion_ref)
+                selected.append(matches[0])
+            refs = [value.assertion_ref for value in selected]
             if len(set(refs)) != len(refs):
                 raise ValueError("critical qualification roles require distinct assertions")
+            durable_refs = {
+                value.assertion_ref
+                for value in qualifications
+                if value.role is EvidenceQualificationRole.DURABLE_VALUE
+            }
+            if durable_refs.intersection(refs):
+                raise ValueError("a durable value cannot stand in for a candidate estimate")
+            stable_targets = {inquiry.inquiry_id, *inquiry.target_refs}
+            common_anchor = set.intersection(
+                *(set(value.target_refs).intersection(stable_targets) for value in selected)
+            )
+            if not common_anchor:
+                raise ValueError("critical candidate estimates require one common target anchor")
             return
         assert opportunity.existing_candidate_id is not None
         candidate = reconsideration.candidate(opportunity.existing_candidate_id)
@@ -633,19 +659,19 @@ class ReconsiderationDiscoveryProjection:
             or binding_event.sequence > evaluation_cut
         ):
             raise ValueError("qualification evidence is outside its evaluation cut")
-        if (
-            assertion_event.sequence <= inquiry.causal_cursor
-            or binding_event.sequence <= inquiry.causal_cursor
-        ):
+        if binding_event.sequence <= inquiry.causal_cursor:
             raise ValueError("qualification must currently re-attest its historical Inquiry")
         roles_requiring_post_cut_basis = {
             EvidenceQualificationRole.CURRENT_REVALIDATION,
+            EvidenceQualificationRole.VALUE_ALIGNMENT,
             EvidenceQualificationRole.MOTIVATION,
             EvidenceQualificationRole.OPPORTUNITY,
             EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
         }
         if binding.role not in roles_requiring_post_cut_basis:
             return
+        if assertion_event.sequence <= inquiry.causal_cursor:
+            raise ValueError(f"{binding.role.value} assertion must follow the historical Inquiry")
         source_sequences = tuple(
             event.sequence
             for ref in assertion.source_refs

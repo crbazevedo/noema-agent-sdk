@@ -320,6 +320,7 @@ from .reasoning import (
 from .reconsideration import (
     ALLOCATION_OUTCOME_LINKED_EVENT,
     ALLOCATION_TRACE_RECORDED_EVENT,
+    DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION,
     DETERMINISTIC_ESTIMATOR_VERSION,
     DISCOVERY_POLICY_RECORDED_EVENT,
     EVIDENCE_QUALIFICATION_BOUND_EVENT,
@@ -848,6 +849,7 @@ __all__ = [
     "DormantInquiryDescriptor",
     "DormantInquiryIndex",
     "EstimateEvidenceKind",
+    "DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION",
     "EvidenceBackedEstimate",
     "EvidenceQualificationBinding",
     "EvidenceQualificationRole",

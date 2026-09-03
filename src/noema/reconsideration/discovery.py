@@ -14,6 +14,7 @@ from ..memory.models import EpistemicType, SemanticAssertion
 from ..memory.projection import MemoryProjection
 from ..situation import GoalStatus
 from .discovery_models import (
+    DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION,
     DiscoveryReason,
     DormancyReason,
     DormantInquiryDescriptor,
@@ -297,17 +298,83 @@ class DeterministicDormantInquiryDetector:
             maximum_interruption_units=current_maximum_interruption_units,
             foreground_refs=current_foreground_refs,
         )
-        nominations: list[DiscoveryNomination] = []
-        for descriptor in index.dormant[: policy.max_dormant_inquiries_examined]:
+        addressed = self._addressed_descriptors(
+            index=index,
+            endogenous=endogenous,
+            reconsideration=reconsideration,
+            trigger=trigger,
+            basis=basis,
+            qualifications=current_qualifications,
+            current_context=current_context,
+            at=at,
+        )
+        precedence = {value: index for index, value in enumerate(policy.reason_precedence)}
+        eligible: list[
+            tuple[int, int, str, DormantInquiryDescriptor]
+        ] = []
+        for descriptor in addressed:
             inquiry = endogenous.inquiry(descriptor.inquiry_id)
-            scope = scopes.get(descriptor.inquiry_id)
-            if inquiry is None or scope is None:
+            if inquiry is None or descriptor.inquiry_id not in scopes:
                 continue
             qualifications = tuple(
                 value
                 for value in current_qualifications
                 if self._targets_inquiry(value.target_refs, inquiry)
-            )[: policy.max_qualification_bindings_consumed]
+            )
+            reasons = self._reasons(
+                inquiry=inquiry,
+                trigger=trigger,
+                policy=policy,
+                qualifications=qualifications,
+                endogenous=endogenous,
+                canonical_events=canonical_events,
+            )
+            existing = self._deferred_candidate(
+                reconsideration,
+                inquiry_id=inquiry.inquiry_id,
+                basis_id=basis.basis_id,
+                current_context=current_context,
+                at=at,
+            )
+            if existing is not None:
+                reasons = (*reasons, DiscoveryReason.DEFERRED_ALLOCATION_CONTEXT_CHANGED)
+            elif not self._critical_roles_are_separate(qualifications, inquiry=inquiry):
+                continue
+            ordered = self._ordered_reasons(reasons, policy)
+            if ordered:
+                eligible.append(
+                    (
+                        min(precedence[reason] for reason in ordered),
+                        descriptor.last_considered_cut,
+                        descriptor.inquiry_id,
+                        descriptor,
+                    )
+                )
+        relevant = tuple(
+            value[3] for value in sorted(eligible)
+        )[: policy.max_dormant_inquiries_examined]
+        inquiries = {
+            descriptor.inquiry_id: endogenous.inquiry(descriptor.inquiry_id)
+            for descriptor in relevant
+        }
+        batch_qualifications = self._bounded_qualifications(
+            descriptors=relevant,
+            inquiries=tuple(value for value in inquiries.values() if value is not None),
+            qualifications=current_qualifications,
+            trigger=trigger,
+            limit=policy.max_qualification_bindings_consumed,
+        )
+        nominations: list[DiscoveryNomination] = []
+        for descriptor in relevant:
+            inquiry = inquiries[descriptor.inquiry_id]
+            scope = scopes.get(descriptor.inquiry_id)
+            if inquiry is None or scope is None:
+                continue
+            qualifications = tuple(
+                value
+                for value in batch_qualifications
+                if self._targets_inquiry(value.target_refs, inquiry)
+            )
             reasons = self._reasons(
                 inquiry=inquiry,
                 trigger=trigger,
@@ -333,7 +400,7 @@ class DeterministicDormantInquiryDetector:
                 kind = ReconsiderationOpportunityKind.NEW_REVALIDATION
                 existing_candidate_id = None
                 context_fingerprint = None
-                if not self._critical_roles_are_separate(qualifications):
+                if not self._critical_roles_are_separate(qualifications, inquiry=inquiry):
                     continue
             reasons = self._ordered_reasons(reasons, policy)
             if not reasons:
@@ -354,7 +421,6 @@ class DeterministicDormantInquiryDetector:
                     evidence_refs=tuple(sorted(evidence)),
                 )
             )
-        precedence = {value: index for index, value in enumerate(policy.reason_precedence)}
         return tuple(
             sorted(
                 nominations,
@@ -365,6 +431,120 @@ class DeterministicDormantInquiryDetector:
                 ),
             )[: policy.max_opportunities_emitted]
         )
+
+    def _addressed_descriptors(
+        self,
+        *,
+        index: DormantInquiryIndex,
+        endogenous: EndogenousProjection,
+        reconsideration: ReconsiderationProjection,
+        trigger: Event,
+        basis: CurrentCognitiveBasis,
+        qualifications: tuple[EvidenceQualificationBinding, ...],
+        current_context: str,
+        at: datetime,
+    ) -> tuple[DormantInquiryDescriptor, ...]:
+        """Narrow by deterministic causal addresses before applying scan bounds."""
+
+        trigger_targets = set(self._trigger_targets(trigger))
+        raw_signal = trigger.payload.get("signal_would_emit")
+        if isinstance(raw_signal, dict) and isinstance(raw_signal.get("subject"), str):
+            trigger_targets.add(str(raw_signal["subject"]))
+        triggered_qualifications = tuple(
+            value
+            for value in qualifications
+            if trigger.id == f"reconsideration-evidence-qualified:{value.qualification_id}"
+        )
+        deferred_inquiry_ids = {
+            inquiry_id
+            for inquiry_id in {
+                value.historical.inquiry_id
+                for value in reconsideration.candidates
+                if value.current_basis.basis_id == basis.basis_id
+            }
+            if self._deferred_candidate(
+                reconsideration,
+                inquiry_id=inquiry_id,
+                basis_id=basis.basis_id,
+                current_context=current_context,
+                at=at,
+            )
+            is not None
+        }
+        relevant: list[DormantInquiryDescriptor] = []
+        for descriptor in index.dormant:
+            inquiry = endogenous.inquiry(descriptor.inquiry_id)
+            if inquiry is None:
+                continue
+            directly_addressed = self._targets_inquiry(tuple(trigger_targets), inquiry)
+            qualification_addressed = any(
+                self._targets_inquiry(value.target_refs, inquiry)
+                for value in triggered_qualifications
+            )
+            lineage_addressed = self._same_goal_lineage_reactivated(
+                trigger,
+                inquiry,
+                endogenous,
+            )
+            deferred_addressed = inquiry.inquiry_id in deferred_inquiry_ids
+            if (
+                directly_addressed
+                or qualification_addressed
+                or lineage_addressed
+                or deferred_addressed
+            ):
+                relevant.append(descriptor)
+        return tuple(relevant)
+
+    def _bounded_qualifications(
+        self,
+        *,
+        descriptors: tuple[DormantInquiryDescriptor, ...],
+        inquiries: tuple[Inquiry, ...],
+        qualifications: tuple[EvidenceQualificationBinding, ...],
+        trigger: Event,
+        limit: int,
+    ) -> tuple[EvidenceQualificationBinding, ...]:
+        """Apply one qualification budget across the already narrowed batch."""
+
+        descriptor_order = {
+            descriptor.inquiry_id: position for position, descriptor in enumerate(descriptors)
+        }
+        role_order = {
+            role: position
+            for position, role in enumerate(
+                (
+                    EvidenceQualificationRole.CURRENT_REVALIDATION,
+                    EvidenceQualificationRole.DURABLE_VALUE,
+                    EvidenceQualificationRole.VALUE_ALIGNMENT,
+                    EvidenceQualificationRole.MOTIVATION,
+                    EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
+                    EvidenceQualificationRole.OPPORTUNITY,
+                    EvidenceQualificationRole.PREFERENCE,
+                )
+            )
+        }
+        addressed: list[tuple[int, EvidenceQualificationBinding]] = []
+        for binding in qualifications:
+            matching = tuple(
+                descriptor_order[inquiry.inquiry_id]
+                for inquiry in inquiries
+                if self._targets_inquiry(binding.target_refs, inquiry)
+            )
+            if matching:
+                addressed.append((min(matching), binding))
+        addressed.sort(
+            key=lambda item: (
+                item[0],
+                0
+                if trigger.id
+                == f"reconsideration-evidence-qualified:{item[1].qualification_id}"
+                else 1,
+                role_order[item[1].role],
+                item[1].qualification_id,
+            )
+        )
+        return tuple(value for _position, value in addressed[:limit])
 
     @staticmethod
     def _agenda_has_slack(
@@ -463,19 +643,35 @@ class DeterministicDormantInquiryDetector:
     @staticmethod
     def _critical_roles_are_separate(
         qualifications: tuple[EvidenceQualificationBinding, ...],
+        *,
+        inquiry: Inquiry,
     ) -> bool:
         required = (
-            EvidenceQualificationRole.DURABLE_VALUE,
+            EvidenceQualificationRole.VALUE_ALIGNMENT,
             EvidenceQualificationRole.MOTIVATION,
             EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
         )
-        selected = []
+        selected: list[EvidenceQualificationBinding] = []
         for role in required:
             matches = tuple(value for value in qualifications if value.role is role)
             if len(matches) != 1:
                 return False
-            selected.append(matches[0].assertion_ref)
-        return len(set(selected)) == len(selected)
+            selected.append(matches[0])
+        refs = [value.assertion_ref for value in selected]
+        durable_refs = {
+            value.assertion_ref
+            for value in qualifications
+            if value.role is EvidenceQualificationRole.DURABLE_VALUE
+        }
+        stable_targets = {inquiry.inquiry_id, *inquiry.target_refs}
+        common_anchor = set.intersection(
+            *(set(value.target_refs).intersection(stable_targets) for value in selected)
+        )
+        return (
+            len(set(refs)) == len(refs)
+            and not durable_refs.intersection(refs)
+            and bool(common_anchor)
+        )
 
     @staticmethod
     def _ordered_reasons(
@@ -547,12 +743,11 @@ def _allocation_context(
     maximum_interruption_units: float,
     foreground_refs: tuple[str, ...],
 ) -> str:
+    latest_policy = reconsideration.latest_policy
     return allocation_context_fingerprint(
         {
             "basis_id": basis.basis_id,
-            "policy_id": (
-                reconsideration.policies[-1].policy_id if reconsideration.policies else "pending"
-            ),
+            "policy_id": latest_policy.policy_id if latest_policy is not None else "pending",
             "budget": budget.to_dict(),
             "maximum_interruption_units": maximum_interruption_units,
             "foreground_demand_refs": list(tuple(sorted(set(foreground_refs)))),
@@ -574,6 +769,8 @@ class DeterministicReconsiderationSeedAssembler:
         reconsideration: ReconsiderationProjection,
         domain: str,
     ) -> ReconsiderationSeed:
+        if opportunity.seed_policy_version != DETERMINISTIC_DISCOVERY_SEED_POLICY_VERSION:
+            raise ValueError("unsupported deterministic discovery seed policy version")
         if opportunity.kind is ReconsiderationOpportunityKind.REALLOCATE_EXISTING:
             assert opportunity.existing_candidate_id is not None
             candidate = reconsideration.candidate(opportunity.existing_candidate_id)
@@ -595,7 +792,7 @@ class DeterministicReconsiderationSeedAssembler:
                 raise ValueError("seed assembly fails closed on ambiguous qualification roles")
             by_role[binding.role] = binding
         required = (
-            EvidenceQualificationRole.DURABLE_VALUE,
+            EvidenceQualificationRole.VALUE_ALIGNMENT,
             EvidenceQualificationRole.MOTIVATION,
             EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
         )
@@ -603,6 +800,20 @@ class DeterministicReconsiderationSeedAssembler:
             raise ValueError("seed assembly requires separately qualified critical features")
         if len({by_role[role].assertion_ref for role in required}) != len(required):
             raise ValueError("one assertion cannot fill multiple critical qualification roles")
+        durable = by_role.get(EvidenceQualificationRole.DURABLE_VALUE)
+        if durable is not None and durable.assertion_ref in {
+            by_role[role].assertion_ref for role in required
+        }:
+            raise ValueError("a durable value cannot stand in for a candidate estimate")
+        stable_targets = {inquiry.inquiry_id, *inquiry.target_refs}
+        common_anchor = set.intersection(
+            *(
+                set(by_role[role].target_refs).intersection(stable_targets)
+                for role in required
+            )
+        )
+        if not common_anchor:
+            raise ValueError("critical candidate estimates require one common target anchor")
 
         evaluation_event = reconsideration.event(opportunity.trigger_event_id)
         if evaluation_event is None or evaluation_event.sequence != opportunity.evaluation_cut:
@@ -617,7 +828,21 @@ class DeterministicReconsiderationSeedAssembler:
         governed = set(scope.governed_information_ids)
         for binding in qualifications:
             governed.update(binding.governed_information_ids)
-        confidence = min(assertions[role].confidence for role in required)
+        evidence_freshness = float(
+            all(
+                qualification_is_current(memory, by_role[role], at=evaluation_event.timestamp)
+                for role in required
+            )
+        )
+        meaningful_new_evidence = float(
+            self._has_meaningful_new_evidence(
+                inquiry=inquiry,
+                binding=by_role.get(EvidenceQualificationRole.CURRENT_REVALIDATION),
+                memory=memory,
+                reconsideration=reconsideration,
+                at=evaluation_event.timestamp,
+            )
+        )
         return ReconsiderationSeed(
             inquiry_id=inquiry.inquiry_id,
             domain=domain,
@@ -625,20 +850,63 @@ class DeterministicReconsiderationSeedAssembler:
             governed_information_ids=tuple(sorted(governed)),
             features=ReconsiderationFeatureSnapshot(
                 unresolvedness=inquiry.uncertainty,
-                evidence_freshness=confidence,
-                meaningful_new_evidence=1.0,
+                evidence_freshness=evidence_freshness,
+                meaningful_new_evidence=meaningful_new_evidence,
                 opportunity_window=(
                     1.0
                     if DiscoveryReason.OPPORTUNITY_WINDOW_OPENED in opportunity.discovery_reasons
                     else 0.0
                 ),
                 current_basis_validity=1.0,
-                value_alignment_estimate=estimates[EvidenceQualificationRole.DURABLE_VALUE],
+                value_alignment_estimate=estimates[EvidenceQualificationRole.VALUE_ALIGNMENT],
                 expected_outcome_value=estimates[EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE],
                 motivation_estimate=estimates[EvidenceQualificationRole.MOTIVATION],
                 provenance_refs=tuple(sorted(evidence)),
             ),
             costs=opportunity.seed_costs,
+        )
+
+    @staticmethod
+    def _has_meaningful_new_evidence(
+        *,
+        inquiry: Inquiry,
+        binding: EvidenceQualificationBinding | None,
+        memory: MemoryProjection,
+        reconsideration: ReconsiderationProjection,
+        at: datetime,
+    ) -> bool:
+        if (
+            binding is None
+            or not qualification_is_current(memory, binding, at=at)
+            or not set(binding.target_refs).intersection(
+                {inquiry.inquiry_id, *inquiry.target_refs}
+            )
+        ):
+            return False
+        assertion = memory.get_assertion(binding.assertion_ref)
+        assertion_event = reconsideration.event(f"memory-assertion:{binding.assertion_ref}")
+        binding_event = reconsideration.event(
+            f"reconsideration-evidence-qualified:{binding.qualification_id}"
+        )
+        if (
+            assertion is None
+            or assertion_event is None
+            or assertion_event.sequence is None
+            or binding_event is None
+            or binding_event.sequence is None
+        ):
+            return False
+        source_sequences = tuple(
+            event.sequence
+            for ref in assertion.source_refs
+            if ref.startswith("event:")
+            and (event := reconsideration.event(ref.removeprefix("event:"))) is not None
+            and event.sequence is not None
+        )
+        return (
+            assertion_event.sequence > inquiry.causal_cursor
+            and binding_event.sequence > inquiry.causal_cursor
+            and any(value > inquiry.causal_cursor for value in source_sequences)
         )
 
     @staticmethod

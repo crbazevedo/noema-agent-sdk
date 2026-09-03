@@ -13,6 +13,7 @@ from noema import (
     CognitiveAllocationOutcomeLink,
     ConsumerCheckpoint,
     CurrentCognitiveBasis,
+    DeterministicDormantInquiryDetector,
     DiscoveryReason,
     DormancyReason,
     DormantInquiryIndex,
@@ -23,6 +24,8 @@ from noema import (
     ReconsiderationDiscoveryProjection,
     ReconsiderationDiscoveryWorker,
     ReconsiderationOpportunityKind,
+    ReconsiderationPolicySnapshot,
+    ReconsiderationProjection,
     ScarceCognitionCostSnapshot,
     SemanticAssertion,
     StaticReconsiderationDiscoveryAuthority,
@@ -38,10 +41,17 @@ from tests.test_reconsideration import (
 )
 
 
-def discovery_policy(*, max_opportunities: int = 8) -> ReconsiderationDiscoveryPolicySnapshot:
+def discovery_policy(
+    *,
+    max_opportunities: int = 8,
+    max_dormant: int = 64,
+    max_qualifications: int = 32,
+) -> ReconsiderationDiscoveryPolicySnapshot:
     return ReconsiderationDiscoveryPolicySnapshot.create(
         version="discovery-fixture-v1",
         max_opportunities_emitted=max_opportunities,
+        max_dormant_inquiries_examined=max_dormant,
+        max_qualification_bindings_consumed=max_qualifications,
         seed_costs=ScarceCognitionCostSnapshot(
             compute_units=0.05,
             wall_time_seconds=1.0,
@@ -136,6 +146,9 @@ async def qualify(
     role: EvidenceQualificationRole,
     value: float,
     derivation_refs: tuple[str, ...] = (),
+    target_refs: tuple[str, ...] | None = None,
+    confidence: float = 0.95,
+    source_refs: tuple[str, ...] | None = None,
 ):
     clock.advance(timedelta(seconds=1))
     assertion = SemanticAssertion.create(
@@ -143,11 +156,11 @@ async def qualify(
         predicate=f"reconsideration.{role.value.lower()}",
         value=value,
         epistemic_type=(EpistemicType.INFERRED if derivation_refs else EpistemicType.REPORTED),
-        confidence=0.95,
+        confidence=confidence,
         valid_from=clock(),
         recorded_at=clock(),
         fresh_until=clock() + timedelta(days=1),
-        source_refs=(f"event:{authorization.id}",),
+        source_refs=source_refs or (f"event:{authorization.id}",),
         derivation_refs=derivation_refs,
         mutable_world=True,
     )
@@ -156,7 +169,7 @@ async def qualify(
     binding = await worker.bind_evidence_qualification(
         assertion_ref=assertion.assertion_id,
         role=role,
-        target_refs=(inquiry_id,),
+        target_refs=target_refs or (inquiry_id,),
         qualifier_id="fixture-qualifier",
         qualifier_version="1",
         authorization_ref=f"event:{authorization.id}",
@@ -213,6 +226,39 @@ async def critical_qualifications(
         value=0.95,
         derivation_refs=(old_value.assertion_id,),
     )
+    current_source = await worker.kernel.emit(
+        Event(
+            "external.current_revalidation",
+            "fixture:evidence",
+            {"still_relevant": True},
+            subject=inquiry_id,
+            timestamp=clock(),
+        )
+    )
+    current_revalidation = await qualify(
+        worker,
+        inquiry_id=inquiry_id,
+        information_id=information_id,
+        mandate=mandate,
+        principal=principal,
+        clock=clock,
+        authorization=authorization,
+        role=EvidenceQualificationRole.CURRENT_REVALIDATION,
+        value=1.0,
+        source_refs=(f"event:{current_source.id}",),
+    )
+    alignment = await qualify(
+        worker,
+        inquiry_id=inquiry_id,
+        information_id=information_id,
+        mandate=mandate,
+        principal=principal,
+        clock=clock,
+        authorization=authorization,
+        role=EvidenceQualificationRole.VALUE_ALIGNMENT,
+        value=0.85,
+        confidence=0.25,
+    )
     motivation = await qualify(
         worker,
         inquiry_id=inquiry_id,
@@ -235,7 +281,15 @@ async def critical_qualifications(
         role=EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
         value=0.90,
     )
-    return old_value, value_assertion, value_binding, motivation, expected
+    return (
+        old_value,
+        value_assertion,
+        value_binding,
+        current_revalidation,
+        alignment,
+        motivation,
+        expected,
+    )
 
 
 class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase):
@@ -257,6 +311,8 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
             old_value,
             current_value,
             _value_binding,
+            _current_revalidation,
+            alignment,
             _motivation,
             expected,
         ) = await critical_qualifications(
@@ -316,6 +372,14 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
         self.assertLess(old_value.recorded_at, current_value.recorded_at)
         self.assertIn(old_value.assertion_id, current_value.derivation_refs)
         self.assertNotEqual(old_value.assertion_id, current_value.assertion_id)
+        self.assertEqual(result.seeds[0].features.evidence_freshness, 1.0)
+        assert result.seeds[0].features.value_alignment_estimate is not None
+        self.assertEqual(result.seeds[0].features.value_alignment_estimate.confidence, 0.25)
+        self.assertEqual(result.seeds[0].features.meaningful_new_evidence, 1.0)
+        self.assertEqual(
+            result.seeds[0].features.value_alignment_estimate.evidence_refs,
+            (f"event:memory-assertion:{alignment[0].assertion_id}",),
+        )
 
         projection = await worker.current_projection()
         self.assertEqual(
@@ -354,7 +418,7 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
         self.assertNotIn(inquiries[0].question, discovery_payloads)
         await kernel.stop()
 
-    async def test_unrelated_events_and_generic_values_create_no_durable_churn(self) -> None:
+    async def test_generic_values_checkpoint_no_op_without_unrelated_churn(self) -> None:
         (
             kernel,
             _rw,
@@ -411,7 +475,14 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
             locality="local",
         )
         self.assertEqual(result.opportunities, ())
-        self.assertEqual(await kernel.store.latest_sequence(), before)
+        self.assertEqual(await kernel.store.latest_sequence(), before + 1)
+        checkpoint = ConsumerCheckpoint.from_event((await kernel.history())[-1])
+        trigger_event = next(
+            value
+            for value in await kernel.history()
+            if value.id == f"reconsideration-evidence-qualified:{expected.qualification_id}"
+        )
+        self.assertEqual(checkpoint.last_completed_sequence, trigger_event.sequence)
 
         unrelated = await kernel.emit(
             Event("fixture.unrelated", "fixture", subject="unrelated", timestamp=clock())
@@ -513,6 +584,7 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
 
         bindings = [binding]
         for role in (
+            EvidenceQualificationRole.VALUE_ALIGNMENT,
             EvidenceQualificationRole.MOTIVATION,
             EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
         ):
@@ -545,6 +617,258 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
         self.assertEqual(result.opportunities, ())
         await kernel.stop()
 
+    async def test_durable_value_alone_cannot_supply_candidate_estimates(self) -> None:
+        (
+            kernel,
+            _rw,
+            worker,
+            mandate,
+            principal,
+            _g1,
+            _current,
+            inquiries,
+            information_refs,
+            clock,
+            authorization,
+        ) = await prepare_discovery()
+        _assertion, durable = await qualify(
+            worker,
+            inquiry_id=inquiries[0].inquiry_id,
+            information_id=information_refs[0].information_id,
+            mandate=mandate,
+            principal=principal,
+            clock=clock,
+            authorization=authorization,
+            role=EvidenceQualificationRole.DURABLE_VALUE,
+            value=0.95,
+        )
+        result = await worker.run_trigger(
+            trigger_event_id=f"reconsideration-evidence-qualified:{durable.qualification_id}",
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        self.assertEqual(result.opportunities, ())
+        await kernel.stop()
+
+    async def test_critical_estimates_require_one_common_stable_target(self) -> None:
+        (
+            kernel,
+            _rw,
+            worker,
+            mandate,
+            principal,
+            _g1,
+            _current,
+            inquiries,
+            information_refs,
+            clock,
+            authorization,
+        ) = await prepare_discovery()
+        inquiry = inquiries[0]
+        for role, targets in (
+            (EvidenceQualificationRole.DURABLE_VALUE, (inquiry.inquiry_id,)),
+            (EvidenceQualificationRole.VALUE_ALIGNMENT, (inquiry.inquiry_id,)),
+            (EvidenceQualificationRole.MOTIVATION, inquiry.target_refs),
+        ):
+            await qualify(
+                worker,
+                inquiry_id=inquiry.inquiry_id,
+                information_id=information_refs[0].information_id,
+                mandate=mandate,
+                principal=principal,
+                clock=clock,
+                authorization=authorization,
+                role=role,
+                value=0.9,
+                target_refs=targets,
+            )
+        _assertion, expected = await qualify(
+            worker,
+            inquiry_id=inquiry.inquiry_id,
+            information_id=information_refs[0].information_id,
+            mandate=mandate,
+            principal=principal,
+            clock=clock,
+            authorization=authorization,
+            role=EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE,
+            value=0.9,
+            target_refs=(inquiry.inquiry_id,),
+        )
+        result = await worker.run_trigger(
+            trigger_event_id=f"reconsideration-evidence-qualified:{expected.qualification_id}",
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        self.assertEqual(result.opportunities, ())
+        await kernel.stop()
+
+    async def test_seed_features_use_versioned_semantics_without_new_evidence_inflation(
+        self,
+    ) -> None:
+        (
+            kernel,
+            _rw,
+            worker,
+            mandate,
+            principal,
+            _g1,
+            _current,
+            inquiries,
+            information_refs,
+            clock,
+            authorization,
+        ) = await prepare_discovery()
+        inquiry = inquiries[0]
+        bindings = []
+        for role, value, confidence in (
+            (EvidenceQualificationRole.DURABLE_VALUE, 0.95, 0.95),
+            (EvidenceQualificationRole.VALUE_ALIGNMENT, 0.8, 0.2),
+            (EvidenceQualificationRole.MOTIVATION, 0.9, 0.9),
+            (EvidenceQualificationRole.EXPECTED_OUTCOME_VALUE, 0.9, 0.9),
+        ):
+            bindings.append(
+                await qualify(
+                    worker,
+                    inquiry_id=inquiry.inquiry_id,
+                    information_id=information_refs[0].information_id,
+                    mandate=mandate,
+                    principal=principal,
+                    clock=clock,
+                    authorization=authorization,
+                    role=role,
+                    value=value,
+                    confidence=confidence,
+                )
+            )
+        result = await worker.run_trigger(
+            trigger_event_id=(
+                f"reconsideration-evidence-qualified:{bindings[-1][1].qualification_id}"
+            ),
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        self.assertEqual(len(result.seeds), 1)
+        features = result.seeds[0].features
+        self.assertEqual(features.unresolvedness, inquiry.uncertainty)
+        self.assertEqual(features.evidence_freshness, 1.0)
+        self.assertEqual(features.meaningful_new_evidence, 0.0)
+        assert features.value_alignment_estimate is not None
+        self.assertEqual(features.value_alignment_estimate.confidence, 0.2)
+        await kernel.stop()
+
+    async def test_explicit_target_is_narrowed_before_dormant_examination_budget(self) -> None:
+        (
+            kernel,
+            reconsideration_worker,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current,
+            inquiries,
+            information_refs,
+            clock,
+            authorization,
+        ) = await prepare_discovery(count=3)
+        worker = ReconsiderationDiscoveryWorker(
+            kernel,
+            reconsideration_worker=reconsideration_worker,
+            authority=fixture_worker.authority,
+            derived_information_id_deriver=ID_DERIVER,
+            policy=discovery_policy(max_dormant=2),
+            clock=clock,
+        )
+        await worker.record_policy()
+        target = max(inquiries, key=lambda value: value.inquiry_id)
+        target_index = inquiries.index(target)
+        *_, expected = await critical_qualifications(
+            worker,
+            inquiry_id=target.inquiry_id,
+            information_id=information_refs[target_index].information_id,
+            mandate=mandate,
+            principal=principal,
+            clock=clock,
+            authorization=authorization,
+        )
+        result = await worker.run_trigger(
+            trigger_event_id=f"reconsideration-evidence-qualified:{expected[1].qualification_id}",
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        self.assertEqual(
+            tuple(value.historical_inquiry_id for value in result.opportunities),
+            (target.inquiry_id,),
+        )
+        await kernel.stop()
+
+    async def test_qualification_limit_is_one_discovery_batch_budget(self) -> None:
+        (
+            kernel,
+            reconsideration_worker,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current,
+            inquiries,
+            information_refs,
+            clock,
+            authorization,
+        ) = await prepare_discovery(count=2, max_candidates=2)
+        worker = ReconsiderationDiscoveryWorker(
+            kernel,
+            reconsideration_worker=reconsideration_worker,
+            authority=fixture_worker.authority,
+            derived_information_id_deriver=ID_DERIVER,
+            policy=discovery_policy(max_qualifications=5),
+            clock=clock,
+        )
+        await worker.record_policy()
+        for inquiry, information in zip(inquiries, information_refs, strict=True):
+            await critical_qualifications(
+                worker,
+                inquiry_id=inquiry.inquiry_id,
+                information_id=information.information_id,
+                mandate=mandate,
+                principal=principal,
+                clock=clock,
+                authorization=authorization,
+            )
+        trigger = await kernel.emit(
+            Event(
+                "user.reconsideration_requested",
+                "fixture:user",
+                {"target_refs": [value.inquiry_id for value in inquiries]},
+                timestamp=clock(),
+            )
+        )
+        result = await worker.run_trigger(
+            trigger_event_id=trigger.id,
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        self.assertEqual(len(result.opportunities), 1)
+        self.assertLessEqual(
+            sum(len(value.qualification_ids) for value in result.opportunities),
+            5,
+        )
+        await kernel.stop()
+
     async def test_partial_discovery_recovers_exactly_once(self) -> None:
         class CrashBeforeHandoff(ReconsiderationDiscoveryWorker):
             crashed = False
@@ -568,7 +892,7 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
             clock,
             authorization,
         ) = await prepare_discovery()
-        _old, _qv, _bv, _qm, expected = await critical_qualifications(
+        *_, expected = await critical_qualifications(
             fixture_worker,
             inquiry_id=inquiries[0].inquiry_id,
             information_id=information_refs[0].information_id,
@@ -594,6 +918,31 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
                 source_trust_domain="local",
                 locality="local",
             )
+        later_no_op = await kernel.emit(
+            Event(
+                "user.reconsideration_requested",
+                "fixture:user",
+                subject="inquiry:unrelated",
+                timestamp=clock(),
+            )
+        )
+        no_op = await fixture_worker.run_trigger(
+            trigger_event_id=later_no_op.id,
+            basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        self.assertEqual(no_op.opportunities, ())
+        checkpoint_before_recovery = ConsumerCheckpoint.from_event(
+            (await kernel.history())[-1]
+        )
+        assert later_no_op.sequence is not None
+        self.assertEqual(
+            checkpoint_before_recovery.last_completed_sequence,
+            later_no_op.sequence,
+        )
         recovered = await fixture_worker.recover(
             principal=principal,
             actor_id="user:carlos",
@@ -645,7 +994,7 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
             clock,
             authorization,
         ) = await prepare_discovery()
-        _old, _qv, _bv, _qm, expected = await critical_qualifications(
+        *_, expected = await critical_qualifications(
             worker,
             inquiry_id=inquiries[0].inquiry_id,
             information_id=information_refs[0].information_id,
@@ -677,6 +1026,67 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
         self.assertEqual(projection.opportunities, ())
         await kernel.stop()
 
+    async def test_post_trigger_foreground_does_not_rewrite_evaluation_cut(self) -> None:
+        class RecordingDetector(DeterministicDormantInquiryDetector):
+            nominations = ()
+
+            def discover(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.nominations = super().discover(**kwargs)
+                return self.nominations
+
+        (
+            kernel,
+            reconsideration_worker,
+            fixture_worker,
+            mandate,
+            principal,
+            _g1,
+            _current,
+            inquiries,
+            information_refs,
+            clock,
+            authorization,
+        ) = await prepare_discovery()
+        *_, expected = await critical_qualifications(
+            fixture_worker,
+            inquiry_id=inquiries[0].inquiry_id,
+            information_id=information_refs[0].information_id,
+            mandate=mandate,
+            principal=principal,
+            clock=clock,
+            authorization=authorization,
+        )
+        trigger_id = f"reconsideration-evidence-qualified:{expected[1].qualification_id}"
+        await kernel.emit(
+            Event(
+                "decision.proposed",
+                "fixture:foreground",
+                timestamp=clock(),
+            )
+        )
+        detector = RecordingDetector()
+        worker = ReconsiderationDiscoveryWorker(
+            kernel,
+            reconsideration_worker=reconsideration_worker,
+            authority=fixture_worker.authority,
+            derived_information_id_deriver=ID_DERIVER,
+            policy=fixture_worker.policy,
+            clock=clock,
+            detector=detector,
+        )
+        with self.assertRaisesRegex(ValueError, "foreground demand blocks"):
+            await worker.run_trigger(
+                trigger_event_id=trigger_id,
+                basis=CurrentCognitiveBasis.from_mandate(mandate.revision_id),
+                principal=principal,
+                actor_id="user:carlos",
+                source_trust_domain="local",
+                locality="local",
+            )
+        self.assertEqual(len(detector.nominations), 1)
+        self.assertEqual((await worker.current_projection()).opportunities, ())
+        await kernel.stop()
+
     async def test_concurrent_discovery_admits_one_semantic_opportunity(self) -> None:
         (
             kernel,
@@ -691,7 +1101,7 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
             clock,
             authorization,
         ) = await prepare_discovery()
-        _old, _qv, _bv, _qm, expected = await critical_qualifications(
+        *_, expected = await critical_qualifications(
             first,
             inquiry_id=inquiries[0].inquiry_id,
             information_id=information_refs[0].information_id,
@@ -726,6 +1136,69 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
         projection = await first.current_projection()
         self.assertEqual(len(projection.opportunities), 1)
         self.assertEqual(len(projection.reconsideration.proposals), 1)
+        await kernel.stop()
+
+    async def test_recovery_uses_checkpoint_as_normal_lower_bound(self) -> None:
+        class CountingWorker(ReconsiderationDiscoveryWorker):
+            trigger_calls = 0
+
+            async def run_trigger(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.trigger_calls += 1
+                return await super().run_trigger(**kwargs)
+
+        (
+            kernel,
+            reconsideration_worker,
+            fixture_worker,
+            _mandate,
+            principal,
+            _g1,
+            _current,
+            _inquiries,
+            _information_refs,
+            clock,
+            _authorization,
+        ) = await prepare_discovery()
+        last = None
+        for index in range(1_200):
+            last = await kernel.emit(
+                Event(
+                    "rule.evaluation_traced",
+                    "fixture:noop-history",
+                    {"candidate": False, "ordinal": index},
+                    subject=f"rule:noop:{index}@1",
+                    timestamp=clock(),
+                )
+            )
+        assert last is not None and last.sequence is not None
+        await kernel.emit(
+            ConsumerCheckpoint(
+                consumer_id=fixture_worker.consumer_id,
+                last_completed_sequence=last.sequence,
+                observed_head_sequence=last.sequence,
+                epoch_id=f"trigger:{last.id}",
+            ).to_event(
+                source=fixture_worker.source,
+                timestamp=clock(),
+                causation_id=last.id,
+            )
+        )
+        worker = CountingWorker(
+            kernel,
+            reconsideration_worker=reconsideration_worker,
+            authority=fixture_worker.authority,
+            derived_information_id_deriver=ID_DERIVER,
+            policy=fixture_worker.policy,
+            clock=clock,
+        )
+        recovered = await worker.recover(
+            principal=principal,
+            actor_id="user:carlos",
+            source_trust_domain="local",
+            locality="local",
+        )
+        self.assertEqual(recovered, ())
+        self.assertEqual(worker.trigger_calls, 0)
         await kernel.stop()
 
     async def test_deferred_candidate_reuses_identity_after_context_change(self) -> None:
@@ -812,6 +1285,22 @@ class DormantCognitionDiscoveryAcceptanceTests(unittest.IsolatedAsyncioTestCase)
             1,
         )
         await kernel.stop()
+
+
+class ReconsiderationPolicyOrderingTests(unittest.TestCase):
+    def test_latest_policy_follows_canonical_sequence_not_lexical_id(self) -> None:
+        first = ReconsiderationPolicySnapshot.create(version="policy-order-a")
+        second = ReconsiderationPolicySnapshot.create(version="policy-order-b")
+        lexical_first, lexical_last = sorted((first, second), key=lambda value: value.policy_id)
+        projection = ReconsiderationProjection()
+        projection.rebuild(
+            (
+                lexical_last.to_event(source="fixture", recorded_at=NOW).with_sequence(1),
+                lexical_first.to_event(source="fixture", recorded_at=NOW).with_sequence(2),
+            )
+        )
+        self.assertEqual(projection.policies[-1], lexical_last)
+        self.assertEqual(projection.latest_policy, lexical_first)
 
 
 class ReconsiderationOutcomeOrderingTests(unittest.IsolatedAsyncioTestCase):

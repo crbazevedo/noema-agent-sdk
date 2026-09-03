@@ -63,6 +63,12 @@ Cadence, elapsed time, an unrelated event, idle capacity, and a generic user
 value create no opportunity. Structured trigger `target_refs` are identifiers;
 the detector never infers targets or domains from prose.
 
+The detector first narrows the dormant corpus by those structured targets,
+qualification targets, stable goal lineage, or an existing deferred candidate.
+Only then does it apply the dormant-Inquiry examination bound. Qualification
+consumption is one bound across that narrowed discovery batch, not a per-
+Inquiry multiplier.
+
 Autonomic `rule.evaluation_traced` events may be evidence only when their typed
 signal is active, target-specific, from the exact canonical rule/version, and
 of a policy-permitted kind. Signal salience, urgency, and expected value never
@@ -81,24 +87,55 @@ The supported roles are:
 ```text
 CURRENT_REVALIDATION
 DURABLE_VALUE
+VALUE_ALIGNMENT
 PREFERENCE
 MOTIVATION
 OPPORTUNITY
 EXPECTED_OUTCOME_VALUE
 ```
 
-`EXPECTED_OUTCOME_VALUE` is an ex ante estimate, not a realized outcome. A
-durable value, value-alignment estimate, expected outcome value, preference,
-and motivation remain separate concepts. Value alignment, motivation, and
-expected outcome value require distinct assertions before a new seed can be
-assembled. Missing or ambiguous qualification yields no seed; the discovery
-worker cannot manufacture subjective evidence to justify its own nomination.
+`EXPECTED_OUTCOME_VALUE` is an ex ante estimate, not a realized outcome.
+`DURABLE_VALUE` may justify discovery but never supplies the candidate's
+`ValueAlignmentEstimate`. Value alignment, motivation, and expected outcome
+value require distinct assertions whose bindings share the Inquiry itself or
+one common stable target. A durable-value assertion cannot be reused for any
+of those estimates. Missing, ambiguous, or disjoint qualification yields no
+seed; the discovery worker cannot manufacture subjective evidence to justify
+its own nomination.
 
 A current qualification assertion may derive from older durable evidence. The
 old assertion retains its original timestamp and remains reachable through
 provenance, while the new assertion and role binding prove current,
-target-specific applicability. Volatile and ex ante roles require post-Inquiry
-evidence and current validity.
+target-specific applicability. The durable assertion itself may predate the
+Inquiry when it remains current; its qualification is a later, explicit
+applicability claim. Volatile, candidate-specific, and ex ante roles require
+post-Inquiry evidence and current validity.
+
+The `deterministic-seed-v1` feature formulas are deliberately mechanical:
+
+```text
+unresolvedness
+    = historical Inquiry.uncertainty
+
+evidence_freshness
+    = 1 iff all three candidate-estimate assertions are current at evaluation
+      (confidence remains on each EvidenceBackedEstimate and is not freshness)
+
+meaningful_new_evidence
+    = 1 iff a current, target-specific CURRENT_REVALIDATION binding cites
+      source evidence canonically after the historical Inquiry cut
+
+opportunity_window
+    = 1 iff OPPORTUNITY_WINDOW_OPENED has exact reason evidence
+
+current_basis_validity
+    = 1 only because opportunity admission proves the basis at both the
+      evaluation cut and exact admission predecessor
+```
+
+An unknown seed-policy version fails closed. These binary v1 features are
+intentionally conservative; they do not infer magnitude from confidence or
+from the mere fact that discovery ran.
 
 ## Scope and Information Governance
 
@@ -122,12 +159,15 @@ evaluation_cut = canonical trigger sequence
 admitted_at_head = actual predecessor accepted by exact-head CAS
 ```
 
-Dormancy and reasons replay through the evaluation cut. At admission and
-handoff, the worker rechecks current cognitive basis and mandate, exact scope,
-foreground slack, candidate disposition, and information access. The durable
-event requires only that its stored sequence is greater than the validated
-predecessor, so PostgreSQL sequence gaps are legal. Opportunity identity uses
-semantic causal inputs, not wall-clock delay or admission-head numbering.
+Dormancy, reasons, and foreground state replay only through the evaluation
+cut. At admission and handoff, the worker independently rechecks current
+cognitive basis and mandate, exact scope, foreground slack through the actual
+CAS predecessor, candidate disposition, and information access. A foreground
+event after the trigger can block admission but cannot rewrite the historical
+evaluation. The durable event requires only that its stored sequence is
+greater than the validated predecessor, so PostgreSQL sequence gaps are legal.
+Opportunity identity uses semantic causal inputs, not wall-clock delay or
+admission-head numbering.
 
 ## Seed handoff and reallocation
 
@@ -147,8 +187,12 @@ seed are reused.
 Discovery state consists of immutable policy, scope, qualification, and
 opportunity events on the canonical log. Content-addressed identities,
 exact-head admission, and the generic `ConsumerCheckpoint` make retries and
-partial-boundary recovery converge exactly once. Checkpoints accelerate replay
-but cannot hide incomplete material triggers.
+partial-boundary recovery converge exactly once. Every fully evaluated
+recognized trigger, including a no-op, advances the checkpoint. Normal recovery
+starts after that watermark, while a separate audit of already materialized
+opportunities below it reconciles any incomplete handoff. Thus old no-op
+history is skipped without allowing a later checkpoint to hide partial
+material work.
 
 `CognitiveAllocationOutcomeLink` now accepts a downstream outcome only when the
 outcome event's canonical sequence follows the allocation trace and its

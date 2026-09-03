@@ -698,6 +698,7 @@ class ReconsiderationShadowWorker:
             for event in await self._normalized_history()
             if event.sequence is not None
             and event.sequence > cutoff
+            and event.sequence <= projection.event_cursor
             and event.type in policy.foreground_event_types
         )
 
