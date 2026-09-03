@@ -83,6 +83,15 @@ Historical goals never regain authority, unchanged scans are idempotent, and
 the worker can recover partial output without creating goals, work, actions, or
 effects. Learned allocation and broader historical sources remain staged.
 
+[Dormant Cognition Discovery](docs/DORMANT_COGNITION_DISCOVERY.md) adds the
+deterministic v0.6.2 bridge that finds which historical inquiries may enter
+that path. Dormancy remains a projection-only complement of current v0.6
+eligibility. Target-specific triggers, memory-owned qualified assertions,
+exact scope, and current Information Governance produce immutable
+opportunities and automatically assembled seeds. Trigger-time evaluation is
+separate from exact-head admission, and constraint-deferred candidates may be
+reallocated only after a material context change without changing identity.
+
 The [Endogenous Drive Ecology](docs/ENDOGENOUS_DRIVE_ECOLOGY.md) records the
 accepted mid-term architecture beyond this first bounded inquiry, calibration,
 and intrinsic-agenda slice. Its schedulers, consolidation processes, generated
@@ -489,6 +498,10 @@ not dispatch selected cognition as work or grant effect authority. v0.6.1 adds
 deterministic historical-inquiry reconsideration under a current cognitive
 basis, current governed evidence, and a separate finite budget. It records
 shadow proposals and allocation traces only; learned allocation remains staged.
+v0.6.2 derives dormant historical-inquiry candidates from target-specific
+current evidence, assembles v0.6.1 seeds automatically, and preserves separate
+discovery, revalidation, allocation, and surfacing stages. It remains
+deterministic, bounded, proposal-only, and effect-free.
 The deterministic Information Governance foundation is implemented as a
 separate cross-cutting layer. Its remaining artifact, sink, and connector slices
 must precede production use of restricted real-world context.
@@ -510,6 +523,8 @@ the implemented [Endogenous Cognition](docs/ENDOGENOUS_COGNITION.md)
 and its [ADR 0010](docs/adr/0010-endogenous-cognition.md),
 the implemented
 [Deterministic Cognitive Reconsideration](docs/COGNITIVE_RECONSIDERATION.md)
+with its implemented
+[Dormant Cognition Discovery](docs/DORMANT_COGNITION_DISCOVERY.md) bridge
 and its
 [ADR 0011](docs/adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md),
 the [Information Governance Foundation](docs/INFORMATION_GOVERNANCE.md), and

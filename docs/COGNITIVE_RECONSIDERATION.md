@@ -8,6 +8,13 @@ separate shadow path and does not manufacture a goal-bound inquiry.
 
 The normative architecture is [ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md).
 
+v0.6.2 adds the implemented
+[Dormant Cognition Discovery](DORMANT_COGNITION_DISCOVERY.md) bridge in front of
+this allocator. It derives historical Inquiry dormancy, admits target-specific
+evidence-bearing opportunities, and constructs `ReconsiderationSeed` inputs
+automatically. It does not change candidate identity, scan schema, allocation
+policy, or the proposal-only authority ceiling described here.
+
 ## Boundary
 
 ```text
@@ -132,6 +139,11 @@ containing provenance, basis, features, costs, hard gates, policy and estimator
 versions, budget, label, causal reason, and binding constraint. Later outcome
 evidence is appended as `CognitiveAllocationOutcomeLink`; it never rewrites the
 original trace.
+
+An outcome link is valid only when its referenced canonical outcome event
+follows the trace event and the trace, outcome, and link timestamps are
+causally coherent. Appending a link later cannot relabel an older event as a
+subsequent outcome.
 
 All durable state rebuilds from the canonical event log. Scan inputs include
 the information decisions, evidence, features, and costs needed for recovery.

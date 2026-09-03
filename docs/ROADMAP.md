@@ -4,7 +4,7 @@
 >
 > **Current revision:** 2026-09-02
 >
-> **Status:** v0.1 through the deterministic v0.6.1 Cognitive Reconsideration
+> **Status:** v0.1 through the deterministic v0.6.2 Dormant Cognition Discovery
 > foundation and Information Governance implemented; learned allocation and
 > later milestones remain staged or planned
 
@@ -64,6 +64,7 @@ cross-cutting release gates, not a final wave.
 | **v0.5.x — Intent & Outcome Stewardship** | Work remains connected to revisable commitments and the user's actual outcomes. | **I know what I owe, whom it serves, and what should remain human.** | Deterministic slice implemented in v0.5.1 |
 | **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Deterministic shadow slice implemented |
 | **v0.6.1 — Deterministic Cognitive Reconsideration** | Historical inquiries can be revalidated under current intent or an explicit mandate and compete for scarce cognitive slack without blind resumption. | **I know what may deserve thought again.** | Deterministic shadow foundation implemented; learned allocation staged |
+| **v0.6.2 — Dormant Cognition Discovery & Evidence Qualification** | Durable history can nominate target-specific historical inquiries for governed reconsideration without manual seed assembly. | **I know which dormant thoughts deserve reconsideration.** | Deterministic shadow slice implemented |
 | **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Planned |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
 | **v0.9 — Integrated Autonomous Runtime** | All cognitive systems operate together continuously under faults and budgets. | **I can keep going without being babysat.** | Planned |
@@ -85,6 +86,7 @@ Information Governance and Confidential Context
 
 Arc III — developmental agency
 Endogenous Cognition → Cognitive Reconsideration & Allocation
+                      → Dormant Cognition Discovery
                       → Habit Learning → Situated Presence
 
 Arc IV — proof
@@ -443,6 +445,58 @@ The bounded implementation is described in
 normatively governed by
 [ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md).
 Learned allocation, exploration, and wider historical sources remain staged.
+
+## v0.6.2 — Dormant Cognition Discovery & Evidence Qualification
+
+Question: **Which dormant historical cognition deserves to enter
+reconsideration?**
+
+Outcome:
+
+> Durable history can deterministically nominate a historical `Inquiry`,
+> qualify current evidence, and assemble the existing reconsideration seed
+> without restoring historical authority or manufacturing subjective value.
+
+Voice: **I know which dormant thoughts deserve reconsideration.**
+
+Status: **Deterministic shadow slice implemented.**
+
+```text
+historical Inquiry corpus
+    → projection-only dormancy
+    → target-specific relevance and qualified evidence
+    → immutable ReconsiderationOpportunity
+    → deterministic ReconsiderationSeed
+    → existing v0.6.1 allocation
+```
+
+Dormancy is exactly the complement of current v0.6 Inquiry eligibility and is
+never a canonical state transition. Agenda slack permits inspection but does
+not supply relevance. The initial detector recognizes explicit user or
+relevance evidence, opportunity windows, same-goal-lineage reactivation,
+target-specific qualified persistent values, and material context changes for
+previously constraint-deferred candidates. It does not use elapsed time,
+generic values, prose matching, signal salience, NetVOC, models, or learned
+scores.
+
+Current evidence remains ordinary `SemanticAssertion` memory. Thin
+qualification bindings classify assertions as current revalidation, durable
+value, preference, motivation, opportunity, or expected outcome value without
+duplicating confidence, bitemporal validity, freshness, provenance, or
+contradiction semantics. The discovery worker cannot create the subjective
+qualifications that justify its own nominations.
+
+Evaluation is pinned to the canonical trigger sequence; exact-head admission
+records and rechecks the actual current predecessor. Scope, qualification, and
+opportunity artifacts inherit Information Governance lineage and policy.
+Constraint-deferred candidates reuse their identity and seed only after a
+material allocation-context change. All outputs remain proposal-only.
+
+The bounded implementation is described in
+[Dormant Cognition Discovery](DORMANT_COGNITION_DISCOVERY.md). ADR 0011 remains
+the accepted governing allocation decision. Learned allocation, broader
+historical sources, automatic subjective inference, and Habit Learning remain
+staged.
 
 ## v0.7 — Habit Learning
 

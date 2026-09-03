@@ -597,7 +597,23 @@ class ReconsiderationProjection:
                 raise ValueError("allocation outcome link references an unknown trace")
             if event.causation_id != outcome_link.outcome_ref.removeprefix("event:"):
                 raise ValueError("allocation outcome link causation is inconsistent")
-            self._event_ref(outcome_link.outcome_ref)
+            outcome_event = self._event_ref(outcome_link.outcome_ref)
+            trace_event = self._events.get(
+                f"cognitive-allocation-trace-recorded:{outcome_link.trace_id}"
+            )
+            if (
+                trace_event is None
+                or trace_event.sequence is None
+                or outcome_event.sequence is None
+                or outcome_event.sequence <= trace_event.sequence
+            ):
+                raise ValueError("allocation outcome must causally follow its trace")
+            trace = self._traces[outcome_link.trace_id]
+            if (
+                outcome_event.timestamp < trace.recorded_at
+                or outcome_link.linked_at < outcome_event.timestamp
+            ):
+                raise ValueError("allocation outcome timestamps are not causally coherent")
             self._put_immutable(
                 self._outcome_links,
                 outcome_link.link_id,

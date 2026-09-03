@@ -79,12 +79,18 @@ principle they change.
 ## Implemented deterministic principles and staged learning principles
 
 These principles govern the implemented v0.6.1 deterministic reconsideration
-foundation and the staged learned-allocation direction. Learning contracts do
-not exist yet.
+foundation, the v0.6.2 dormant-discovery bridge, and the staged learned-
+allocation direction. Learning contracts do not exist yet.
 
 | Principle | Enforced or staged consequence |
 |---|---|
 | Historical cognition loses authority, not value | Prior cognition remains immutable evidence, but old goals, selections, priorities, and authority cannot directly govern a new allocation. |
+| Dormancy is derived, not asserted | A dormant Inquiry is the projection-only complement of current v0.6 eligibility; no dormancy event, relevance, or authority follows from it. |
+| Slack is a gate, not a reason | Idle cognitive capacity permits bounded inspection but cannot make a specific historical Inquiry relevant. |
+| Discovery, revalidation, allocation, and surfacing differ | A target-specific reason may justify bounded revalidation; only the existing allocator may select cognition, and selection can produce at most a shadow proposal. |
+| Memory owns epistemology | Qualification bindings point to current `SemanticAssertion` state; they do not duplicate confidence, validity, freshness, provenance, supersession, or contradiction semantics. |
+| Subjective qualification cannot self-bootstrap | Discovery consumes authenticated current value, preference, motivation, and expected-outcome evidence but cannot manufacture those claims to justify itself. |
+| Evaluation and admission cuts differ | Dormancy and reasons replay at the trigger sequence; current basis, foreground, scope, candidate state, and information legality are rechecked against the actual CAS predecessor. |
 | Reconsideration is not resumption | Historical cognition returns only as newly admitted cognition after current-basis/current-world revalidation and a fresh causal cut. |
 | Cognitive basis is explicit | Reconsideration requires current live governing intent or an explicit, unexpired, scope-matching reconsideration mandate; historical goals never supply authority. |
 | A reconsideration mandate is bounded meta-cognitive authority | The mandate pins scope, candidate classes/domains, budget, cadence/triggers, expiry, interruption, surfacing, and information-use policy; it cannot create/reactivate goals, obligations, work, or effects. |

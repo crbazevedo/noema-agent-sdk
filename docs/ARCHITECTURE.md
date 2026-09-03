@@ -2,7 +2,7 @@
 
 > **Current revision:** 2026-09-02
 >
-> **Implemented through:** v0.6.1 deterministic Cognitive Reconsideration
+> **Implemented through:** v0.6.2 Dormant Cognition Discovery and Evidence Qualification
 > shadow foundation, plus Information Governance
 >
 > **Accepted next direction:** learned Governed Allocation of Scarce Cognition;
@@ -757,8 +757,14 @@ permitted for current cognition
 Feature stores, training sets, evaluation corpora, and estimator artifacts are
 governed derived views of canonical traces, never a second source of truth.
 The deterministic substrate is described in
-[Cognitive Reconsideration](COGNITIVE_RECONSIDERATION.md); learned estimators,
-training, exploration, and active allocation remain unimplemented.
+[Cognitive Reconsideration](COGNITIVE_RECONSIDERATION.md). Its implemented
+v0.6.2 [Dormant Cognition Discovery](DORMANT_COGNITION_DISCOVERY.md) bridge
+derives the complement of current Inquiry eligibility, admits only target-
+specific evidence-bearing opportunities, and builds seeds for the existing
+allocator without parsing prose or creating subjective evidence. Discovery
+evaluation is pinned to its trigger cut while current legality is rechecked at
+the exact CAS predecessor. Learned estimators, training, exploration, and
+active allocation remain unimplemented.
 
 The implemented `CognitiveAllocationTrace` makes allocation evidence identifiable. It
 pins candidate provenance, features, hard-gate outcomes, policy and estimator
@@ -773,12 +779,14 @@ exploration for high-stakes, identity-bound, or relationship-sensitive
 resurfacing is prohibited without separate authorization, and no bandit/RL
 algorithm is selected by ADR 0011.
 
-The four responsibilities remain distinct: Endogenous Cognition identifies
+The responsibilities remain distinct: Endogenous Cognition identifies
 what deserves thought now; Historical Reconsideration identifies what may
-deserve thought again; Governed Allocation chooses which eligible thought fits
-scarce cognition now; Habit Learning identifies what has earned the right not
-to require deliberation anymore. Learned Allocation is a future mechanism
-inside the Governed Allocation envelope, never a replacement for it.
+deserve thought again; Dormant Cognition Discovery identifies which historical
+Inquiry has enough current reason to pay revalidation cost; Governed Allocation
+chooses which eligible thought fits scarce cognition now; and Habit Learning
+identifies what has earned the right not to require deliberation anymore.
+Learned Allocation is a future mechanism inside the Governed Allocation
+envelope, never a replacement for it.
 
 ## Situation graph and agent cycle
 

@@ -338,6 +338,82 @@ class ReconsiderationShadowWorker:
         projection.rebuild(await self._normalized_history())
         return projection
 
+    async def ensure_derived_governance(
+        self,
+        *,
+        information_id: str,
+        source_information_ids: tuple[str, ...],
+        policy_ids: tuple[str, ...],
+        recorded_at: datetime,
+    ) -> None:
+        """Share the existing race-safe lineage boundary with discovery artifacts."""
+
+        await self._ensure_derived_governance(
+            information_id=information_id,
+            source_information_ids=source_information_ids,
+            policy_ids=policy_ids,
+            recorded_at=recorded_at,
+        )
+
+    async def admit_information_use(
+        self,
+        information_ids: tuple[str, ...],
+        *,
+        principal: PrincipalSnapshot,
+        actor_id: str,
+        purpose: str,
+        source_trust_domain: str,
+        locality: str,
+        at: datetime,
+    ) -> tuple[str, ...]:
+        """Admit exact governed sources for reasoning without constructing a seed."""
+
+        decision_ids: list[str] = []
+        for information_id in tuple(sorted(set(information_ids))):
+            projection = await self.current_projection()
+            engine = InformationGovernanceEngine(projection.information)
+            information_ref = GovernedInformationRef(information_id)
+            context = engine.context_for(
+                information_ref=information_ref,
+                actor_id=actor_id,
+                principal=principal,
+                purpose=purpose,
+                operation=InformationOperation.REASON,
+                source_trust_domain=source_trust_domain,
+                destination_trust_domain=None,
+                recipient=None,
+                decision_time=at,
+                locality=locality,
+            )
+            request = InformationAccessRequest.create(
+                information_ref=information_ref,
+                context=context,
+            )
+            receipt = await InformationGovernanceAdmission(
+                self.kernel,
+                projection.information,
+                source=self.source,
+            ).admit_access(
+                request,
+                expected_disposition=DecisionDisposition.ALLOW,
+            )
+            decision_ids.append(receipt.record.decision_id)
+        return tuple(sorted(decision_ids))
+
+    async def canonical_foreground_refs(
+        self,
+        projection: ReconsiderationProjection,
+        *,
+        basis: CurrentCognitiveBasis,
+    ) -> tuple[str, ...]:
+        """Expose the pinned v0.6.1 foreground view to the discovery layer."""
+
+        return await self._canonical_foreground_refs(
+            projection,
+            basis=basis,
+            policy=self.policy,
+        )
+
     async def _process_scan(self, scan_event: Event) -> ReconsiderationAllocation | None:
         if scan_event.sequence is None:
             raise ValueError("reconsideration scan must be canonical")
@@ -659,37 +735,15 @@ class ReconsiderationShadowWorker:
         locality: str,
         at: datetime,
     ) -> tuple[str, ...]:
-        decision_ids: list[str] = []
-        for information_id in seed.governed_information_ids:
-            projection = await self.current_projection()
-            engine = InformationGovernanceEngine(projection.information)
-            information_ref = GovernedInformationRef(information_id)
-            context = engine.context_for(
-                information_ref=information_ref,
-                actor_id=actor_id,
-                principal=principal,
-                purpose=purpose,
-                operation=InformationOperation.REASON,
-                source_trust_domain=source_trust_domain,
-                destination_trust_domain=None,
-                recipient=None,
-                decision_time=at,
-                locality=locality,
-            )
-            request = InformationAccessRequest.create(
-                information_ref=information_ref,
-                context=context,
-            )
-            receipt = await InformationGovernanceAdmission(
-                self.kernel,
-                projection.information,
-                source=self.source,
-            ).admit_access(
-                request,
-                expected_disposition=DecisionDisposition.ALLOW,
-            )
-            decision_ids.append(receipt.record.decision_id)
-        return tuple(sorted(decision_ids))
+        return await self.admit_information_use(
+            seed.governed_information_ids,
+            principal=principal,
+            actor_id=actor_id,
+            purpose=purpose,
+            source_trust_domain=source_trust_domain,
+            locality=locality,
+            at=at,
+        )
 
     @staticmethod
     def _historical_ref(

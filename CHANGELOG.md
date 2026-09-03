@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.6.2 — 2026-09-02
+
+- added projection-only dormant-`Inquiry` discovery with deterministic,
+  target-specific relevance reasons and zero durable churn for unrelated
+  events or agenda slack alone;
+- reused memory-owned `SemanticAssertion` epistemology through thin,
+  authenticated evidence-role bindings instead of introducing a second
+  confidence, validity, freshness, or contradiction model;
+- added immutable scope bindings and reconsideration opportunities with opaque
+  governed identities, exact lineage, inherited policies, and current access
+  decisions;
+- separated trigger-time evaluation from PostgreSQL-gap-safe exact-head
+  admission and rechecked current basis, foreground, candidate, scope, and
+  information legality at admission and handoff;
+- added deterministic seed assembly into the existing v0.6.1 allocator and
+  same-candidate reallocation after a material context change;
+- required linked allocation outcomes to follow their trace in canonical and
+  timestamp order;
+- proved proposal-only behavior, replay, crash recovery, concurrency,
+  sequence-gap safety, target qualification, and structural separation from
+  goals, work, actions, capabilities, models, and effects.
+
 ## 0.6.1 — 2026-09-02
 
 - added immutable, authenticated and explicitly revocable
