@@ -1,12 +1,13 @@
 # Architecture
 
-> **Current revision:** 2026-09-02
+> **Current revision:** 2026-09-03
 >
 > **Implemented through:** v0.6.2 Dormant Cognition Discovery and Evidence Qualification
 > shadow foundation, plus Information Governance
 >
-> **Accepted next direction:** learned Governed Allocation of Scarce Cognition;
-> deterministic allocation traces now exist
+> **Proposed next direction:** governed Habit Learning; runtime mining is blocked
+> until a narrow deliberative-attention telemetry family supplies actual
+> outcomes, corrections, and an eligible-exposure denominator
 >
 > **Remaining ADR-0009 stages:** production confidential artifacts, identity
 > attestation, and exhaustive sink/connector enforcement
@@ -101,6 +102,13 @@ MotivationEstimate != Authority
 MotivationEstimate != Commitment
 
 EpistemicContradiction != GoalConflict
+
+Repetition != Habit
+
+HabitCandidate != AutonomicRuleVersion
+AutonomicRuleVersion != HabitLifecycleState
+HabitLifecycleState != RulesetMembership
+RulesetMembership != EffectAuthority
 ```
 
 An agent's ability to perform a task does not imply that the agent should own
@@ -788,6 +796,53 @@ identifies what has earned the right not to require deliberation anymore.
 Learned Allocation is a future mechanism inside the Governed Allocation
 envelope, never a replacement for it.
 
+### Proposed: governed habit learning; runtime blocked
+
+[ADR 0012](adr/0012-governed-habit-learning-and-cognitive-compilation.md)
+defines a habit as an evidence-backed, scoped, reversible compression of
+deliberative policy. The compression claim requires actual outcomes,
+counterexamples, corrections, and the denominator of situations in which the
+candidate could have applied. Repetition, behavior, correlation, and silence do
+not establish preference, intent, success, or authority.
+
+The current runtime is not yet a valid learning source. Agent decision/action
+history lacks a typed attention context, complete exposure denominator, current
+intent and information lineage, and correction semantics. Autonomic evaluation
+is counterfactual, while cognitive-allocation traces describe selection of
+thought rather than correctness of its later disposition. Runtime HabitForge is
+therefore a NO-GO until a narrow canonical `deliberative_attention_v1` family
+records every recognized attention disposition and causally later outcome and
+typed feedback evidence.
+
+Once that prerequisite supplies a qualifying corpus, the first proposed slice
+is intentionally small:
+
+```text
+attention disposition history
+    -> projected HabitEpisode denominator
+    -> governed content-addressed evidence bundle
+    -> deterministic bounded Predicate candidate
+    -> causal holdout fitness + exact-ruleset collision analysis
+    -> inert rule registration -> explicit SHADOW lifecycle
+```
+
+`InformationOperation.LEARN` and `EVALUATE` must be distinct from `REASON`,
+`TELEMETRY`, disclosure, and one another. An intersected secondary-use policy
+dimension explicitly opts into each operation; legacy policies permit neither.
+`HabitEpisode` remains a rebuildable projection; evidence bundles, candidates,
+reports, registrations, and lifecycle transitions are canonical. `RuleRegistry`
+remains immutable inventory and
+`RuleLifecycleProjection` separately determines which explicit refs enter a
+ruleset. Historical rule registrations retain shadow compatibility, but a new
+DRAFT registration cannot enter a ruleset merely because its version is latest.
+
+The first implementation stops at SHADOW. A compiled policy is typed data, has
+no capability, cannot create an `ActionIntent`, cannot raise authority, and
+abstains on missing, unknown, stale, contradictory, novel, out-of-scope,
+privacy-incompatible, inhibited, corrected, or quarantined context. Future
+CANARY, ACTIVE, live wake suppression, live reflex behavior, learned allocation,
+and model-based mining require later decisions.
+
 ## Situation graph and agent cycle
 
 The built-in situation projection supports facts, entities, typed relations,
@@ -844,6 +899,7 @@ mutation authority.
 | Confidentiality | Derive a summary and work plan from a protected artifact; typed policy composition blocks unauthorized internal retrieval and external disclosure, and redaction alone does not declassify it. |
 | Historical reconsideration | Encounter useful cognition after the live agenda closes; retain it as evidence but require current live intent or an explicit bounded reconsideration mandate, current-world revalidation, a new causal cut, and a new allocation before it can return. |
 | Learned allocation governance | Train or evaluate an estimator from operational traces; include only purpose-permitted governed projections, preserve identifiable selection evidence and censored labels, and keep hard constraints ahead of scores. |
+| Habit evidence integrity | A repeated deep-work choice appears successful; require every eligible exposure, causally later outcomes or explicit acceptance, corrections, causal holdout, and separate LEARN/EVALUATE permission before compiling it. |
 | Modifiability | Replace a model, broker, store, planner, sensor, or optimizer; stable domain contracts and acceptance semantics remain unchanged. |
 | Auditability | Reconstruct why the system believed, refreshed, prioritized, committed, delegated, authorized, disclosed, and acted from canonical history and policy versions. |
 | Performance | Process a million-event life while keeping expensive cognition sparse and projections rebuildable; indexes and snapshots may accelerate but never become authority. |
@@ -865,6 +921,7 @@ mutation authority.
 | Abstraction | A supposedly safe abstraction may retain identifying structure. | Transformation retains source policy; only a separately authorized declassification decision may loosen it. |
 | Rebuild cost | Event-only projections can become expensive at scale. | Disposable verified snapshots and indexes pinned to canonical cursors; never a second writable source of truth. |
 | Learned habits | Compression can hide regret or bypass novelty. | Counterexamples, replay, collision analysis, shadow/canary stages, drift and novelty escape paths. |
+| Habit telemetry | Recording only selected or corrected cases creates a positive-only corpus. | Checkpoint one typed disposition for every recognized source-family trigger and fail bundle admission when denominator coverage is incomplete. |
 | Historical resumption | Old cognition can smuggle obsolete intent or priority into current behavior. | Reconsideration creates a new inquiry basis after current-basis/current-world revalidation; closed goals contribute evidence only. |
 | Standing reconsideration | A broad mandate can become ambient intent or an indirect effect authority. | Pin scope, candidate classes, budget, cadence/triggers, expiry, interruption, surfacing, and information-use policy; prohibit goal, commitment, work, and effect transitions. |
 | Motivation inference | Behavioral activity can be mistaken for durable value, intent, or obligation. | Keep value, alignment, expected outcome, preference, and motivation distinct; preserve provenance/freshness and give explicit evidence stronger standing. |
@@ -943,8 +1000,8 @@ The staged information-governance implementation must add gates that prove:
 - every projection rebuilds from a declared canonical cursor and emits
   byte-equivalent semantic state for identical history.
 
-The accepted but unimplemented v0.6.x architecture must not advance to active
-control until structural gates prove:
+The implemented deterministic v0.6.x substrate and its staged learned
+architecture must not advance to active control until structural gates prove:
 
 - terminal historical intent cannot authorize new cognition;
 - reconsideration cites current live intent or an unexpired, scope-matching
@@ -975,6 +1032,27 @@ control until structural gates prove:
   scores; and
 - permission for current cognition cannot silently authorize training or
   evaluation reuse.
+
+The proposed v0.7 architecture must not enter runtime until structural gates
+also prove:
+
+- every selected source cut has a complete eligible-exposure denominator and
+  treats absent feedback as censored;
+- `LEARN` and `EVALUATE` are independent Information Governance operations;
+- candidate generation can see training history but not temporal holdout data;
+- fitness remains a vector with hard error, regret, privacy, authority,
+  outcome-quality, and compression gates;
+- collision analysis pins an exact ruleset and fails closed on unknown overlap;
+- candidate, registered rule, lifecycle state, ruleset membership, and effect
+  authority remain separate;
+- new DRAFT registrations cannot enter an evaluation epoch, while legacy rules
+  remain shadow-only compatible;
+- missing or novel required state causes abstention rather than imputation;
+- HabitForge cannot import models, effects, capabilities, strategic mutation,
+  work admission, or runtime policy mutation; and
+- crash and concurrent-forge tests converge through canonical prefixes,
+  expected-head append, and `ConsumerCheckpoint`, including with PostgreSQL
+  sequence gaps.
 
 See [Architecture principles](ARCHITECTURE_PRINCIPLES.md) for current release
 invariants.
@@ -1008,6 +1086,7 @@ invariants.
 | Intent and portfolio | `GoalRevision` / `IntentAuthority` / `RoadmapRevision` / `Commitment` / coverage and health projections |
 | External work | `ExternalWorkstream` / support-demand projection |
 | Information governance (foundation implemented; remaining slices staged) | `InformationPolicy` / `PolicyComposition` / access, disclosure, and declassification decisions / governed retrieval, context, and matching ports |
+| Habit Learning (proposed; runtime blocked on telemetry) | projected `HabitEpisode` / `HabitEvidenceBundle` / deterministic predicate miner / fitness and collision reports / `RuleLifecycleProjection` |
 
 ## Non-goals of the core
 
@@ -1042,5 +1121,8 @@ policy.
 - [ADR 0011](adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md):
   accepted staged architecture for historical reconsideration and governed,
   eventually learned allocation of scarce cognition.
+- [ADR 0012](adr/0012-governed-habit-learning-and-cognitive-compilation.md):
+  proposed governed Habit Learning architecture and the telemetry prerequisite
+  that currently blocks runtime mining.
 
 See the [roadmap](ROADMAP.md) for delivery order and release acceptances.

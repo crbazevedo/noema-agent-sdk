@@ -7,6 +7,11 @@ cognition into cheap, persistent, governed micro-policies while promoting
 novelty, uncertainty, contradiction, conflict, and opportunity into the
 deliberative workspace.
 
+[ADR 0012](adr/0012-governed-habit-learning-and-cognitive-compilation.md)
+defines the proposed Habit Learning boundary. Runtime mining is currently a
+NO-GO because existing canonical history does not contain both a complete
+eligible-exposure denominator and actual attention outcomes/corrections.
+
 It is not a classical business-rules engine and not a second path around
 Noema's authority model.
 
@@ -95,23 +100,20 @@ The event store remains the only source of truth. A separate rule database,
 cell-local truth, or model-managed policy memory would create unrecoverable
 divergence.
 
-Canonical rule events include:
+Implemented canonical rule events include:
 
 ```text
-rule.intent_recorded
 rule.version_registered
-rule.lifecycle_changed
 rule.ruleset_materialized
 rule.evaluation_epoch_started
 rule.evaluation_traced
 rule.salience_decision_shadowed
-rule.firing_recorded
-rule.evaluation_summarized
-rule.outcome_linked
-rule.feedback_recorded
-habit.candidate_forged
-rule.collision_detected
 ```
+
+ADR 0012 proposes the later evidence-bundle, candidate, fitness, collision, and
+`rule.lifecycle_changed` contracts. Active firing, outcome, and feedback events
+remain later work. These names describe staged architecture, not current runtime
+capability.
 
 The outer runtime also records generic consumer progress as:
 
@@ -120,7 +122,7 @@ runtime.consumer_checkpoint_advanced
 ```
 
 The rule registry, temporal state, active ruleset, signal workspace, metrics,
-and HabitForge training views are projections. Rule-cell computation checkpoints
+and future HabitForge episode views are projections. Rule-cell computation checkpoints
 are disposable accelerators and must be rebuildable from the log. Durable
 consumer progress is different: it is itself a canonical event projection.
 
@@ -137,8 +139,9 @@ learning:
 real trigger → shadow policy → would-have outcome → actual outcome → comparison
 ```
 
-HabitForge can therefore reject or refine a candidate before it receives live
-authority.
+Once a denominator-complete actual-decision corpus exists, HabitForge can use
+these counterfactual traces to reject or refine a candidate before it receives
+live authority. Shadow traces alone are not labels of deliberative correctness.
 
 The live signal workspace is a disposable projection. Complete shadow
 evaluation traces and would-have-signaled/woken/suppressed decisions are durable
@@ -196,18 +199,17 @@ Rule identity and versions are separate. Versions are immutable and include:
 
 ```text
 rule_id, version, intent_text, purpose
-family, scope, trigger selector, dependencies
-encoding kind, typed encoding payload
-output signal template or bounded reflex proposal
-confidence, threshold, precedence
-inhibits, inhibited_by, cooldown, ttl
-authority_required, privacy_class, externality
-evidence refs, test-suite ref, provenance
-lifecycle state, supersedes
+family, trigger selector, typed encoding payload
+output signal template, threshold, precedence
+evidence refs
 ```
 
-The original natural-language intent is retained verbatim as evidence of
-purpose. It seeds an `IntentFrame`; it is never executed directly.
+The implemented value is deliberately narrower than the full target metadata.
+ADR 0012 keeps scope, governance, authority, risk, novelty, lifecycle, and
+supersession in the immutable candidate and separate lifecycle projection rather
+than pretending they already exist inside the rule value. Authenticated natural-
+language intent may be retained as evidence of purpose; observed behavior cannot
+fabricate it, and it is never executed directly.
 
 ### `RuleFiring`
 
@@ -357,34 +359,35 @@ prepare-only, or reduce exploration. These controls are scoped and expiring.
 
 ## HabitForge
 
-Natural-language preferences and observed behavior seed hypotheses, not active
-rules. HabitForge preserves the original intent and produces a structured
-`IntentFrame` containing goals, contexts, preferences, exceptions,
-non-goals, ambiguities, and required clarification.
+Natural-language statements and observed behavior may seed hypotheses, not
+active rules. Behavior is not preference, correlation is not intent, and
+frequency is not authority. An explicit statement retains authenticated intent
+provenance; observed repetition cannot fabricate `intent_text`.
 
-Candidate sources include repeated user corrections, repeated deliberative
-trajectories, recurring manual workflows, unresolved-signal clusters, missed
-opportunities, false wakeups, and delegation failures.
+The first proposed source is deliberately narrower than the possible future
+candidate set: a typed deliberative-attention family with one record for every
+recognized eligible exposure and causally later outcome/feedback links. Current
+agent/action events, autonomic traces, and cognitive-allocation traces do not
+jointly supply that denominator and outcome semantics, so runtime HabitForge is
+blocked on the telemetry precursor in ADR 0012.
 
 ```text
-intent or observed pattern
-  → intent frame / pattern hypothesis
-  → evidence and episode retrieval
+governed canonical attention history
+  → projected episodes and exposure denominator
+  → content-addressed evidence bundle
   → typed candidate generation
   → counterexample search
-  → historical replay
-  → impact simulation
-  → collision analysis
+  → causal holdout and fitness vector
+  → exact-ruleset collision analysis
   → shadow
-  → canary
-  → active
 ```
 
-The model may propose an intent frame or typed candidate. Deterministic schema
-validation, semantic-alignment checks, evidence, counterexamples, replay,
-collision analysis, policy, and lifecycle gates decide whether it advances.
-Ambiguity produces a clarification or a retained hypothesis, never a guessed
-active policy.
+The first miner is deterministic, model-free, and `RuleFamily.PREDICATE`-only.
+It enumerates bounded conjunctions over policy-approved scalar features and
+literals, chooses the least-complex training survivor by a stable tie-break,
+and evaluates the fixed candidate on later causal holdout. Ambiguity,
+insufficient outcomes, missing features, or collision uncertainty produces
+abstention or rejection, never guessed policy.
 
 ## Lifecycle and authority
 
@@ -397,6 +400,12 @@ any nonterminal state → SUPERSEDED or RETIRED
 
 Lifecycle transitions are events. Versions never mutate in place. A revised
 rule supersedes an earlier version while preserving both histories.
+
+ADR 0012 proposes a separate `RuleLifecycleProjection`; `RuleRegistry` remains
+immutable inventory. Historical registrations stay usable only in legacy
+shadow compatibility. A new DRAFT registration enters no ruleset until an
+explicit SHADOW transition makes its ref eligible. The first Habit Learning
+implementation rejects CANARY and ACTIVE transitions.
 
 Graduation burden is proportional to risk, reversibility, privacy,
 externality, resource cost, confidence calibration, support, and user impact:
@@ -413,18 +422,17 @@ retirement. They cannot silently rewrite or activate executable policy.
 
 ## Self-observation and fitness
 
-Rule fitness is a projection over firing and outcome events:
+Rule fitness is a vector over exposure, decision, counterexample, correction,
+outcome, cost, and collision evidence. It is never one opaque score:
 
 ```text
-fitness =
-    precision
-  + realized utility
-  + opportunity gain
-  + user acceptance
-  - false wakeups
-  - interruption cost
-  - action regret
-  - conflict rate
+support, eligible exposures, coverage
+agreement, precision, false positives, identifiable false negatives
+corrections, overrides, rejections
+realized outcome, missed opportunity, regret
+deliberative compute/latency/attention avoided
+incremental rule and privacy cost
+collision, calibration, drift, evidence age
 ```
 
 Support, coverage, calibration, firing/suppression frequency, overrides,
@@ -451,8 +459,11 @@ The autonomy gradient is:
 observe → shadow → evaluate → learn → compile → canary → autonomous
 ```
 
-HabitForge enters at learning and compilation. A reflex is one possible
-compiled habit, not a separate forge.
+HabitForge enters at learning and compilation only after explicit `LEARN` and
+`EVALUATE` information decisions and matching secondary-use policy grants.
+Legacy information policies permit neither operation. A reflex is one possible
+future compiled habit, not a separate forge. The first slice is signal-only
+SHADOW policy.
 
 ## Time semantics boundary
 
@@ -506,8 +517,11 @@ The fabric is a cross-cutting track, not one monolithic release:
   situated orientation; keep active wake control disabled.
 - **v0.5:** observe protocol-neutral durable work, lease, and agent-ecology
   events; coordination remains owned by the work control plane.
-- **v0.6:** add counterfactual replay, compile-down candidate mining, fitness,
-  meta-rule proposals, and governed lifecycle transitions.
+- **v0.6:** implement bounded endogenous cognition and historical
+  reconsideration while retaining counterfactual autonomic replay.
+- **v0.7 proposed:** first add denominator-complete attention telemetry; only
+  then add governed predicate mining, fitness, collision analysis, and a
+  lifecycle that stops at SHADOW.
 - **later:** add durable timer workers, richer opportunity patterns,
   sensing-request signals, active wake control, and salience-driven adaptive
   perception.

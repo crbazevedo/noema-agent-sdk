@@ -2,11 +2,12 @@
 
 > **Roadmap ID:** `noema-core`
 >
-> **Current revision:** 2026-09-02
+> **Current revision:** 2026-09-03
 >
 > **Status:** v0.1 through the deterministic v0.6.2 Dormant Cognition Discovery
-> foundation and Information Governance implemented; learned allocation and
-> later milestones remain staged or planned
+> foundation and Information Governance implemented; v0.7 architecture is
+> proposed, while runtime Habit Learning is blocked on a narrow telemetry
+> precursor
 
 Noema is infrastructure for agents that maintain a coherent relationship with
 a changing world. Its releases should therefore tell a story of increasing
@@ -65,7 +66,7 @@ cross-cutting release gates, not a final wave.
 | **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Deterministic shadow slice implemented |
 | **v0.6.1 — Deterministic Cognitive Reconsideration** | Historical inquiries can be revalidated under current intent or an explicit mandate and compete for scarce cognitive slack without blind resumption. | **I know what may deserve thought again.** | Deterministic shadow foundation implemented; learned allocation staged |
 | **v0.6.2 — Dormant Cognition Discovery & Evidence Qualification** | Durable history can nominate target-specific historical inquiries for governed reconsideration without manual seed assembly. | **I know which dormant thoughts deserve reconsideration.** | Deterministic shadow slice implemented |
-| **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Planned |
+| **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Architecture proposed; runtime NO-GO pending attention-disposition telemetry |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
 | **v0.9 — Integrated Autonomous Runtime** | All cognitive systems operate together continuously under faults and budgets. | **I can keep going without being babysat.** | Planned |
 | **v1.0 — Durable Cognitive Agency** | Developers can build production long-lived agents without inventing another agent operating system around Noema. | **I persist, orient, steward, coordinate, act, and improve over time.** | Planned |
@@ -87,6 +88,7 @@ Information Governance and Confidential Context
 Arc III — developmental agency
 Endogenous Cognition → Cognitive Reconsideration & Allocation
                       → Dormant Cognition Discovery
+                      → attention-disposition telemetry
                       → Habit Learning → Situated Presence
 
 Arc IV — proof
@@ -503,16 +505,50 @@ staged.
 Question: **Which cognition has the agent earned the right not to perform?**
 
 ```text
-episode mining → candidate → counterexamples → historical replay
-               → fitness → collision analysis → shadow → canary → active
+canonical deliberative-attention telemetry
+    → episode/exposure projection
+    → governed evidence bundle
+    → bounded predicate candidate
+    → temporal holdout + fitness + collision analysis
+    → governed SHADOW rule
 ```
 
-The release adds governed HabitForge progression from repeated trajectories and
-corrections. Observation precedes learning; an accepted habit remains typed
-data and cannot bypass policy, authority, or capability gates.
+Status: **Architecture proposed; runtime implementation is a NO-GO until the
+telemetry prerequisite below exists and supplies a qualifying corpus.**
+
+Repository inspection found no current canonical family that combines a typed
+attention situation, a complete eligible-exposure denominator, the actual
+deliberative disposition, current intent and authority, Information Governance
+lineage, downstream outcome, correction semantics, and cognition/attention
+cost. `decision.proposed` and action events are incomplete; autonomic traces are
+counterfactual; cognitive-allocation traces describe whether thought was
+selected rather than whether its eventual attention decision was correct.
+
+The prerequisite is one narrow `deliberative_attention_v1` source family that
+records every recognized attention disposition plus causally later outcome and
+typed feedback links. It must add explicit `LEARN` and `EVALUATE` information
+operations and establish a denominator before mining begins. Silence or absence
+of correction is censored, never positive evidence.
+
+Once unblocked, the first HabitForge slice remains model-free and
+`RuleFamily.PREDICATE`-only. It derives `HabitEpisode` as a projection, creates
+content-addressed evidence/policy/candidate/fitness/collision artifacts, uses
+causal train/holdout cuts, compiles into the existing typed rule IR, and advances
+through a separate lifecycle projection only as far as SHADOW. Registration
+does not imply ruleset membership, authority, CANARY, ACTIVE, live wake
+suppression, an `ActionIntent`, or an effect.
 
 Acceptance: repeated situations require progressively less deliberate
 cognition while outcome quality remains stable and regret does not increase.
+The first runtime acceptance is earlier and stricter: the naive
+`deep_work → REMEMBER` rule must fail on urgent or user-decision counterexamples,
+while a bounded refined conjunction may enter SHADOW only after denominator,
+governance, holdout, regret, compression, novelty-escape, authority, privacy,
+and exact-ruleset collision gates all pass.
+
+The proposed architecture, readiness audit, prerequisite, object/event map, and
+explicit deferrals are recorded in
+[ADR 0012](adr/0012-governed-habit-learning-and-cognitive-compilation.md).
 
 ## v0.8 — Situated Presence
 

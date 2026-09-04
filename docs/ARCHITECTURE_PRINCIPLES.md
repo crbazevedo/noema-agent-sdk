@@ -62,7 +62,7 @@ principle they change.
 | Policy time is sequence-based | Rule eligibility is pinned by canonical event cursor; a later registration cannot leak into historical evaluation. |
 | Ruleset identity is content identity | Time and event cursor belong to evaluation epochs, not the content-addressed ruleset artifact. |
 | Inhibition strength is typed | Hard equal-or-higher-precedence vetoes and probabilistic graded modulation are distinct encodings. |
-| Observation precedes learning | Continuous shadow telemetry must ground HabitForge fitness before learned policy can advance. |
+| Observation precedes learning | A complete eligible-exposure denominator plus causally observed outcomes, corrections, and costs must ground HabitForge fitness before learned policy can advance. |
 | Intrinsic goals are subordinate | Future endogenous processes may propose instrumental, epistemic, maintenance, and exploratory goals, never terminal values. |
 | Background cognition is leased | Future dream/maintenance work consumes explicit preemptible budgets and cannot silently act externally. |
 | Cognitive demand is layered | `Signal`, `Inquiry`, `IntrinsicActivity`, `WorkOrder`, and `ActionIntent` cannot substitute for one another. |
@@ -80,7 +80,8 @@ principle they change.
 
 These principles govern the implemented v0.6.1 deterministic reconsideration
 foundation, the v0.6.2 dormant-discovery bridge, and the staged learned-
-allocation direction. Learning contracts do not exist yet.
+allocation direction. Habit Learning contracts are proposed in ADR 0012 but
+runtime mining remains blocked on its telemetry prerequisite.
 
 | Principle | Enforced or staged consequence |
 |---|---|
@@ -110,6 +111,26 @@ allocation direction. Learning contracts do not exist yet.
 | Hard gates precede learned scores | Current intent, authority, safety, information access, and user agency constrain the candidate set before learned ranking. |
 | Learning use is separately governed | Permission to use information for current cognition never automatically permits training, calibration, evaluation, or benchmarking reuse. |
 | Learning stages earn authority | Deterministic allocation precedes traces, calibrated estimation, counterfactual evaluation, shadow allocation, and only then bounded active allocation. |
+
+## Proposed governed Habit Learning principles
+
+These are architecture requirements, not implemented claims:
+
+| Principle | Required consequence |
+|---|---|
+| Repetition is not a habit | A pattern needs denominator-complete exposures, counterexamples, temporal holdout, and observed outcome or explicit acceptance evidence. |
+| Silence is censored | Absence of correction cannot become success, and unknown outcomes enter neither positive nor negative numerators. |
+| Operational use is not learning use | `LEARN` and `EVALUATE` are distinct Information Governance operations, an intersected secondary-use policy explicitly permits each, and legacy policies permit neither. |
+| Habit episodes are projections | Canonical source decisions, outcomes, feedback, and governance remain truth; `HabitEpisode` is rebuilt for a declared causal cut. |
+| Habit learning is bounded compilation | The first miner enumerates only policy-approved scalar predicate conjunctions and emits proposal data, never code or effects. |
+| Training precedes temporal holdout | Candidate generation cannot inspect later validation history, and a holdout failure rejects rather than refines the same candidate. |
+| Fitness is a gated vector | Compression cannot compensate for error, regret, privacy, authority, user-agency, outcome-quality, or collision failure. |
+| Collision uncertainty fails closed | Analysis pins an exact ruleset and `UNKNOWN_OVERLAP` blocks automatic lifecycle advancement. |
+| Registration is not activation | `RuleRegistry` remains inventory; a separate lifecycle projection selects explicit SHADOW refs for a ruleset. |
+| Authority cannot compile upward | Learned policy cannot gain intent, information, effect, or capability authority from support or frequency. |
+| Novelty restores cognition | Missing, unknown, stale, contradictory, novel, out-of-scope, corrected, inhibited, or privacy-incompatible state causes abstention rather than imputation. |
+| Habit and reconsideration are complements | Compilation never deletes cognition history; correction or drift can make deliberation valuable again. |
+| Runtime waits for evidence | HabitForge mining is a NO-GO until a narrow attention-disposition source records every eligible exposure plus causally linkable outcomes and feedback. |
 
 Structural enforcement lives in `tests/test_architecture.py`, schema/replay
 tests, and distributed fault tests. Documentation alone is not considered an
