@@ -1,13 +1,13 @@
 # Architecture
 
-> **Current revision:** 2026-09-03
+> **Current revision:** 2026-09-04
 >
 > **Implemented through:** v0.6.2 Dormant Cognition Discovery and Evidence Qualification
 > shadow foundation, plus Information Governance
 >
-> **Proposed next direction:** governed Habit Learning; runtime mining is blocked
-> until a narrow deliberative-attention telemetry family supplies actual
-> outcomes, corrections, and an eligible-exposure denominator
+> **Accepted next direction:** governed Habit Learning; the narrow
+> deliberative-attention telemetry mechanics are implemented, while runtime
+> mining remains blocked until real operation supplies a qualifying corpus
 >
 > **Remaining ADR-0009 stages:** production confidential artifacts, identity
 > attestation, and exhaustive sink/connector enforcement
@@ -796,7 +796,7 @@ identifies what has earned the right not to require deliberation anymore.
 Learned Allocation is a future mechanism inside the Governed Allocation
 envelope, never a replacement for it.
 
-### Proposed: governed habit learning; runtime blocked
+### Accepted direction: governed habit learning; runtime blocked
 
 [ADR 0012](adr/0012-governed-habit-learning-and-cognitive-compilation.md)
 defines a habit as an evidence-backed, scoped, reversible compression of
@@ -805,14 +805,15 @@ counterexamples, corrections, and the denominator of situations in which the
 candidate could have applied. Repetition, behavior, correlation, and silence do
 not establish preference, intent, success, or authority.
 
-The current runtime is not yet a valid learning source. Agent decision/action
-history lacks a typed attention context, complete exposure denominator, current
-intent and information lineage, and correction semantics. Autonomic evaluation
-is counterfactual, while cognitive-allocation traces describe selection of
-thought rather than correctness of its later disposition. Runtime HabitForge is
-therefore a NO-GO until a narrow canonical `deliberative_attention_v1` family
-records every recognized attention disposition and causally later outcome and
-typed feedback evidence.
+Agent decision/action history alone is not a valid learning source: it lacks a
+typed attention context, complete exposure denominator, current intent and
+information lineage, and correction semantics. Autonomic evaluation remains
+counterfactual, while cognitive-allocation traces describe selection of thought
+rather than correctness of its later disposition. The canonical
+`deliberative_attention_v1` mechanics now record recognized opportunities,
+actual dispositions, and causally later outcome and typed feedback evidence.
+Runtime HabitForge remains a NO-GO until real operation supplies a qualifying
+corpus through those contracts.
 
 Once that prerequisite supplies a qualifying corpus, the first proposed slice
 is intentionally small:
@@ -1033,7 +1034,7 @@ architecture must not advance to active control until structural gates prove:
 - permission for current cognition cannot silently authorize training or
   evaluation reuse.
 
-The proposed v0.7 architecture must not enter runtime until structural gates
+The accepted HabitForge runtime must not be implemented until structural gates
 also prove:
 
 - every selected source cut has a complete eligible-exposure denominator and

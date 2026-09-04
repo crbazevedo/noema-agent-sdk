@@ -80,8 +80,9 @@ principle they change.
 
 These principles govern the implemented v0.6.1 deterministic reconsideration
 foundation, the v0.6.2 dormant-discovery bridge, and the staged learned-
-allocation direction. Habit Learning contracts are proposed in ADR 0012 but
-runtime mining remains blocked on its telemetry prerequisite.
+allocation direction. Habit Learning architecture is accepted in ADR 0012 and
+its telemetry mechanics are implemented, but runtime mining remains blocked on
+a qualifying real corpus.
 
 | Principle | Enforced or staged consequence |
 |---|---|
@@ -112,9 +113,10 @@ runtime mining remains blocked on its telemetry prerequisite.
 | Learning use is separately governed | Permission to use information for current cognition never automatically permits training, calibration, evaluation, or benchmarking reuse. |
 | Learning stages earn authority | Deterministic allocation precedes traces, calibrated estimation, counterfactual evaluation, shadow allocation, and only then bounded active allocation. |
 
-## Proposed governed Habit Learning principles
+## Accepted governed Habit Learning principles
 
-These are architecture requirements, not implemented claims:
+These are architecture requirements. Only the observation and Information
+Governance prerequisites are implemented claims:
 
 | Principle | Required consequence |
 |---|---|
@@ -130,7 +132,7 @@ These are architecture requirements, not implemented claims:
 | Authority cannot compile upward | Learned policy cannot gain intent, information, effect, or capability authority from support or frequency. |
 | Novelty restores cognition | Missing, unknown, stale, contradictory, novel, out-of-scope, corrected, inhibited, or privacy-incompatible state causes abstention rather than imputation. |
 | Habit and reconsideration are complements | Compilation never deletes cognition history; correction or drift can make deliberation valuable again. |
-| Runtime waits for evidence | HabitForge mining is a NO-GO until a narrow attention-disposition source records every eligible exposure plus causally linkable outcomes and feedback. |
+| Runtime waits for evidence | The attention source mechanics are implemented, but HabitForge mining is a NO-GO until real operation records every eligible exposure plus causally linkable outcomes and feedback for a qualifying corpus. |
 
 Structural enforcement lives in `tests/test_architecture.py`, schema/replay
 tests, and distributed fault tests. Documentation alone is not considered an

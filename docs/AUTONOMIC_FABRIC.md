@@ -1,16 +1,18 @@
 # Autonomic Fabric
 
 The Noema Autonomic Fabric is a control plane beneath deliberative agency. Its
-first effect-free shadow kernel is implemented; activation, HabitForge, and active
-wake control remain staged work. The fabric turns repeated, well-evidenced
+first effect-free shadow kernel and the learning-grade attention observation
+precursor are implemented; HabitForge, activation, and active wake control
+remain staged work. The fabric turns repeated, well-evidenced
 cognition into cheap, persistent, governed micro-policies while promoting
 novelty, uncertainty, contradiction, conflict, and opportunity into the
 deliberative workspace.
 
 [ADR 0012](adr/0012-governed-habit-learning-and-cognitive-compilation.md)
-defines the proposed Habit Learning boundary. Runtime mining is currently a
-NO-GO because existing canonical history does not contain both a complete
-eligible-exposure denominator and actual attention outcomes/corrections.
+defines the accepted Habit Learning boundary. Runtime mining remains a NO-GO:
+the telemetry contracts can now collect a complete eligible-exposure
+denominator and actual attention outcomes/corrections, but no qualifying real
+corpus exists yet.
 
 It is not a classical business-rules engine and not a second path around
 Noema's authority model.
@@ -110,10 +112,11 @@ rule.evaluation_traced
 rule.salience_decision_shadowed
 ```
 
-ADR 0012 proposes the later evidence-bundle, candidate, fitness, collision, and
-`rule.lifecycle_changed` contracts. Active firing, outcome, and feedback events
-remain later work. These names describe staged architecture, not current runtime
-capability.
+ADR 0012 accepts the later evidence-bundle, candidate, fitness, collision, and
+`rule.lifecycle_changed` contracts as architecture only. The implemented
+`attention.disposition_*` outcomes and feedback describe actual baseline
+attention observations; active autonomic firing and its outcome/feedback events
+remain later work.
 
 The outer runtime also records generic consumer progress as:
 
@@ -364,12 +367,13 @@ active rules. Behavior is not preference, correlation is not intent, and
 frequency is not authority. An explicit statement retains authenticated intent
 provenance; observed repetition cannot fabricate `intent_text`.
 
-The first proposed source is deliberately narrower than the possible future
+The first implemented source is deliberately narrower than the possible future
 candidate set: a typed deliberative-attention family with one record for every
 recognized eligible exposure and causally later outcome/feedback links. Current
 agent/action events, autonomic traces, and cognitive-allocation traces do not
-jointly supply that denominator and outcome semantics, so runtime HabitForge is
-blocked on the telemetry precursor in ADR 0012.
+jointly supply that denominator and outcome semantics. The ADR 0012 telemetry
+precursor now supplies the contracts, while runtime HabitForge remains blocked
+until real operation produces a qualifying denominator-complete corpus.
 
 ```text
 governed canonical attention history
@@ -401,7 +405,7 @@ any nonterminal state → SUPERSEDED or RETIRED
 Lifecycle transitions are events. Versions never mutate in place. A revised
 rule supersedes an earlier version while preserving both histories.
 
-ADR 0012 proposes a separate `RuleLifecycleProjection`; `RuleRegistry` remains
+ADR 0012 defines a separate `RuleLifecycleProjection`; `RuleRegistry` remains
 immutable inventory. Historical registrations stay usable only in legacy
 shadow compatibility. A new DRAFT registration enters no ruleset until an
 explicit SHADOW transition makes its ref eligible. The first Habit Learning
@@ -519,9 +523,10 @@ The fabric is a cross-cutting track, not one monolithic release:
   events; coordination remains owned by the work control plane.
 - **v0.6:** implement bounded endogenous cognition and historical
   reconsideration while retaining counterfactual autonomic replay.
-- **v0.7 proposed:** first add denominator-complete attention telemetry; only
-  then add governed predicate mining, fitness, collision analysis, and a
-  lifecycle that stops at SHADOW.
+- **v0.7 accepted direction:** denominator-complete attention telemetry is
+  implemented; governed predicate mining, fitness, collision analysis, and a
+  lifecycle that stops at SHADOW remain blocked until a qualifying real corpus
+  exists.
 - **later:** add durable timer workers, richer opportunity patterns,
   sensing-request signals, active wake control, and salience-driven adaptive
   perception.

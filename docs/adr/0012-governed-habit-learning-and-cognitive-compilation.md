@@ -1,8 +1,9 @@
 # ADR 0012: Governed habit learning and cognitive compilation
 
-- Status: Proposed — architecture ready; runtime mining blocked on a narrow
-  attention-disposition telemetry precursor
+- Status: Accepted architecture direction — HabitForge runtime blocked on a
+  qualifying `deliberative_attention_v1` corpus
 - Date: 2026-09-03
+- Accepted: 2026-09-04
 - Scope: habit evidence, deterministic mining, temporal validation, fitness,
   collision analysis, rule lifecycle, Information Governance, and the initial
   SHADOW-only compilation boundary
@@ -32,9 +33,9 @@ repeated, well-evidenced deliberation -> cheaper typed policy
 novelty, contradiction, drift, correction -> abstain and restore cognition
 ```
 
-This decision defines the eventual HabitForge boundary. It does not authorize a
-runtime implementation while the first learning corpus lacks a defensible
-exposure denominator and observed outcomes.
+This decision defines the eventual HabitForge boundary. Its acceptance does not
+authorize a runtime implementation while the first real learning corpus lacks
+a defensible exposure denominator and observed outcomes.
 
 ## Normative definition and identity boundaries
 
@@ -72,8 +73,9 @@ episode occurred; it cannot grant current authority to a compiled rule.
 | expected-head conditional append | yes | yes | sufficient substrate | Reuse actual predecessor-head semantics; never assume contiguous sequences. |
 | `ConsumerCheckpoint` and projection | yes | checkpoint events | sufficient substrate | Reuse after every required forge suffix is durable. |
 | `SemanticAssertion`, `EvidenceLink`, memory projection | yes | yes | supporting evidence only | Reuse epistemic provenance; do not make memory a habit label store. |
-| Information policies, lineage, bindings, access decisions | yes | yes | incomplete | Add distinct `LEARN` and `EVALUATE` operations and apply them to every derived artifact. |
-| `InformationGovernanceProjection` | yes | projection | incomplete | Reuse after operation extension; it remains the policy view, not a training store. |
+| Information policies, lineage, bindings, access decisions | yes | yes | sufficient governance substrate | Distinct `LEARN` and `EVALUATE` operations and intersected secondary-use policy are implemented; legacy policies grant neither. |
+| `InformationGovernanceProjection` | yes | projection | sufficient governance substrate | Reused by attention telemetry; it remains the policy view, not a training store. |
+| `deliberative_attention_v1` contracts and exposure projection | yes | yes / projection | mechanics ready; real corpus absent | Records source policy, feature schema, actual disposition, later outcomes and explicit feedback; denominator audit fails closed. |
 | `AutonomicRule`, `PredicateSpec`, `SignalTemplate` | yes | registration event | sufficient first target IR | Reuse unchanged for the bounded predicate compiler; candidate governance does not become rule code. |
 | `RuleRegistry` | yes | projection | sufficient inventory | Reuse unchanged; it must not own lifecycle. |
 | `RulesetSnapshot` | yes | materialization event | sufficient artifact | Reuse `snapshot(refs=...)`; no direct mutation. |
@@ -88,7 +90,9 @@ episode occurred; it cannot grant current authority to a compiled rule.
 
 ### Readiness verdict
 
-No existing canonical event family can supply the first valid `HabitEpisode`
+At proposal time, no existing canonical event family could supply the first
+valid `HabitEpisode` corpus. The accepted precursor now supplies the required
+observation mechanics, but the repository still contains no qualifying real
 corpus.
 
 - `decision.proposed` records trigger type, proposed intents, critic decisions,
@@ -111,10 +115,9 @@ corpus.
 Absence of correction therefore cannot be interpreted as success, and the
 repository cannot currently distinguish a successful-looking positive-only
 sample from a complete learning corpus. Runtime HabitForge is a **NO-GO** until
-the following prerequisite is implemented and has produced a qualifying
-corpus.
+the implemented prerequisite has produced a qualifying real corpus.
 
-## Required telemetry precursor
+## Implemented telemetry precursor
 
 The first source family is deliberately narrow:
 
@@ -127,7 +130,8 @@ represent `deep_work`, `requires_user_decision`, and `urgency`, and whose actual
 baseline choice is `WAKE`, `REMEMBER`, `DEFER`, or `SUPPRESS`. It is not a
 generic “learn from all history” envelope.
 
-The prerequisite adds three canonical contracts:
+The prerequisite implements three canonical observation contracts plus
+content-addressed source-policy and feature-schema records:
 
 1. `attention.disposition_recorded` records exactly one baseline decision for
    every recognized attention opportunity, including its trigger reference,
@@ -156,11 +160,11 @@ observes a disposition or outcome. It selects triggers only from typed source
 fields and the declared situation cut. A policy that chooses examples by their
 later label cannot define a denominator.
 
-The precursor is complete only when the training and temporal-validation cuts
-contain policy-permitted, feature-complete exposures, observed positives,
-counterexamples, and non-censored outcome or explicit acceptance evidence.
-Synthetic fixtures may prove mechanics; they do not establish a production
-habit.
+Telemetry mechanics are complete. HabitForge data readiness is not: the
+training and temporal-validation cuts must still contain policy-permitted,
+feature-complete real exposures, observed positives, counterexamples, and
+non-censored outcome or explicit acceptance evidence. Synthetic fixtures prove
+correctness and recovery; they do not establish a production habit.
 
 ## Episode, exposure, and label semantics
 
@@ -216,7 +220,7 @@ enter positive or negative numerators.
 
 ## Information Governance for learning
 
-The runtime prerequisite must extend `InformationOperation` with:
+The implemented governance prerequisite extends `InformationOperation` with:
 
 ```text
 LEARN     information may influence persistent future policy
@@ -530,8 +534,8 @@ edits the old rule.
 | `rule.version_registered` | modified existing envelope | v2 origin/compiler/candidate provenance; rule value unchanged; v1 upcasts to legacy shadow. |
 | `RuleRegistry`, `RulesetSnapshot` | reused projection/artifact | Inventory and immutable selected content remain unchanged. |
 | `runtime.consumer_checkpoint_advanced` | reused canonical | Advances after a complete or durably terminal forge attempt. |
-| `attention.disposition_*` family | prerequisite new canonical | Supplies the first actual episode and denominator; not part of HabitForge itself. |
-| `InformationOperation`, `InformationPolicy`, and policy matrices | modified existing | Add independent `LEARN`/`EVALUATE` plus fail-closed `allowed_secondary_uses`; legacy policies permit neither. |
+| `attention.disposition_*` family | implemented canonical prerequisite | Supplies the first actual episode and denominator; not part of HabitForge itself. |
+| `InformationOperation`, `InformationPolicy`, and policy matrices | implemented extension | Independent `LEARN`/`EVALUATE` plus fail-closed `allowed_secondary_uses`; legacy policies permit neither. |
 | CANARY, ACTIVE, live suppression/reflex | deferred | Explicitly outside the first implementation. |
 
 ## Replay and concurrency
@@ -725,8 +729,8 @@ learned cognitive allocation.
 4. **Observed/inferred/censored:** dispositions, explicit feedback, and linked
    outcomes are observed; positive/counterexample categories are deterministic
    derived labels; missing or unresolved outcomes are censored.
-5. **Runtime today:** NO-GO. Implement and populate the three-event
-   deliberative-attention telemetry precursor first.
+5. **Runtime today:** NO-GO. The three-event deliberative-attention telemetry
+   precursor is implemented; populate and verify a qualifying real corpus first.
 6. **Learning permission:** distinct `InformationOperation.LEARN` and
    `.EVALUATE`, plus an intersected `allowed_secondary_uses` policy dimension;
    neither is implied by REASON, TELEMETRY, disclosure, legacy policy, or each
@@ -772,9 +776,9 @@ learned cognitive allocation.
 
 **NO-GO for HabitForge runtime implementation today.** The architecture is
 sufficiently specific to guide implementation, but the first source corpus is
-not. Implement the narrow deliberative-attention telemetry precursor as a
-separate reviewed wave, collect a qualifying canonical corpus, and rerun this
-readiness gate. Do not compensate by widening the corpus or weakening labels.
+not. Collect a qualifying canonical corpus through the separately implemented
+deliberative-attention precursor, then rerun this readiness gate. Do not
+compensate by widening the corpus or weakening labels.
 
 This decision extends [ADR 0002](0002-autonomic-fabric.md),
 [ADR 0004](0004-durable-consumer-checkpoints.md),

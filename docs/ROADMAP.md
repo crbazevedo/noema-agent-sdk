@@ -2,12 +2,12 @@
 
 > **Roadmap ID:** `noema-core`
 >
-> **Current revision:** 2026-09-03
+> **Current revision:** 2026-09-04
 >
 > **Status:** v0.1 through the deterministic v0.6.2 Dormant Cognition Discovery
 > foundation and Information Governance implemented; v0.7 architecture is
-> proposed, while runtime Habit Learning is blocked on a narrow telemetry
-> precursor
+> accepted and its attention telemetry precursor is implemented, while runtime
+> Habit Learning remains blocked on a qualifying real corpus
 
 Noema is infrastructure for agents that maintain a coherent relationship with
 a changing world. Its releases should therefore tell a story of increasing
@@ -66,7 +66,7 @@ cross-cutting release gates, not a final wave.
 | **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Deterministic shadow slice implemented |
 | **v0.6.1 — Deterministic Cognitive Reconsideration** | Historical inquiries can be revalidated under current intent or an explicit mandate and compete for scarce cognitive slack without blind resumption. | **I know what may deserve thought again.** | Deterministic shadow foundation implemented; learned allocation staged |
 | **v0.6.2 — Dormant Cognition Discovery & Evidence Qualification** | Durable history can nominate target-specific historical inquiries for governed reconsideration without manual seed assembly. | **I know which dormant thoughts deserve reconsideration.** | Deterministic shadow slice implemented |
-| **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Architecture proposed; runtime NO-GO pending attention-disposition telemetry |
+| **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Architecture accepted; telemetry mechanics implemented; runtime NO-GO pending qualifying real corpus |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
 | **v0.9 — Integrated Autonomous Runtime** | All cognitive systems operate together continuously under faults and budgets. | **I can keep going without being babysat.** | Planned |
 | **v1.0 — Durable Cognitive Agency** | Developers can build production long-lived agents without inventing another agent operating system around Noema. | **I persist, orient, steward, coordinate, act, and improve over time.** | Planned |
@@ -513,8 +513,9 @@ canonical deliberative-attention telemetry
     → governed SHADOW rule
 ```
 
-Status: **Architecture proposed; runtime implementation is a NO-GO until the
-telemetry prerequisite below exists and supplies a qualifying corpus.**
+Status: **Architecture accepted; telemetry mechanics implemented; runtime
+HabitForge remains a NO-GO until actual operation supplies a qualifying,
+denominator-complete corpus.**
 
 Repository inspection found no current canonical family that combines a typed
 attention situation, a complete eligible-exposure denominator, the actual
@@ -524,11 +525,13 @@ cost. `decision.proposed` and action events are incomplete; autonomic traces are
 counterfactual; cognitive-allocation traces describe whether thought was
 selected rather than whether its eventual attention decision was correct.
 
-The prerequisite is one narrow `deliberative_attention_v1` source family that
-records every recognized attention disposition plus causally later outcome and
-typed feedback links. It must add explicit `LEARN` and `EVALUATE` information
-operations and establish a denominator before mining begins. Silence or absence
-of correction is censored, never positive evidence.
+The implemented prerequisite is one narrow `deliberative_attention_v1` source
+family that records every recognized attention disposition plus causally later
+outcome and typed feedback links. Explicit `LEARN` and `EVALUATE` information
+operations are independently governed and source policies establish the
+denominator before labels. Silence or absence of correction is censored, never
+positive evidence. Synthetic acceptance fixtures demonstrate mechanics, not a
+production-ready learning corpus.
 
 Once unblocked, the first HabitForge slice remains model-free and
 `RuleFamily.PREDICATE`-only. It derives `HabitEpisode` as a projection, creates
