@@ -233,8 +233,11 @@ class AttentionExposureProjection:
             self._dispositions_by_key[key] = record
             self._disposition_sequences[record.disposition_id] = event.sequence
             schema = self._schemas[record.feature_schema_id]
-            self._feature_complete[record.disposition_id] = schema.validate_snapshot(
-                record.decision.features
+            self._feature_complete[record.disposition_id] = (
+                record.source_governance_contract_version == 2
+                and self._policies[record.source_policy_id].source_governance_contract_version
+                == 2
+                and schema.validate_snapshot(record.decision.features)
             )
             handled = True
         elif event.type == DISPOSITION_OUTCOME_LINKED_EVENT:
@@ -389,11 +392,14 @@ class AttentionExposureProjection:
                     feature_schema_id=policy.feature_schema_id,
                 )
                 self._recognized[opportunity.key] = opportunity
+                governed_information_ids = (
+                    policy.extract_governed_information_ids(event.payload)
+                    if policy.source_governance_contract_version == 2
+                    else ()
+                )
                 self._recognized_source_facts[opportunity.key] = _RecognizedSourceFacts(
                     features=schema.extract_snapshot(event.payload),
-                    governed_information_ids=policy.extract_governed_information_ids(
-                        event.payload
-                    ),
+                    governed_information_ids=governed_information_ids,
                 )
 
     def _validate_disposition(
@@ -419,13 +425,17 @@ class AttentionExposureProjection:
             raise ValueError("attention disposition references an unknown feature schema")
         schema.validate_snapshot(record.decision.features)
         source_facts = self._recognized_source_facts[key]
-        if dict(record.decision.features) != source_facts.features:
+        policy = self._policies[record.source_policy_id]
+        learning_grade = (
+            policy.source_governance_contract_version == 2
+            and record.source_governance_contract_version == 2
+        )
+        if learning_grade and dict(record.decision.features) != source_facts.features:
             raise ValueError(
                 "attention disposition features differ from its canonical source"
             )
-        if (
-            record.decision.governed_information_ids
-            != source_facts.governed_information_ids
+        if learning_grade and (
+            record.decision.governed_information_ids != source_facts.governed_information_ids
         ):
             raise ValueError(
                 "attention disposition lineage differs from its canonical source declaration"
@@ -441,13 +451,14 @@ class AttentionExposureProjection:
             cited = self._events.get(reference)
             if cited is None or cited.sequence > record.decision.situation_causal_cursor:
                 raise ValueError("attention decision reference was unavailable at its causal cut")
-        self._validate_source_access(
-            governed_information_ids=source_facts.governed_information_ids,
-            information_access_decision_ids=(
-                record.source_information_access_decision_ids
-            ),
-            situation_causal_cursor=record.decision.situation_causal_cursor,
-        )
+        if learning_grade:
+            self._validate_source_access(
+                governed_information_ids=source_facts.governed_information_ids,
+                information_access_decision_ids=(
+                    record.source_information_access_decision_ids
+                ),
+                situation_causal_cursor=record.decision.situation_causal_cursor,
+            )
         self._validate_governance(
             governed_information_ids=record.decision.governed_information_ids,
             derived_information_id=record.derived_information_id,

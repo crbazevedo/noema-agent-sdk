@@ -173,6 +173,10 @@ class DeliberativeAttentionRecorder:
         policy = projection.policy(source_policy_id)
         if policy is None:
             raise ValueError("attention opportunity references an unknown source policy")
+        if policy.source_governance_contract_version != 2:
+            raise ValueError(
+                "legacy attention source policy is not safe for provider preparation"
+            )
         policy_sequence = projection.policy_sequence(source_policy_id)
         if policy_sequence is None:
             raise ValueError("attention source policy is not canonical")

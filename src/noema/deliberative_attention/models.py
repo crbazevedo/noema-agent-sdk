@@ -33,6 +33,8 @@ DELIBERATIVE_ATTENTION_EVENT_TYPES = (
     DISPOSITION_FEEDBACK_RECORDED_EVENT,
 )
 
+SOURCE_GOVERNANCE_CONTRACT_VERSION_KEY = "source_governance_contract_version"
+
 
 def _content_id(prefix: str, payload: Mapping[str, JSONValue]) -> str:
     encoded = json.dumps(
@@ -104,6 +106,7 @@ def _event(
     timestamp: datetime,
     payload: Mapping[str, JSONValue],
     causation_id: str | None = None,
+    schema_version: int = 1,
 ) -> Event:
     return Event(
         id=event_id,
@@ -113,6 +116,7 @@ def _event(
         timestamp=timestamp,
         payload=payload,
         causation_id=causation_id,
+        schema_version=schema_version,
     )
 
 
@@ -407,6 +411,7 @@ class AttentionSourcePolicySnapshot:
     source_event_types: tuple[str, ...]
     scope: str
     information_id_payload_fields: tuple[str, ...]
+    source_governance_contract_version: int
     recorded_at: datetime
     source_prefixes: tuple[str, ...] = ()
     subject_prefixes: tuple[str, ...] = ()
@@ -451,6 +456,7 @@ class AttentionSourcePolicySnapshot:
             source_event_types=normalized_event_types,
             scope=scope,
             information_id_payload_fields=normalized_information_fields,
+            source_governance_contract_version=2,
             recorded_at=recorded_at,
             source_prefixes=normalized_source_prefixes,
             subject_prefixes=normalized_subject_prefixes,
@@ -467,13 +473,21 @@ class AttentionSourcePolicySnapshot:
             (self.source_prefixes, "attention source prefixes", False),
             (self.subject_prefixes, "attention subject prefixes", False),
             (self.required_payload_fields, "attention required payload fields", False),
-            (
-                self.information_id_payload_fields,
-                "attention information-id payload fields",
-                True,
-            ),
+            (self.information_id_payload_fields, "attention information-id payload fields", False),
         ):
             _unique_text(values, name, required=required)
+        if self.source_governance_contract_version not in {1, 2}:
+            raise ValueError("unsupported attention source-governance contract version")
+        if (
+            self.source_governance_contract_version == 2
+            and not self.information_id_payload_fields
+        ):
+            raise ValueError("attention information-id payload fields must be non-empty")
+        if (
+            self.source_governance_contract_version == 1
+            and self.information_id_payload_fields
+        ):
+            raise ValueError("legacy attention policy cannot declare source information fields")
         if any(
             value.startswith("attention.") or value == "runtime.consumer_checkpoint_advanced"
             for value in self.source_event_types
@@ -508,6 +522,10 @@ class AttentionSourcePolicySnapshot:
     ) -> tuple[str, ...]:
         """Extract only the opaque information IDs named by this policy."""
 
+        if self.source_governance_contract_version != 2:
+            raise ValueError(
+                "legacy attention source policy lacks declared information lineage"
+            )
         values: list[str] = []
         for field_name in self.information_id_payload_fields:
             raw = payload.get(field_name)
@@ -523,49 +541,61 @@ class AttentionSourcePolicySnapshot:
         return result
 
     def to_dict(self) -> JSONObject:
-        return {
+        payload: JSONObject = {
             "policy_id": self.policy_id,
             "version": self.version,
             "feature_schema_id": self.feature_schema_id,
             "source_event_types": list(self.source_event_types),
             "scope": self.scope,
-            "information_id_payload_fields": list(
-                self.information_id_payload_fields
-            ),
             "source_prefixes": list(self.source_prefixes),
             "subject_prefixes": list(self.subject_prefixes),
             "required_payload_fields": list(self.required_payload_fields),
             "recorded_at": self.recorded_at.isoformat(),
         }
+        if self.source_governance_contract_version == 2:
+            payload["information_id_payload_fields"] = list(
+                self.information_id_payload_fields
+            )
+            payload[SOURCE_GOVERNANCE_CONTRACT_VERSION_KEY] = 2
+        return payload
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> AttentionSourcePolicySnapshot:
+        contract_version = int(
+            cast(int, data.get(SOURCE_GOVERNANCE_CONTRACT_VERSION_KEY, 1))
+        )
         value = cls(
             policy_id=str(data["policy_id"]),
             version=str(data["version"]),
             feature_schema_id=str(data["feature_schema_id"]),
             source_event_types=_strings(data, "source_event_types"),
             scope=str(data["scope"]),
-            information_id_payload_fields=_strings(
-                data, "information_id_payload_fields"
+            information_id_payload_fields=(
+                _strings(data, "information_id_payload_fields")
+                if contract_version == 2
+                else ()
             ),
+            source_governance_contract_version=contract_version,
             source_prefixes=_strings(data, "source_prefixes"),
             subject_prefixes=_strings(data, "subject_prefixes"),
             required_payload_fields=_strings(data, "required_payload_fields"),
             recorded_at=_datetime(data, "recorded_at"),
         )
-        expected = cls.create(
-            version=value.version,
-            feature_schema_id=value.feature_schema_id,
-            source_event_types=value.source_event_types,
-            scope=value.scope,
-            information_id_payload_fields=value.information_id_payload_fields,
-            source_prefixes=value.source_prefixes,
-            subject_prefixes=value.subject_prefixes,
-            required_payload_fields=value.required_payload_fields,
-            recorded_at=value.recorded_at,
-        )
-        if value != expected:
+        identity: JSONObject = {
+            "version": value.version,
+            "feature_schema_id": value.feature_schema_id,
+            "source_event_types": list(value.source_event_types),
+            "scope": value.scope,
+            "source_prefixes": list(value.source_prefixes),
+            "subject_prefixes": list(value.subject_prefixes),
+            "required_payload_fields": list(value.required_payload_fields),
+            "recorded_at": value.recorded_at.isoformat(),
+        }
+        if contract_version == 2:
+            identity["information_id_payload_fields"] = list(
+                value.information_id_payload_fields
+            )
+        if value.policy_id != _content_id("attention-source-policy", identity):
             raise ValueError("attention source policy id does not match immutable content")
         return value
 
@@ -577,6 +607,7 @@ class AttentionSourcePolicySnapshot:
             subject=self.policy_id,
             timestamp=self.recorded_at,
             payload=self.to_dict(),
+            schema_version=self.source_governance_contract_version,
         )
 
     @classmethod
@@ -752,6 +783,7 @@ class AttentionDispositionRecord:
     information_policy_ids: tuple[str, ...]
     source_information_access_decision_ids: tuple[str, ...]
     derived_information_access_decision_ids: tuple[str, ...]
+    source_governance_contract_version: int
     admitted_predecessor_head: int
 
     @classmethod
@@ -768,6 +800,7 @@ class AttentionDispositionRecord:
         source_information_access_decision_ids: tuple[str, ...],
         derived_information_access_decision_ids: tuple[str, ...],
         admitted_predecessor_head: int,
+        source_governance_contract_version: int = 2,
     ) -> AttentionDispositionRecord:
         identity: JSONObject = {
             "source_event_id": source_event_id,
@@ -789,6 +822,7 @@ class AttentionDispositionRecord:
             derived_information_access_decision_ids=tuple(
                 sorted(set(derived_information_access_decision_ids))
             ),
+            source_governance_contract_version=source_governance_contract_version,
             admitted_predecessor_head=admitted_predecessor_head,
         )
 
@@ -812,11 +846,18 @@ class AttentionDispositionRecord:
             self.derived_information_id, "attention derived information id"
         )
         _unique_text(self.information_policy_ids, "attention information policy ids", required=True)
+        if self.source_governance_contract_version not in {1, 2}:
+            raise ValueError("unsupported attention source-governance contract version")
         _unique_text(
             self.source_information_access_decision_ids,
             "attention source access decision ids",
-            required=True,
+            required=self.source_governance_contract_version == 2,
         )
+        if (
+            self.source_governance_contract_version == 1
+            and self.source_information_access_decision_ids
+        ):
+            raise ValueError("legacy attention disposition cannot claim source access evidence")
         _unique_text(
             self.derived_information_access_decision_ids,
             "attention derived access decision ids",
@@ -830,7 +871,7 @@ class AttentionDispositionRecord:
             validate_opaque_governance_id(value, "attention governance reference")
 
     def to_dict(self) -> JSONObject:
-        return {
+        payload: JSONObject = {
             "disposition_id": self.disposition_id,
             "source_event_id": self.source_event_id,
             "source_event_sequence": self.source_event_sequence,
@@ -839,17 +880,27 @@ class AttentionDispositionRecord:
             "decision": self.decision.to_dict(),
             "derived_information_id": self.derived_information_id,
             "information_policy_ids": list(self.information_policy_ids),
-            "source_information_access_decision_ids": list(
-                self.source_information_access_decision_ids
-            ),
-            "derived_information_access_decision_ids": list(
-                self.derived_information_access_decision_ids
-            ),
             "admitted_predecessor_head": self.admitted_predecessor_head,
         }
+        if self.source_governance_contract_version == 1:
+            payload["information_access_decision_ids"] = list(
+                self.derived_information_access_decision_ids
+            )
+        else:
+            payload["source_information_access_decision_ids"] = list(
+                self.source_information_access_decision_ids
+            )
+            payload["derived_information_access_decision_ids"] = list(
+                self.derived_information_access_decision_ids
+            )
+            payload[SOURCE_GOVERNANCE_CONTRACT_VERSION_KEY] = 2
+        return payload
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> AttentionDispositionRecord:
+        contract_version = int(
+            cast(int, data.get(SOURCE_GOVERNANCE_CONTRACT_VERSION_KEY, 1))
+        )
         value = cls(
             disposition_id=str(data["disposition_id"]),
             source_event_id=str(data["source_event_id"]),
@@ -861,12 +912,20 @@ class AttentionDispositionRecord:
             ),
             derived_information_id=str(data["derived_information_id"]),
             information_policy_ids=_strings(data, "information_policy_ids"),
-            source_information_access_decision_ids=_strings(
-                data, "source_information_access_decision_ids"
+            source_information_access_decision_ids=(
+                _strings(data, "source_information_access_decision_ids")
+                if contract_version == 2
+                else ()
             ),
-            derived_information_access_decision_ids=_strings(
-                data, "derived_information_access_decision_ids"
+            derived_information_access_decision_ids=(
+                _strings(data, "derived_information_access_decision_ids")
+                if contract_version == 2
+                else (
+                    _strings(data, "derived_information_access_decision_ids")
+                    or _strings(data, "information_access_decision_ids")
+                )
             ),
+            source_governance_contract_version=contract_version,
             admitted_predecessor_head=int(cast(int, data["admitted_predecessor_head"])),
         )
         expected = cls.create(
@@ -884,6 +943,9 @@ class AttentionDispositionRecord:
                 value.derived_information_access_decision_ids
             ),
             admitted_predecessor_head=value.admitted_predecessor_head,
+            source_governance_contract_version=(
+                value.source_governance_contract_version
+            ),
         )
         if value != expected:
             raise ValueError("attention disposition id does not match its opportunity")
@@ -898,6 +960,7 @@ class AttentionDispositionRecord:
             timestamp=self.decision.decided_at,
             payload=self.to_dict(),
             causation_id=self.source_event_id,
+            schema_version=self.source_governance_contract_version,
         )
 
     @classmethod

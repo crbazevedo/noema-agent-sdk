@@ -172,6 +172,13 @@ returned feature snapshot, information lineage, and causal cut to match that
 prepared view exactly; replay separately verifies complete source-access and
 derived-artifact access coverage.
 
+Schema-v1 attention source policies and dispositions predate this source-
+governance contract. Deterministic upcasters preserve their original content
+identities and permit historical replay, but do not invent source lineage or
+access evidence. Those records remain feature/corpus-incomplete and cannot be
+prepared for a provider or admitted as learning-grade evidence; only schema-v2
+contracts can qualify.
+
 Telemetry mechanics are complete. HabitForge data readiness is not: the
 training and temporal-validation cuts must still contain policy-permitted,
 feature-complete real exposures, observed positives, counterexamples, and

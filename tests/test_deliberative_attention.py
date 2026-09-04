@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import unittest
 from dataclasses import replace
@@ -11,6 +12,7 @@ from noema import (
     AttentionCostSnapshot,
     AttentionDisposition,
     AttentionDispositionDecision,
+    AttentionDispositionRecord,
     AttentionExposureProjection,
     AttentionFeatureDefinition,
     AttentionFeatureSchemaSnapshot,
@@ -553,6 +555,132 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
                 telemetry_context=self.context,
             )
         self.assertEqual(tuple(self.provider.calls), calls_before)
+
+    async def test_literal_v1_history_replays_but_never_qualifies_or_prepares(
+        self,
+    ) -> None:
+        source = await self._opportunity(27, disposition=AttentionDisposition.REMEMBER)
+        record = (await self._worker().process_available())[0]
+        history = await self.kernel.history()
+
+        legacy_policy_identity = {
+            "version": self.source_policy.version,
+            "feature_schema_id": self.schema.schema_id,
+            "source_event_types": list(self.source_policy.source_event_types),
+            "scope": self.source_policy.scope,
+            "source_prefixes": list(self.source_policy.source_prefixes),
+            "subject_prefixes": list(self.source_policy.subject_prefixes),
+            "required_payload_fields": list(self.source_policy.required_payload_fields),
+            "recorded_at": self.source_policy.recorded_at.isoformat(),
+        }
+
+        def content_id(prefix: str, payload: object) -> str:
+            encoded = json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode()
+            return f"{prefix}:{hashlib.sha256(encoded).hexdigest()[:32]}"
+
+        legacy_policy_id = content_id(
+            "attention-source-policy", legacy_policy_identity
+        )
+        legacy_policy_payload = {
+            "policy_id": legacy_policy_id,
+            **legacy_policy_identity,
+        }
+        legacy_policy_event = replace(
+            next(
+                event
+                for event in history
+                if event.id
+                == f"attention-source-policy-recorded:{self.source_policy.policy_id}"
+            ),
+            id=f"attention-source-policy-recorded:{legacy_policy_id}",
+            subject=legacy_policy_id,
+            payload=legacy_policy_payload,
+            schema_version=1,
+        )
+        legacy_disposition_id = content_id(
+            "attention-disposition",
+            {
+                "source_event_id": source.id,
+                "source_policy_id": legacy_policy_id,
+                "feature_schema_id": self.schema.schema_id,
+            },
+        )
+        legacy_disposition_payload = record.to_dict()
+        legacy_disposition_payload["disposition_id"] = legacy_disposition_id
+        legacy_disposition_payload["source_policy_id"] = legacy_policy_id
+        legacy_decision = dict(legacy_disposition_payload["decision"])  # type: ignore[arg-type]
+        legacy_features = dict(legacy_decision["features"])  # type: ignore[arg-type]
+        legacy_features["deep_work"] = not bool(legacy_features["deep_work"])
+        legacy_decision["features"] = legacy_features
+        legacy_disposition_payload["decision"] = legacy_decision
+        legacy_disposition_payload["information_access_decision_ids"] = (
+            legacy_disposition_payload.pop(
+                "derived_information_access_decision_ids"
+            )
+        )
+        legacy_disposition_payload.pop("source_information_access_decision_ids")
+        legacy_disposition_payload.pop("source_governance_contract_version")
+        legacy_disposition_event = replace(
+            next(
+                event
+                for event in history
+                if event.id
+                == f"attention-disposition-recorded:{record.disposition_id}"
+            ),
+            id=f"attention-disposition-recorded:{legacy_disposition_id}",
+            subject=legacy_disposition_id,
+            payload=legacy_disposition_payload,
+            schema_version=1,
+        )
+        legacy_history = [
+            (
+                legacy_policy_event
+                if event.id
+                == f"attention-source-policy-recorded:{self.source_policy.policy_id}"
+                else legacy_disposition_event
+                if event.id == f"attention-disposition-recorded:{record.disposition_id}"
+                else event
+            )
+            for event in history
+        ]
+        normalized_policy_event = self.kernel.schemas.normalize(legacy_policy_event)
+        normalized_disposition_event = self.kernel.schemas.normalize(
+            legacy_disposition_event
+        )
+        legacy_policy = AttentionSourcePolicySnapshot.from_event(
+            normalized_policy_event
+        )
+        legacy_record = AttentionDispositionRecord.from_event(
+            normalized_disposition_event
+        )
+        self.assertEqual(legacy_policy.policy_id, legacy_policy_id)
+        self.assertEqual(legacy_policy.to_dict(), legacy_policy_payload)
+        self.assertEqual(legacy_record.disposition_id, legacy_disposition_id)
+        self.assertEqual(legacy_record.to_dict(), legacy_disposition_payload)
+
+        replayed = AttentionExposureProjection()
+        replayed.rebuild(self.kernel.schemas.normalize(event) for event in legacy_history)
+        audit = replayed.audit(
+            source_policy_id=legacy_policy_id,
+            feature_schema_id=self.schema.schema_id,
+        )
+        self.assertEqual(audit.feature_complete_ids, ())
+        self.assertEqual(audit.feature_incomplete_ids, (legacy_disposition_id,))
+
+        await self.kernel.emit(legacy_policy_event)
+        later = await self._opportunity(28, disposition=AttentionDisposition.DEFER)
+        with self.assertRaisesRegex(ValueError, "not safe for provider preparation"):
+            await self.recorder.prepare_opportunity(
+                source_event_id=later.id,
+                source_policy_id=legacy_policy_id,
+                telemetry_context=self.context,
+            )
 
     async def test_provider_failure_and_post_append_crash_recover_exactly_once(self) -> None:
         source = await self._opportunity(30, disposition=AttentionDisposition.DEFER)

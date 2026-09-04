@@ -63,7 +63,9 @@ source extraction and feature computation remain application-local.
 opaque governed-information ID. Before invoking the disposition provider, the
 worker shall resolve those canonical lineages and record allowed source
 `TELEMETRY` access. Missing, denied, or undeclared lineage shall fail before the
-provider call.
+provider call. The Companion shall register schema-v2 source-governance
+contracts; replay-compatible schema-v1 records are historical evidence only
+and shall not enter the learning corpus.
 
 ## Actual disposition
 
