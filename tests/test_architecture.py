@@ -635,3 +635,61 @@ class ArchitectureFitnessTests(unittest.TestCase):
                 ):
                     violations.append(f"{path.relative_to(source_root)} calls {node.func.attr}")
         self.assertEqual(violations, [])
+
+    def test_deliberative_attention_is_observation_not_agency_or_learning(self) -> None:
+        source_root = Path(__file__).parents[1] / "src" / "noema"
+        attention_root = source_root / "deliberative_attention"
+        forbidden_modules = {"adapters", "authority", "capabilities", "models", "work"}
+        forbidden_names = {
+            "ActionIntent",
+            "Capability",
+            "Commitment",
+            "Goal",
+            "HabitCandidate",
+            "HabitEpisode",
+            "ModelProvider",
+            "RuleRegistry",
+            "WorkOrder",
+        }
+        forbidden_calls = {
+            "authorize",
+            "dispatch",
+            "execute",
+            "invoke",
+            "mine",
+            "register_rule",
+        }
+        violations: list[str] = []
+        for path in attention_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.module:
+                    root = node.module.split(".")[0]
+                    if node.level >= 2 and root in forbidden_modules:
+                        violations.append(f"{path.relative_to(source_root)} imports {node.module}")
+                    if "adapters" in node.module.split("."):
+                        violations.append(f"{path.relative_to(source_root)} imports adapters")
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        parts = alias.name.split(".")
+                        if "adapters" in parts or (
+                            len(parts) >= 2
+                            and parts[0] == "noema"
+                            and parts[1] in forbidden_modules
+                        ):
+                            violations.append(
+                                f"{path.relative_to(source_root)} imports {alias.name}"
+                            )
+                if isinstance(node, ast.Name) and node.id in forbidden_names:
+                    violations.append(
+                        f"{path.relative_to(source_root)} references {node.id}"
+                    )
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr in forbidden_calls
+                ):
+                    violations.append(
+                        f"{path.relative_to(source_root)} calls {node.func.attr}"
+                    )
+        self.assertEqual(violations, [])

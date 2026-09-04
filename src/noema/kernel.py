@@ -34,11 +34,15 @@ class NoemaKernel:
             schemas = EventSchemaRegistry()
             # Imported lazily to keep the event primitive independent while
             # making legacy strategic migration the default runtime behavior.
+            from .deliberative_attention.schemas import (
+                register_deliberative_attention_event_schemas,
+            )
             from .information.schemas import register_information_event_schemas
             from .intent.schemas import register_intent_event_schemas
 
             register_intent_event_schemas(schemas)
             register_information_event_schemas(schemas)
+            register_deliberative_attention_event_schemas(schemas)
         self.schemas = schemas
         self.tracer = tracer or NullTracer()
         self.distributed = distributed

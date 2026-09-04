@@ -3,14 +3,27 @@ from __future__ import annotations
 import asyncio
 import os
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from noema import (
+    DISPOSITION_RECORDED_EVENT,
+    AttentionAuthorityCeiling,
+    AttentionDisposition,
+    AttentionDispositionDecision,
+    AttentionExposureProjection,
+    AttentionFeatureDefinition,
+    AttentionFeatureSchemaSnapshot,
+    AttentionFeatureType,
+    AttentionSemanticConflictError,
+    AttentionSourcePolicySnapshot,
+    AttentionTelemetryContext,
     Classification,
     ConcurrentAppendError,
+    DeliberativeAttentionRecorder,
     DisclosureForm,
     Event,
+    FeatureMissingness,
     GovernedInformationRef,
     HmacOpaqueInformationIdDeriver,
     InboxDisposition,
@@ -198,3 +211,248 @@ class PostgresConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             receipt.record,
         )
         await kernel.stop()
+
+    async def test_attention_admission_races_and_replay_survive_bigserial_gap(self) -> None:
+        unique = str(uuid4())
+        recorded_at = datetime.now(UTC)
+        derivation_key = b"postgres-attention-test-key-00001"
+        deriver = HmacOpaqueInformationIdDeriver(derivation_key)
+        first_kernel = NoemaKernel(store=self.first)
+        await first_kernel.start()
+        information_ref = GovernedInformationRef.create(
+            namespace="postgres-attention",
+            stable_key=unique,
+            deriver=deriver,
+        )
+        information_policy = InformationPolicy.create(
+            version=2,
+            origin_domains=(f"postgres-attention-{unique}",),
+            classification=Classification.CONFIDENTIAL,
+            allowed_purposes=("attention-telemetry",),
+            allowed_recipients=("companion",),
+            allowed_trust_domains=("local",),
+            allowed_localities=("local",),
+            allowed_providers=(),
+            cross_agent_sharing=False,
+            retention=RetentionPolicy(),
+            disclosure_forms=(DisclosureForm.REDACTED,),
+            declassification_authorities=(),
+            recorded_at=recorded_at,
+            allowed_secondary_uses=(InformationOperation.LEARN,),
+        )
+        lineage = InformationLineage.create(
+            information_id=information_ref.information_id,
+            source_information_ids=(),
+            transformation=LineageTransformation.SOURCE,
+            recorded_at=recorded_at,
+        )
+        binding = PolicyBinding.create(
+            information_id=information_ref.information_id,
+            lineage_id=lineage.lineage_id,
+            policy_ids=(information_policy.policy_id,),
+            bound_at=recorded_at,
+        )
+        await first_kernel.emit_many(
+            (
+                information_policy.to_event(source="test:postgres-attention"),
+                lineage.to_event(source="test:postgres-attention"),
+                binding.to_event(source="test:postgres-attention"),
+            )
+        )
+        schema = AttentionFeatureSchemaSnapshot.create(
+            version=f"postgres-v1-{unique}",
+            features=(
+                AttentionFeatureDefinition(
+                    name="deep_work",
+                    value_type=AttentionFeatureType.BOOLEAN,
+                    required=True,
+                    policy_safe=True,
+                    missingness=FeatureMissingness.REQUIRED_EXPOSURE_INCOMPLETE,
+                ),
+            ),
+            recorded_at=recorded_at + timedelta(seconds=1),
+        )
+        source_type = f"test.postgres.attention.{unique}"
+        source_policy = AttentionSourcePolicySnapshot.create(
+            version=f"postgres-v1-{unique}",
+            feature_schema_id=schema.schema_id,
+            source_event_types=(source_type,),
+            scope=f"postgres-{unique}",
+            recorded_at=recorded_at + timedelta(seconds=2),
+        )
+        base_recorder = DeliberativeAttentionRecorder(
+            first_kernel,
+            derived_information_id_deriver=deriver,
+            source="test:postgres-attention",
+        )
+        await base_recorder.register_contracts(
+            feature_schema=schema,
+            source_policy=source_policy,
+        )
+        await first_kernel.emit(
+            Event(
+                id=f"postgres-attention-intent-{unique}",
+                type="test.postgres.current_intent",
+                source="test:postgres-attention",
+                timestamp=recorded_at + timedelta(seconds=3),
+            )
+        )
+        context = AttentionTelemetryContext(
+            principal=PrincipalSnapshot.create(
+                principal_id="companion",
+                roles=(),
+                groups=(),
+                trust_domains=("local",),
+                captured_at=recorded_at,
+            ),
+            actor_id="agent:companion",
+            purpose="attention-telemetry",
+            source_trust_domain="local",
+            locality="local",
+        )
+
+        async def source_event(index: int) -> Event:
+            return await first_kernel.emit(
+                Event(
+                    id=f"postgres-attention-source-{unique}-{index}",
+                    type=source_type,
+                    source="test:postgres-attention",
+                    timestamp=recorded_at + timedelta(minutes=index + 1),
+                )
+            )
+
+        def decision(
+            event: Event, disposition: AttentionDisposition
+        ) -> AttentionDispositionDecision:
+            assert event.sequence is not None
+            return AttentionDispositionDecision(
+                disposition=disposition,
+                features={"deep_work": True},
+                situation_causal_cursor=event.sequence,
+                decision_mechanism_id="postgres-fixture-provider",
+                decision_mechanism_version="1",
+                decision_configuration_ref=f"fixture:{unique}",
+                decision_refs=(f"postgres-attention-intent-{unique}",),
+                governing_intent_refs=(f"postgres-attention-intent-{unique}",),
+                authority_ceiling=AttentionAuthorityCeiling.INTERNAL_ATTENTION_ONLY,
+                governed_information_ids=(information_ref.information_id,),
+                valid_at=event.timestamp,
+                known_at=event.timestamp,
+                decided_at=event.timestamp,
+            )
+
+        gap_source = await source_event(0)
+
+        class _GapRecorder(DeliberativeAttentionRecorder):
+            injected = False
+
+            async def _append_exact(
+                self,
+                event: Event,
+                projection: AttentionExposureProjection,
+            ) -> Event:
+                if event.type == DISPOSITION_RECORDED_EVENT and not self.injected:
+                    self.injected = True
+                    gap_seed = Event(
+                        f"test.postgres.attention-gap.{unique}",
+                        "test:postgres-attention-gap",
+                        timestamp=recorded_at,
+                    )
+                    await self.kernel.emit(gap_seed)
+                    await self.second_store.append(gap_seed)
+                return await super()._append_exact(event, projection)
+
+            def __init__(self, second_store: PostgresEventStore) -> None:
+                super().__init__(
+                    first_kernel,
+                    derived_information_id_deriver=deriver,
+                    source="test:postgres-attention-gap",
+                )
+                self.second_store = second_store
+
+        gap_recorder = _GapRecorder(self.second)
+        gap_record = await gap_recorder.record_disposition(
+            source_event_id=gap_source.id,
+            source_policy_id=source_policy.policy_id,
+            decision=decision(gap_source, AttentionDisposition.REMEMBER),
+            telemetry_context=context,
+        )
+        disposition_event = next(
+            event
+            for event in await first_kernel.history()
+            if event.id == f"attention-disposition-recorded:{gap_record.disposition_id}"
+        )
+        assert disposition_event.sequence is not None
+        self.assertGreater(
+            disposition_event.sequence,
+            gap_record.admitted_predecessor_head + 1,
+        )
+        replayed = AttentionExposureProjection()
+        replayed.rebuild(
+            first_kernel.schemas.normalize(event) for event in await first_kernel.history()
+        )
+        self.assertEqual(replayed.disposition(gap_record.disposition_id), gap_record)
+
+        second_kernel = NoemaKernel(store=self.second)
+        await second_kernel.start()
+        first_recorder = DeliberativeAttentionRecorder(
+            first_kernel,
+            derived_information_id_deriver=deriver,
+            source="test:postgres-attention-distributed",
+        )
+        second_recorder = DeliberativeAttentionRecorder(
+            second_kernel,
+            derived_information_id_deriver=deriver,
+            source="test:postgres-attention-distributed",
+        )
+        equal_source = await source_event(1)
+        equal_decision = decision(equal_source, AttentionDisposition.WAKE)
+        equal = await asyncio.gather(
+            first_recorder.record_disposition(
+                source_event_id=equal_source.id,
+                source_policy_id=source_policy.policy_id,
+                decision=equal_decision,
+                telemetry_context=context,
+            ),
+            second_recorder.record_disposition(
+                source_event_id=equal_source.id,
+                source_policy_id=source_policy.policy_id,
+                decision=equal_decision,
+                telemetry_context=context,
+            ),
+        )
+        self.assertEqual(equal[0], equal[1])
+
+        conflict_source = await source_event(2)
+        conflict = await asyncio.gather(
+            first_recorder.record_disposition(
+                source_event_id=conflict_source.id,
+                source_policy_id=source_policy.policy_id,
+                decision=decision(conflict_source, AttentionDisposition.DEFER),
+                telemetry_context=context,
+            ),
+            second_recorder.record_disposition(
+                source_event_id=conflict_source.id,
+                source_policy_id=source_policy.policy_id,
+                decision=decision(conflict_source, AttentionDisposition.SUPPRESS),
+                telemetry_context=context,
+            ),
+            return_exceptions=True,
+        )
+        self.assertEqual(sum(not isinstance(value, BaseException) for value in conflict), 1)
+        self.assertEqual(
+            sum(isinstance(value, AttentionSemanticConflictError) for value in conflict),
+            1,
+        )
+        final = AttentionExposureProjection()
+        final.rebuild(
+            first_kernel.schemas.normalize(event) for event in await first_kernel.history()
+        )
+        matching = tuple(
+            value
+            for value in final.dispositions
+            if value.source_event_id == conflict_source.id
+        )
+        self.assertEqual(len(matching), 1)
+        await first_kernel.stop()
+        await second_kernel.stop()
