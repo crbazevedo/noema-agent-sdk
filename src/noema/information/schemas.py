@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 
 from ..events import Event, EventSchemaRegistry
 from .models import (
@@ -27,7 +28,6 @@ from .models import (
 )
 
 _VALIDATORS: dict[str, Callable[[Event], object]] = {
-    POLICY_RECORDED_EVENT: InformationPolicy.from_event,
     LINEAGE_RECORDED_EVENT: InformationLineage.from_event,
     POLICY_BOUND_EVENT: PolicyBinding.from_event,
     INFORMATION_QUARANTINED_EVENT: QuarantinedInformationRef.from_event,
@@ -40,11 +40,23 @@ _VALIDATORS: dict[str, Callable[[Event], object]] = {
 
 
 def _validate(event: Event) -> None:
+    if event.type == POLICY_RECORDED_EVENT:
+        InformationPolicy.from_event(event)
+        return
     _VALIDATORS[event.type](event)
+
+
+def _upcast_policy_v1(event: Event) -> Event:
+    payload = dict(event.payload)
+    payload["allowed_secondary_uses"] = []
+    payload["secondary_use_semantics_version"] = 1
+    return replace(event, payload=payload, schema_version=2)
 
 
 def register_information_event_schemas(registry: EventSchemaRegistry) -> None:
     """Make safe construction and immutable identity runtime admission rules."""
 
+    registry.register(POLICY_RECORDED_EVENT, 1, upcast_to_next=_upcast_policy_v1)
+    registry.register(POLICY_RECORDED_EVENT, 2, validator=_validate)
     for event_type in _VALIDATORS:
         registry.register(event_type, 1, validator=_validate)

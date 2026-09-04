@@ -46,6 +46,8 @@ _INTERNAL_OPERATIONS = (
     InformationOperation.TELEMETRY,
     InformationOperation.EXTERNAL_CONNECTOR,
     InformationOperation.CROSS_AGENT_SHARE,
+    InformationOperation.LEARN,
+    InformationOperation.EVALUATE,
 )
 _CONTENT_OPERATIONS = _INTERNAL_OPERATIONS
 _PURPOSE_OPERATIONS = (
@@ -68,6 +70,10 @@ _SHARING_OPERATIONS = (
 _PRINCIPAL_DESTINATION_OPERATIONS = (
     InformationOperation.WORK_ASSIGN,
     InformationOperation.CROSS_AGENT_SHARE,
+)
+_SECONDARY_USE_OPERATIONS = (
+    InformationOperation.LEARN,
+    InformationOperation.EVALUATE,
 )
 _ALL_RESTRICTED_OPERATIONS = tuple(
     operation
@@ -164,6 +170,17 @@ def compose_policies(
     declassification_authorities = _intersection(
         value.declassification_authorities for value in values
     )
+    allowed_secondary_uses = tuple(
+        sorted(
+            set(values[0].allowed_secondary_uses).intersection(
+                *(set(value.allowed_secondary_uses) for value in values[1:])
+            ),
+            key=lambda value: value.value,
+        )
+    )
+    secondary_use_semantics_version = (
+        1 if all(value.secondary_use_semantics_version == 1 for value in values) else 2
+    )
 
     retain_until_values = tuple(
         value.retention.retain_until for value in values if value.retention.retain_until is not None
@@ -208,6 +225,11 @@ def compose_policies(
             PolicyConflictKind.NO_DECLASSIFICATION_AUTHORITY,
             (InformationOperation.DECLASSIFY,),
         ),
+        (
+            not allowed_secondary_uses,
+            PolicyConflictKind.EMPTY_SECONDARY_USES,
+            _SECONDARY_USE_OPERATIONS,
+        ),
     ):
         if condition:
             conflicts.append(_conflict(kind, operations))
@@ -244,6 +266,8 @@ def compose_policies(
         retention=retention,
         disclosure_forms=disclosure_forms,
         declassification_authorities=declassification_authorities,
+        allowed_secondary_uses=allowed_secondary_uses,
+        secondary_use_semantics_version=secondary_use_semantics_version,
         conflicts=tuple(conflicts),
     )
 
@@ -266,6 +290,8 @@ def _failed_composition(
         retention=RetentionPolicy(),
         disclosure_forms=(),
         declassification_authorities=(),
+        allowed_secondary_uses=(),
+        secondary_use_semantics_version=1,
         conflicts=conflicts,
     )
 
@@ -551,6 +577,11 @@ class InformationGovernanceEngine:
         if operation in _PURPOSE_OPERATIONS:
             if context.purpose not in composition.allowed_purposes:
                 reasons.add(DecisionReason.PURPOSE_NOT_PERMITTED)
+        if (
+            operation in _SECONDARY_USE_OPERATIONS
+            and operation not in composition.allowed_secondary_uses
+        ):
+            reasons.add(DecisionReason.SECONDARY_USE_NOT_PERMITTED)
         if operation in _LOCALITY_OPERATIONS:
             if context.locality not in composition.allowed_localities:
                 reasons.add(DecisionReason.LOCALITY_NOT_PERMITTED)

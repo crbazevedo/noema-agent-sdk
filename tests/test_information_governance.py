@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from dataclasses import replace
@@ -26,6 +27,7 @@ from noema import (
     DurableWorkCoordinator,
     EpistemicType,
     Event,
+    EventSchemaRegistry,
     FakePlanner,
     GovernedContextAssembler,
     GovernedContextItem,
@@ -66,6 +68,7 @@ from noema import (
     WorkNodeKind,
     WorkOrder,
     opaque_information_id,
+    register_information_event_schemas,
     validate_governance_event_envelope,
 )
 
@@ -103,6 +106,7 @@ def _policy(
     forms: tuple[DisclosureForm, ...] = (DisclosureForm.REDACTED,),
     authorities: tuple[str, ...] = ("legal-review",),
     version: int = 1,
+    secondary_uses: tuple[InformationOperation, ...] = (),
 ) -> InformationPolicy:
     return InformationPolicy.create(
         version=version,
@@ -118,6 +122,7 @@ def _policy(
         disclosure_forms=forms,
         declassification_authorities=authorities,
         recorded_at=START,
+        allowed_secondary_uses=secondary_uses,
     )
 
 
@@ -409,6 +414,158 @@ class InformationPolicyKernelTests(unittest.TestCase):
         transformed = self.engine.composition_for(view.information_ref)
         self.assertEqual(transformed.classification, Classification.RESTRICTED)
         self.assertEqual(transformed.source_policy_ids, composition.source_policy_ids)
+
+    def test_secondary_uses_are_explicit_independent_and_intersected(self) -> None:
+        learn_policy = _policy(
+            recipients=("user",),
+            secondary_uses=(InformationOperation.LEARN,),
+        )
+        evaluate_policy = _policy(
+            origin_domains=("second-source",),
+            recipients=("user",),
+            secondary_uses=(InformationOperation.EVALUATE,),
+        )
+        learn_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="learn-only", deriver=TEST_ID_DERIVER
+        )
+        evaluate_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="evaluate-only", deriver=TEST_ID_DERIVER
+        )
+        combined_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="combined-secondary-use", deriver=TEST_ID_DERIVER
+        )
+        state = _CanonicalGovernance()
+        state.record_source(learn_ref, learn_policy)
+        state.record_source(evaluate_ref, evaluate_policy)
+        state.record_derived(
+            combined_ref,
+            (learn_ref, evaluate_ref),
+            (learn_policy.policy_id, evaluate_policy.policy_id),
+        )
+        engine = InformationGovernanceEngine(state.projection)
+
+        def decide(
+            information_ref: GovernedInformationRef,
+            operation: InformationOperation,
+        ) -> InformationAccessDecision:
+            return engine.decide_access(
+                InformationAccessRequest.create(
+                    information_ref=information_ref,
+                    context=engine.context_for(
+                        information_ref=information_ref,
+                        actor_id="agent:learner",
+                        principal=_principal("user"),
+                        purpose="legal-review",
+                        operation=operation,
+                        source_trust_domain="local",
+                        destination_trust_domain=None,
+                        recipient=None,
+                        decision_time=START,
+                        locality="local",
+                    ),
+                )
+            )
+
+        self.assertTrue(decide(learn_ref, InformationOperation.LEARN).allowed)
+        self.assertFalse(decide(learn_ref, InformationOperation.EVALUATE).allowed)
+        self.assertTrue(decide(evaluate_ref, InformationOperation.EVALUATE).allowed)
+        self.assertFalse(decide(evaluate_ref, InformationOperation.LEARN).allowed)
+        self.assertEqual(engine.composition_for(combined_ref).allowed_secondary_uses, ())
+        self.assertFalse(decide(combined_ref, InformationOperation.LEARN).allowed)
+        self.assertFalse(decide(combined_ref, InformationOperation.EVALUATE).allowed)
+
+    def test_legacy_policy_upcasts_to_empty_secondary_uses_without_changing_identity(self) -> None:
+        template = _policy(recipients=("user",))
+        legacy_payload = template.to_dict()
+        legacy_payload.pop("allowed_secondary_uses")
+        legacy_payload.pop("secondary_use_semantics_version")
+        legacy_identity = dict(legacy_payload)
+        legacy_identity.pop("policy_id")
+        encoded = json.dumps(
+            legacy_identity,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+        policy_id = f"ipol_{hashlib.sha256(encoded).hexdigest()[:32]}"
+        legacy_payload["policy_id"] = policy_id
+        legacy_event = Event(
+            id=f"information-policy-recorded:{policy_id}",
+            type="information.policy_recorded",
+            source="test:legacy",
+            subject=policy_id,
+            timestamp=START,
+            payload=legacy_payload,
+            schema_version=1,
+        )
+        registry = EventSchemaRegistry()
+        register_information_event_schemas(registry)
+
+        normalized = registry.normalize(legacy_event)
+        restored = InformationPolicy.from_event(normalized)
+
+        self.assertEqual(normalized.schema_version, 2)
+        self.assertEqual(restored.policy_id, policy_id)
+        self.assertEqual(restored.allowed_secondary_uses, ())
+        self.assertEqual(restored.secondary_use_semantics_version, 1)
+
+        information_ref = GovernedInformationRef.create(
+            namespace="test", stable_key="legacy-secondary-use", deriver=TEST_ID_DERIVER
+        )
+        state = _CanonicalGovernance()
+        state.apply(normalized)
+        lineage = InformationLineage.create(
+            information_id=information_ref.information_id,
+            source_information_ids=(),
+            transformation=LineageTransformation.SOURCE,
+            recorded_at=START,
+        )
+        state.apply(lineage.to_event(source="test:legacy"))
+        state.apply(
+            PolicyBinding.create(
+                information_id=information_ref.information_id,
+                lineage_id=lineage.lineage_id,
+                policy_ids=(policy_id,),
+                bound_at=START,
+            ).to_event(source="test:legacy")
+        )
+        engine = InformationGovernanceEngine(state.projection)
+
+        def allowed(operation: InformationOperation) -> bool:
+            return engine.decide_access(
+                InformationAccessRequest.create(
+                    information_ref=information_ref,
+                    context=engine.context_for(
+                        information_ref=information_ref,
+                        actor_id="agent:legacy",
+                        principal=_principal("user"),
+                        purpose="legal-review",
+                        operation=operation,
+                        source_trust_domain="local",
+                        destination_trust_domain=None,
+                        recipient=None,
+                        decision_time=START,
+                        locality="local",
+                    ),
+                )
+            ).allowed
+
+        self.assertTrue(allowed(InformationOperation.REASON))
+        self.assertFalse(allowed(InformationOperation.LEARN))
+        self.assertFalse(allowed(InformationOperation.EVALUATE))
+
+        smuggled = replace(
+            legacy_event,
+            payload={
+                **legacy_event.payload,
+                "allowed_secondary_uses": [InformationOperation.LEARN.value],
+                "secondary_use_semantics_version": 2,
+            },
+        )
+        direct = InformationPolicy.from_event(smuggled)
+        self.assertEqual(direct.allowed_secondary_uses, ())
+        self.assertEqual(direct.secondary_use_semantics_version, 1)
 
     def test_declassification_requires_authority_acceptable_to_every_source(self) -> None:
         public_policy = _policy(

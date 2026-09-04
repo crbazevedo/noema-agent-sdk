@@ -167,6 +167,8 @@ class InformationOperation(StrEnum):
     TELEMETRY = "telemetry"
     EXTERNAL_CONNECTOR = "external_connector"
     CROSS_AGENT_SHARE = "cross_agent_share"
+    LEARN = "learn"
+    EVALUATE = "evaluate"
     UNKNOWN = "unknown"
 
 
@@ -196,6 +198,7 @@ class PolicyConflictKind(StrEnum):
     EMPTY_LOCALITIES = "empty_localities"
     EMPTY_PROVIDERS = "empty_providers"
     EMPTY_DISCLOSURE_FORMS = "empty_disclosure_forms"
+    EMPTY_SECONDARY_USES = "empty_secondary_uses"
     RETENTION_WINDOW = "retention_window"
     LEGAL_HOLD_DELETION = "legal_hold_deletion"
     NO_DECLASSIFICATION_AUTHORITY = "no_declassification_authority"
@@ -215,6 +218,7 @@ class DecisionReason(StrEnum):
     PROVIDER_NOT_PERMITTED = "provider_not_permitted"
     SHARING_NOT_PERMITTED = "sharing_not_permitted"
     DISCLOSURE_FORM_NOT_PERMITTED = "disclosure_form_not_permitted"
+    SECONDARY_USE_NOT_PERMITTED = "secondary_use_not_permitted"
     RETENTION_REQUIRES_PRESERVATION = "retention_requires_preservation"
     DECLASSIFICATION_AUTHORITY_REQUIRED = "declassification_authority_required"
     CONTEXT_POLICY_MISMATCH = "context_policy_mismatch"
@@ -319,6 +323,8 @@ class InformationPolicy:
     disclosure_forms: tuple[DisclosureForm, ...]
     declassification_authorities: tuple[str, ...]
     recorded_at: datetime
+    allowed_secondary_uses: tuple[InformationOperation, ...] = ()
+    secondary_use_semantics_version: int = 2
 
     @classmethod
     def create(
@@ -337,6 +343,7 @@ class InformationPolicy:
         disclosure_forms: tuple[DisclosureForm, ...],
         declassification_authorities: tuple[str, ...],
         recorded_at: datetime,
+        allowed_secondary_uses: tuple[InformationOperation, ...] = (),
     ) -> InformationPolicy:
         normalized_origin_domains = _ordered(origin_domains)
         normalized_purposes = _ordered(allowed_purposes)
@@ -346,6 +353,9 @@ class InformationPolicy:
         normalized_providers = _ordered(allowed_providers)
         normalized_forms = tuple(sorted(set(disclosure_forms), key=lambda value: value.value))
         normalized_authorities = _ordered(declassification_authorities)
+        normalized_secondary_uses = tuple(
+            sorted(set(allowed_secondary_uses), key=lambda value: value.value)
+        )
         identity: JSONObject = {
             "version": version,
             "origin_domains": list(normalized_origin_domains),
@@ -360,6 +370,8 @@ class InformationPolicy:
             "disclosure_forms": [value.value for value in normalized_forms],
             "declassification_authorities": list(normalized_authorities),
             "recorded_at": recorded_at.isoformat(),
+            "allowed_secondary_uses": [value.value for value in normalized_secondary_uses],
+            "secondary_use_semantics_version": 2,
         }
         return cls(
             policy_id=_canonical_id("ipol", identity),
@@ -376,6 +388,8 @@ class InformationPolicy:
             disclosure_forms=normalized_forms,
             declassification_authorities=normalized_authorities,
             recorded_at=recorded_at,
+            allowed_secondary_uses=normalized_secondary_uses,
+            secondary_use_semantics_version=2,
         )
 
     def __post_init__(self) -> None:
@@ -394,6 +408,17 @@ class InformationPolicy:
             _unique(values, name)
         if len(set(self.disclosure_forms)) != len(self.disclosure_forms):
             raise ValueError("policy disclosure forms must be unique")
+        if self.secondary_use_semantics_version not in {1, 2}:
+            raise ValueError("unsupported secondary-use policy semantics")
+        if any(
+            value not in {InformationOperation.LEARN, InformationOperation.EVALUATE}
+            for value in self.allowed_secondary_uses
+        ):
+            raise ValueError("policy secondary uses may contain only learn/evaluate")
+        if len(set(self.allowed_secondary_uses)) != len(self.allowed_secondary_uses):
+            raise ValueError("policy secondary uses must be unique")
+        if self.secondary_use_semantics_version == 1 and self.allowed_secondary_uses:
+            raise ValueError("legacy policies cannot grant secondary use")
         _require_aware(self.recorded_at, "policy recorded_at")
 
     def to_dict(self) -> JSONObject:
@@ -412,10 +437,26 @@ class InformationPolicy:
             "disclosure_forms": [value.value for value in self.disclosure_forms],
             "declassification_authorities": list(self.declassification_authorities),
             "recorded_at": self.recorded_at.isoformat(),
+            "allowed_secondary_uses": [value.value for value in self.allowed_secondary_uses],
+            "secondary_use_semantics_version": self.secondary_use_semantics_version,
         }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> InformationPolicy:
+        legacy = "allowed_secondary_uses" not in data
+        secondary_uses = tuple(
+            InformationOperation(str(item))
+            for item in cast(
+                tuple[object, ...] | list[object],
+                data.get("allowed_secondary_uses", ()),
+            )
+        )
+        semantics_version = int(
+            cast(
+                int,
+                data.get("secondary_use_semantics_version", 1 if legacy else 2),
+            )
+        )
         value = cls(
             policy_id=str(data["policy_id"]),
             version=int(cast(int, data["version"])),
@@ -434,7 +475,28 @@ class InformationPolicy:
             ),
             declassification_authorities=_strings(data, "declassification_authorities"),
             recorded_at=_datetime(data, "recorded_at"),
+            allowed_secondary_uses=secondary_uses,
+            secondary_use_semantics_version=semantics_version,
         )
+        if semantics_version == 1:
+            legacy_identity: JSONObject = {
+                "version": value.version,
+                "origin_domains": list(value.origin_domains),
+                "classification": value.classification.value,
+                "allowed_purposes": list(value.allowed_purposes),
+                "allowed_recipients": list(value.allowed_recipients),
+                "allowed_trust_domains": list(value.allowed_trust_domains),
+                "allowed_localities": list(value.allowed_localities),
+                "allowed_providers": list(value.allowed_providers),
+                "cross_agent_sharing": value.cross_agent_sharing,
+                "retention": value.retention.to_dict(),
+                "disclosure_forms": [item.value for item in value.disclosure_forms],
+                "declassification_authorities": list(value.declassification_authorities),
+                "recorded_at": value.recorded_at.isoformat(),
+            }
+            if value.policy_id != _canonical_id("ipol", legacy_identity):
+                raise ValueError("legacy information policy id does not match immutable content")
+            return value
         expected = cls.create(
             version=value.version,
             origin_domains=value.origin_domains,
@@ -449,6 +511,7 @@ class InformationPolicy:
             disclosure_forms=value.disclosure_forms,
             declassification_authorities=value.declassification_authorities,
             recorded_at=value.recorded_at,
+            allowed_secondary_uses=value.allowed_secondary_uses,
         )
         if value != expected:
             raise ValueError("information policy id does not match immutable content")
@@ -462,13 +525,20 @@ class InformationPolicy:
             subject=self.policy_id,
             timestamp=self.recorded_at,
             payload=self.to_dict(),
+            schema_version=2,
         )
 
     @classmethod
     def from_event(cls, event: Event) -> InformationPolicy:
         if event.type != POLICY_RECORDED_EVENT:
             raise ValueError("event is not an information policy record")
-        value = cls.from_dict(event.payload)
+        payload = dict(event.payload)
+        if event.schema_version == 1:
+            # Schema-v1 history predates secondary-use grants. Never let fields
+            # smuggled into a legacy envelope authorize new operations.
+            payload.pop("allowed_secondary_uses", None)
+            payload.pop("secondary_use_semantics_version", None)
+        value = cls.from_dict(payload)
         _validate_envelope(
             event,
             event_id=f"information-policy-recorded:{value.policy_id}",
@@ -1040,6 +1110,8 @@ class PolicyComposition:
     retention: RetentionPolicy
     disclosure_forms: tuple[DisclosureForm, ...]
     declassification_authorities: tuple[str, ...]
+    allowed_secondary_uses: tuple[InformationOperation, ...]
+    secondary_use_semantics_version: int
     conflicts: tuple[PolicyConflict, ...]
 
     @classmethod
@@ -1059,6 +1131,8 @@ class PolicyComposition:
         retention: RetentionPolicy,
         disclosure_forms: tuple[DisclosureForm, ...],
         declassification_authorities: tuple[str, ...],
+        allowed_secondary_uses: tuple[InformationOperation, ...],
+        secondary_use_semantics_version: int,
         conflicts: tuple[PolicyConflict, ...],
     ) -> PolicyComposition:
         normalized_conflicts = tuple(
@@ -1071,6 +1145,9 @@ class PolicyComposition:
             )
         )
         normalized_forms = tuple(sorted(set(disclosure_forms), key=lambda value: value.value))
+        normalized_secondary_uses = tuple(
+            sorted(set(allowed_secondary_uses), key=lambda value: value.value)
+        )
         identity: JSONObject = {
             "source_policy_ids": list(_ordered(source_policy_ids)),
             "source_information_ids": list(_ordered(source_information_ids)),
@@ -1085,8 +1162,20 @@ class PolicyComposition:
             "retention": retention.to_dict(),
             "disclosure_forms": [value.value for value in normalized_forms],
             "declassification_authorities": list(_ordered(declassification_authorities)),
-            "conflicts": [value.to_dict() for value in normalized_conflicts],
         }
+        identity_conflicts = normalized_conflicts
+        if secondary_use_semantics_version == 1:
+            identity_conflicts = tuple(
+                value
+                for value in normalized_conflicts
+                if value.kind is not PolicyConflictKind.EMPTY_SECONDARY_USES
+            )
+        else:
+            identity["allowed_secondary_uses"] = [
+                value.value for value in normalized_secondary_uses
+            ]
+            identity["secondary_use_semantics_version"] = secondary_use_semantics_version
+        identity["conflicts"] = [value.to_dict() for value in identity_conflicts]
         return cls(
             composition_id=_canonical_id("composition", identity),
             source_policy_ids=_ordered(source_policy_ids),
@@ -1102,6 +1191,8 @@ class PolicyComposition:
             retention=retention,
             disclosure_forms=normalized_forms,
             declassification_authorities=_ordered(declassification_authorities),
+            allowed_secondary_uses=normalized_secondary_uses,
+            secondary_use_semantics_version=secondary_use_semantics_version,
             conflicts=normalized_conflicts,
         )
 
@@ -1126,6 +1217,12 @@ class PolicyComposition:
             _unique(values, name)
         if len(set(self.disclosure_forms)) != len(self.disclosure_forms):
             raise ValueError("composition disclosure forms must be unique")
+        if len(set(self.allowed_secondary_uses)) != len(self.allowed_secondary_uses):
+            raise ValueError("composition secondary uses must be unique")
+        if self.secondary_use_semantics_version not in {1, 2}:
+            raise ValueError("unsupported composition secondary-use semantics")
+        if self.secondary_use_semantics_version == 1 and self.allowed_secondary_uses:
+            raise ValueError("legacy compositions cannot grant secondary use")
         if len(set(self.conflicts)) != len(self.conflicts):
             raise ValueError("composition conflicts must be unique")
 
@@ -1148,6 +1245,8 @@ class PolicyComposition:
             "retention": self.retention.to_dict(),
             "disclosure_forms": [value.value for value in self.disclosure_forms],
             "declassification_authorities": list(self.declassification_authorities),
+            "allowed_secondary_uses": [value.value for value in self.allowed_secondary_uses],
+            "secondary_use_semantics_version": self.secondary_use_semantics_version,
             "conflicts": [value.to_dict() for value in self.conflicts],
         }
 
@@ -1967,6 +2066,7 @@ def _governance_event(
     subject: str,
     timestamp: datetime,
     payload: Mapping[str, JSONValue],
+    schema_version: int = 1,
 ) -> Event:
     event = Event(
         id=event_id,
@@ -1975,6 +2075,7 @@ def _governance_event(
         subject=subject,
         timestamp=timestamp,
         payload=payload,
+        schema_version=schema_version,
     )
     validate_governance_event_envelope(event)
     return event
