@@ -2,17 +2,16 @@
 
 > **Current revision:** 2026-09-04
 >
-> **Implemented through:** v0.6.2 Dormant Cognition Discovery and Evidence Qualification
-> shadow foundation, plus Information Governance
+> **Implemented through:** v0.6.3 Learning-Grade Attention Telemetry, including
+> the v0.6.2 Dormant Cognition Discovery shadow foundation and Information
+> Governance
 >
-> **Accepted learning direction:** governed Habit Learning under ADR 0012; the
-> current feature branch contains the narrow deliberative-attention telemetry
-> implementation candidate, while runtime mining remains blocked until real
-> operation supplies a qualifying corpus
+> **Accepted learning direction:** governed Habit Learning under ADR 0012;
+> deliberative-attention telemetry is implemented, while runtime mining remains
+> blocked until real operation supplies a qualifying corpus
 >
-> **Proposed developmental direction:** ADR 0013 defines the next intervention
-> boundary and awaits acceptance; no developmental-intervention runtime is
-> implemented
+> **Accepted developmental direction:** ADR 0013 defines the next intervention
+> boundary; developmental-intervention runtime remains staged
 >
 > **Remaining ADR-0009 stages:** production confidential artifacts, identity
 > attestation, and exhaustive sink/connector enforcement
@@ -270,7 +269,7 @@ policy and ownership constraints.
 This intentionally rejects “automation rate,” agent utilization, token volume,
 and task count as top-level objectives.
 
-### Proposed extension: developmental intervention
+### Accepted direction: developmental intervention
 
 Existing outcome roles and `AssistanceEnvelope` answer who owns, decides,
 executes, verifies, and how much assistance is permitted. They do not yet record
@@ -278,7 +277,7 @@ one material advisory intervention's mode, named current outcome, expected
 decision improvement, expected user-effort change, secondary long-term
 capability effect, affected parties, assumptions, tradeoffs, cost, later
 feedback, and later outcome. That is the narrow cross-cutting gap addressed by
-[proposed ADR 0013](adr/0013-durable-developmental-intervention.md).
+[accepted ADR 0013](adr/0013-durable-developmental-intervention.md).
 
 The required invariant is:
 
@@ -865,14 +864,21 @@ developmental hypotheses, opportunities for reconsideration, and candidates for
 cognitive compilation. These are loop concerns, not new scheduler classes.
 
 ```text
-detectors / typed evidence
-    -> Inquiry proposals
-    -> common scarce-cognition allocator
-    -> bounded, preemptible cognition
-    -> typed internal assessments
-    -> governed intervention candidate
-    -> silence / advise / challenge / teach / coach / prepare
+Observation
+    -> CognitiveDemand
+    -> CognitiveAllocation
+    -> Assessment
+    -> InterventionOpportunity
+    -> InterventionAllocation
+    -> silence / remember / defer / wake
 ```
+
+`CognitivePriority != InterventionPriority`. Private cognition may merit scarce
+compute without meriting user interruption. The first allocation decides what
+may be thought about; the second independently decides whether and when an
+assessment may consume user attention. Intervention mode and effect authority
+remain separate again. This flow must reuse the existing scarce-cognition
+machinery; the mixed portfolio and intervention allocator are not implemented.
 
 The proposed v0.7.x slice reuses `Signal`, `Inquiry`, `IntrinsicActivity`,
 existing cognitive-allocation traces and budgets, DREAM epochs, autonomic rules,
@@ -905,15 +911,14 @@ Agent decision/action history alone is not a valid learning source: it lacks a
 typed attention context, complete exposure denominator, current intent and
 information lineage, and correction semantics. Autonomic evaluation remains
 counterfactual, while cognitive-allocation traces describe selection of thought
-rather than correctness of its later disposition. The current feature branch
-contains the `deliberative_attention_v1` implementation candidate: it records
+rather than correctness of its later disposition. Main implements
+`deliberative_attention_v1`: it records
 recognized opportunities, explicit actual dispositions, policy-safe typed
 features, observable costs, and causally later outcome and typed feedback
 evidence. Its provider boundary receives only a schema-approved safe view after
 source information access is admitted; the provider cannot substitute its own
 features, lineage, or causal cut. It also introduces independently governed
-`LEARN` and `EVALUATE` secondary uses. This is a branch claim, not a statement
-that those mechanics are on `main`. Runtime HabitForge remains a NO-GO until
+`LEARN` and `EVALUATE` secondary uses. Runtime HabitForge remains a NO-GO until
 real operation supplies a qualifying corpus through those contracts.
 
 Once that prerequisite supplies a qualifying corpus, the first proposed slice
@@ -1164,7 +1169,7 @@ also prove:
   expected-head append, and `ConsumerCheckpoint`, including with PostgreSQL
   sequence gaps.
 
-Any implementation of proposed ADR 0013 or the private cognitive ecology must
+Any implementation of accepted ADR 0013 or the private cognitive ecology must
 add structural gates proving:
 
 - every material intervention names a current user outcome and records its
@@ -1217,9 +1222,9 @@ invariants.
 | Intent and portfolio | `GoalRevision` / `IntentAuthority` / `RoadmapRevision` / `Commitment` / coverage and health projections |
 | External work | `ExternalWorkstream` / support-demand projection |
 | Information governance (foundation implemented; remaining slices staged) | `InformationPolicy` / `PolicyComposition` / access, disclosure, and declassification decisions / governed retrieval, context, and matching ports |
-| Learning-grade attention telemetry (implementation candidate on this branch) | source/feature policies / explicit disposition provider / exposure projection / outcome and feedback links / denominator audit |
+| Learning-grade attention telemetry (implemented) | source/feature policies / explicit disposition provider / exposure projection / outcome and feedback links / denominator audit |
 | Habit Learning (accepted direction; runtime blocked on a real corpus) | projected `HabitEpisode` / `HabitEvidenceBundle` / deterministic predicate miner / fitness and collision reports / `RuleLifecycleProjection` |
-| Developmental intervention (proposed ADR 0013) | existing outcome roles and `AssistanceEnvelope`, plus the smallest future intervention/outcome/feedback seam proven necessary |
+| Developmental intervention (accepted ADR 0013; runtime staged) | existing outcome roles and `AssistanceEnvelope`, plus the smallest future intervention/outcome/feedback seam proven necessary |
 | Private cognitive ecology (proposed) | existing `Signal` / `Inquiry` / DREAM budget / common cognitive allocator / `ConsumerCheckpoint`; concern-specific detectors and typed assessment schemas |
 
 ## Non-goals of the core
@@ -1259,11 +1264,10 @@ policy.
   eventually learned allocation of scarce cognition.
 - [ADR 0012](adr/0012-governed-habit-learning-and-cognitive-compilation.md):
   accepted governed Habit Learning direction and its learning-grade telemetry
-  prerequisite; this branch contains the telemetry implementation candidate,
-  while a qualifying real corpus still blocks runtime mining;
-- [ADR 0013](adr/0013-durable-developmental-intervention.md): proposed
+  prerequisite; telemetry is implemented, while a qualifying real corpus still
+  blocks runtime mining;
+- [ADR 0013](adr/0013-durable-developmental-intervention.md): accepted
   developmental-intervention boundary for improving a named current user
-  outcome without owning user values or decision authority; awaiting
-  acceptance.
+  outcome without owning user values or decision authority; runtime staged.
 
 See the [roadmap](ROADMAP.md) for delivery order and release acceptances.

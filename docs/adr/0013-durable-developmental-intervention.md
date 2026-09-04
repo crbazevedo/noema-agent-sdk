@@ -1,7 +1,6 @@
 # ADR 0013: Durable developmental intervention
 
-- Status: Proposed — architecture decision awaiting acceptance; no runtime
-  implementation
+- Status: Accepted — architecture direction; runtime implementation staged
 - Date: 2026-09-04
 - Scope: material advisory intervention, intervention-mode permission,
   outcome and assistance provenance, later evidence, and the boundary from
@@ -45,6 +44,7 @@ observation != truth
 AdvisoryIntervention != WorkOrder != ActionIntent
 later outcome != feedback
 silence != acceptance
+CognitivePriority != InterventionPriority
 ```
 
 ## Existing substrate and demonstrated gap
@@ -285,23 +285,30 @@ Developmental cognition begins as another bounded demand on the existing
 cognitive substrate:
 
 ```text
-detector and evidence
--> Inquiry proposal
--> shared scarce-cognition allocation
--> bounded cognition in a proposal-only epoch
--> typed, evidence-bearing assessment
--> intervention candidate
--> intervention admission policy
--> silence or a separately governed advisory proposal
+Observation
+-> CognitiveDemand
+-> CognitiveAllocation
+-> Assessment
+-> InterventionOpportunity
+-> InterventionAllocation
+-> silence / remember / defer / wake
 ```
+
+`CognitivePriority != InterventionPriority`. Private cognition may deserve
+compute without deserving user interruption. `CognitiveAllocation` determines
+whether bounded thought receives scarce compute. Only a later, outcome-scoped
+`InterventionOpportunity` may compete in a separate `InterventionAllocation`
+for user attention. The resulting presentation disposition does not itself
+grant an intervention mode, delivery authority, or effect authority.
 
 Situation continuity, goal coherence, hazard anticipation, scenario
 evaluation, stakeholder impact, epistemic health, developmental stewardship,
 opportunity reconsideration, and cognitive compilation may supply detectors or
 typed assessments. They do not become bespoke schedulers. The eventual mixed
-portfolio must allocate one finite foreground/background cognitive budget and
-preserve foreground preemption, expiry, checkpoints, and deterministic
-recovery.
+portfolio must reuse the existing scarce-cognition machinery to allocate one
+finite foreground/background cognitive budget and preserve foreground
+preemption, expiry, checkpoints, and deterministic recovery. It is not
+implemented by this ADR acceptance.
 
 Private cognition has no direct work, dispatch, action, notification, or effect
 path. It records typed claims, evidence, uncertainty, counterevidence,

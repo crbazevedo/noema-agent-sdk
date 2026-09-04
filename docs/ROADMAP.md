@@ -4,11 +4,11 @@
 >
 > **Current revision:** 2026-09-04
 >
-> **Status:** `main` implements v0.1 through the deterministic v0.6.2 Dormant
-> Cognition Discovery foundation and Information Governance; ADR 0012 is an
-> accepted direction, and the current feature branch contains a v0.6.3
-> learning-grade attention-telemetry implementation candidate. A qualifying
-> real corpus does not yet exist, so runtime Habit Learning remains blocked.
+> **Status:** `main` implements v0.1 through v0.6.3 Learning-Grade Attention
+> Telemetry and Information Governance. ADRs 0012 and 0013 are accepted
+> architecture directions; Habit Learning and developmental-intervention
+> runtime remain staged. A qualifying real Companion corpus does not yet exist,
+> so runtime Habit Learning remains blocked.
 
 Noema is infrastructure for agents that maintain a coherent relationship with
 a changing world. Its releases should therefore tell a story of increasing
@@ -69,9 +69,8 @@ Status terms in this document mean:
   change;
 - **Beyond v1.0:** intentionally excluded from the stable core milestone.
 
-The v0.6.3, v0.6.4, and v0.7.x labels below express the proposed dependency
-sequence. Their exact numbering remains provisional until their respective
-architecture decisions are accepted.
+The v0.6.4 and v0.7.x labels below express the proposed dependency sequence.
+Their exact numbering remains provisional until implementation is committed.
 
 Security, observability, deterministic replay, and local operation are
 cross-cutting release gates, not a final wave.
@@ -89,8 +88,8 @@ cross-cutting release gates, not a final wave.
 | **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Deterministic shadow slice implemented |
 | **v0.6.1 — Deterministic Cognitive Reconsideration** | Historical inquiries can be revalidated under current intent or an explicit mandate and compete for scarce cognitive slack without blind resumption. | **I know what may deserve thought again.** | Deterministic shadow foundation implemented; learned allocation staged |
 | **v0.6.2 — Dormant Cognition Discovery & Evidence Qualification** | Durable history can nominate target-specific historical inquiries for governed reconsideration without manual seed assembly. | **I know which dormant thoughts deserve reconsideration.** | Deterministic shadow slice implemented |
-| **v0.6.3 — Learning-Grade Attention Telemetry** *(proposed number)* | Real attention opportunities, actual dispositions, outcomes, explicit feedback, and cost form a denominator-complete governed learning corpus. | **I can observe what deserved attention and what happened next.** | Implementation candidate on the current feature branch; real qualifying corpus pending |
-| **v0.6.4 — Developmental Intervention Foundation** *(proposed number)* | Applications can represent an intervention aimed at an immediate user outcome and/or long-term agency without taking ownership of terminal values. | **I can help improve a decision without owning it.** | Proposed in ADR 0013; not implemented |
+| **v0.6.3 — Learning-Grade Attention Telemetry** | Real attention opportunities, actual dispositions, outcomes, explicit feedback, and cost form a denominator-complete governed learning corpus. | **I can observe what deserved attention and what happened next.** | Implemented; real qualifying corpus pending |
+| **v0.6.4 — Developmental Intervention Foundation** *(proposed number)* | Applications can represent an intervention aimed at an immediate user outcome and/or long-term agency without taking ownership of terminal values. | **I can help improve a decision without owning it.** | Accepted architecture direction in ADR 0013; runtime staged |
 | **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Architecture accepted in ADR 0012; runtime NO-GO pending qualifying real corpus |
 | **v0.7.x — Private Cognitive Ecology** *(proposed number)* | Multiple bounded background loops maintain situation, hazards, scenarios, stakeholder effects, epistemic challenges, and developmental hypotheses through one scarce-cognition portfolio. | **I can keep a bounded private watch over what may matter.** | Proposed; not implemented |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
@@ -537,7 +536,7 @@ the accepted governing allocation decision. Learned allocation, broader
 historical sources, automatic subjective inference, and Habit Learning remain
 staged.
 
-## v0.6.3 — Learning-Grade Attention Telemetry *(proposed number)*
+## v0.6.3 — Learning-Grade Attention Telemetry
 
 Question: **Can actual attention behavior become a governed, denominator-
 complete source of learning evidence?**
@@ -548,8 +547,7 @@ Outcome:
 > actual disposition, with typed features and observable cost, before later
 > outcome and explicit feedback are linked causally.
 
-Status: **Implementation candidate on the current feature branch. The mechanics
-are implemented there; a qualifying real operating corpus is not.**
+Status: **Implemented. A qualifying real operating corpus does not yet exist.**
 
 ```text
 label-blind source policy + feature schema
@@ -559,7 +557,7 @@ label-blind source policy + feature schema
     → denominator audit under LEARN / EVALUATE policy
 ```
 
-The `deliberative_attention_v1` candidate keeps opportunity recognition
+The `deliberative_attention_v1` implementation keeps opportunity recognition
 independent of later labels, never infers disposition from model calls or
 actions, treats unknown outcome and absent feedback as censored, records
 unknown cost components as unknown rather than zero, and inherits Information
@@ -587,8 +585,8 @@ Outcome:
 > improve, its mode, costs, assumptions, affected parties, authority boundary,
 > and later feedback/outcome; developmental effects remain secondary evidence.
 
-Status: **Proposed in
-[ADR 0013](adr/0013-durable-developmental-intervention.md); not implemented.**
+Status: **Accepted architecture direction in
+[ADR 0013](adr/0013-durable-developmental-intervention.md); runtime staged.**
 
 The smallest contract should extend, not replace, existing outcome roles,
 `AssistanceEnvelope`, current intent, Information Governance, and evidence
@@ -625,9 +623,8 @@ canonical deliberative-attention telemetry
 ```
 
 Status: **Architecture accepted in ADR 0012; runtime HabitForge remains a NO-GO
-until actual operation supplies a qualifying, denominator-complete corpus. The
-telemetry mechanics exist only as an implementation candidate on the current
-feature branch until reviewed and merged.**
+until actual operation supplies a qualifying, denominator-complete corpus.
+The v0.6.3 telemetry mechanics are implemented.**
 
 Repository inspection found no current canonical family that combines a typed
 attention situation, a complete eligible-exposure denominator, the actual
@@ -637,7 +634,7 @@ cost. `decision.proposed` and action events are incomplete; autonomic traces are
 counterfactual; cognitive-allocation traces describe whether thought was
 selected rather than whether its eventual attention decision was correct.
 
-The v0.6.3 implementation candidate supplies one narrow
+The v0.6.3 implementation supplies one narrow
 `deliberative_attention_v1` source family that records every recognized
 attention disposition plus causally later outcome and typed feedback links.
 Explicit `LEARN` and `EVALUATE` information operations are independently
@@ -680,14 +677,20 @@ Outcome:
 Status: **Proposed; not implemented.**
 
 ```text
-detectors + typed evidence
-    → Inquiry proposals
-    → one common scarce-cognition allocator
-    → bounded cognition
-    → typed internal assessments
-    → governed intervention candidate
-    → silence / advise / challenge / teach / coach / prepare
+Observation
+    → CognitiveDemand
+    → CognitiveAllocation
+    → Assessment
+    → InterventionOpportunity
+    → InterventionAllocation
+    → silence / remember / defer / wake
 ```
+
+`CognitivePriority != InterventionPriority`. Private cognition may deserve
+compute without deserving user interruption. Cognitive allocation decides what
+may consume scarce thought; intervention allocation separately decides whether
+and when an assessment may compete for attention. The future mixed portfolio
+must reuse the existing scarce-cognition machinery and remains unimplemented.
 
 This track must reuse `Signal`, `Inquiry`, `IntrinsicActivity`, existing
 cognitive-allocation traces and budgets, DREAM epochs, autonomic rules, and
@@ -819,7 +822,7 @@ separately authorized.
 
 Arc V is cross-cutting because developmental help draws on current intent,
 outcome ownership, memory, evidence, cognition, work, and later evaluation. It
-does not sit above them as a new sovereign planner. Proposed ADR 0013 defines
+does not sit above them as a new sovereign planner. Accepted ADR 0013 defines
 the first decision point: every material intervention must identify the current
 user outcome it expects to improve, while any longer-term capability or agency
 effect remains separately observed secondary evidence.

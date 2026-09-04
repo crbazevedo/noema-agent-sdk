@@ -124,9 +124,9 @@ real restricted ingestion, and exhaustive sink/connector coverage remain
 staged under ADR 0009.
 
 [ADR 0012](docs/adr/0012-governed-habit-learning-and-cognitive-compilation.md)
-is an accepted architecture direction for governed Habit Learning. The current
-feature branch contains the implementation candidate for its prerequisite,
-`deliberative_attention_v1`: label-blind opportunity recognition, explicit
+is an accepted architecture direction for governed Habit Learning. Main
+implements its prerequisite, `deliberative_attention_v1`: label-blind
+opportunity recognition, explicit
 actual dispositions, denominator auditing, causally later outcomes and typed
 feedback, independently governed `LEARN`/`EVALUATE` reuse, replay, checkpoint
 recovery, and PostgreSQL-gap-safe admission. These mechanics are not yet a
@@ -135,9 +135,9 @@ qualifying real corpus, so runtime mining remains blocked.
 The next cross-cutting design track is **Developmental Partnership**. It will
 reuse outcome, assistance, intent, evidence, and scarce-cognition contracts so
 applications can safely advise, challenge, teach, coach, prepare, or remain
-silent. [Proposed ADR 0013](docs/adr/0013-durable-developmental-intervention.md)
-is the decision boundary for that extension; no runtime contract is claimed by
-this README.
+silent. [Accepted ADR 0013](docs/adr/0013-durable-developmental-intervention.md)
+defines the architecture boundary for that extension; its runtime remains
+staged.
 
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
@@ -540,13 +540,12 @@ current evidence, assembles v0.6.1 seeds automatically, and preserves separate
 discovery, revalidation, allocation, and surfacing stages. It remains
 deterministic, bounded, proposal-only, and effect-free.
 
-On this feature branch, proposed v0.6.3 packages learning-grade attention
-telemetry mechanics; a real governed operating corpus is still an acceptance
-dependency. Proposed v0.6.4 introduces the narrow developmental-intervention
-foundation. v0.7 Habit Learning remains a runtime NO-GO until that corpus
-exists, and proposed v0.7.x then extends the same bounded cognitive portfolio
-into a private cognitive ecology. Exact numbering remains provisional pending
-architecture acceptance. None of these releases may create a second scheduler,
+v0.6.3 implements learning-grade attention-telemetry mechanics; a real governed
+operating corpus is still required before learning runtime may begin. v0.6.4 is
+the accepted, runtime-staged developmental-intervention foundation. v0.7 Habit
+Learning remains a runtime NO-GO until real Companion evidence supplies that
+corpus, and proposed v0.7.x then extends the same bounded cognitive portfolio
+into a private cognitive ecology. None of these releases may create a second scheduler,
 a second effect path, or a durable model scratchpad: typed evidence and
 assessments enter the canonical log, while all cognitive demand competes in one
 shared scarce-cognition portfolio.
@@ -579,7 +578,8 @@ and its
 the [Information Governance Foundation](docs/INFORMATION_GOVERNANCE.md), and
 [ADR 0009](docs/adr/0009-information-governance-and-confidential-context.md),
 plus accepted [ADR 0012](docs/adr/0012-governed-habit-learning-and-cognitive-compilation.md)
-and proposed [ADR 0013](docs/adr/0013-durable-developmental-intervention.md).
+and accepted, runtime-staged
+[ADR 0013](docs/adr/0013-durable-developmental-intervention.md).
 The cross-cutting programme contracts are summarized in
 [Durable Developmental Agency](docs/DEVELOPMENTAL_AGENCY.md),
 [non-functional requirements](docs/NFRS.md), and

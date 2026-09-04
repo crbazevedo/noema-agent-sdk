@@ -88,8 +88,8 @@ principle they change.
 These principles govern the implemented v0.6.1 deterministic reconsideration
 foundation, the v0.6.2 dormant-discovery bridge, and the staged learned-
 allocation direction. Habit Learning architecture is accepted in ADR 0012. Its
-telemetry mechanics are an implementation candidate on the current feature
-branch, but runtime mining remains blocked on a qualifying real corpus.
+telemetry mechanics are implemented, but runtime mining remains blocked on a
+qualifying real corpus.
 
 | Principle | Enforced or staged consequence |
 |---|---|
@@ -139,13 +139,13 @@ Governance prerequisites are implemented claims:
 | Authority cannot compile upward | Learned policy cannot gain intent, information, effect, or capability authority from support or frequency. |
 | Novelty restores cognition | Missing, unknown, stale, contradictory, novel, out-of-scope, corrected, inhibited, or privacy-incompatible state causes abstention rather than imputation. |
 | Habit and reconsideration are complements | Compilation never deletes cognition history; correction or drift can make deliberation valuable again. |
-| Runtime waits for evidence | The attention source mechanics are an implementation candidate on the current feature branch, but HabitForge mining is a NO-GO until real operation records every eligible exposure plus causally linkable outcomes and feedback for a qualifying corpus. |
+| Runtime waits for evidence | The attention source mechanics are implemented, but HabitForge mining is a NO-GO until real operation records every eligible exposure plus causally linkable outcomes and feedback for a qualifying corpus. |
 
-## Proposed Developmental Partnership principles
+## Accepted Developmental Partnership principles
 
-[ADR 0013](adr/0013-durable-developmental-intervention.md) is proposed and
-awaiting acceptance. These are design constraints, not implemented runtime
-claims:
+[ADR 0013](adr/0013-durable-developmental-intervention.md) is accepted as an
+architecture direction. These are design constraints for staged runtime
+contracts, not claims of implementation:
 
 | Principle | Required consequence |
 |---|---|
@@ -154,6 +154,7 @@ claims:
 | Advice cannot rewrite intent | An intervention may expose assumptions, tradeoffs, hazards, or alternatives, but only existing intent authority may create or revise a governing goal. |
 | Affected parties remain visible | Material stakeholder impacts, assumptions, expected effort, reversibility, and intervention cost are inspectable rather than hidden in prose. |
 | Application voice stays outside core | Applications may render a permitted governed intervention as advice, challenge, teaching, coaching, or preparation—or decline to admit/present one—without adding SDK personas. |
+| Cognitive priority is not intervention priority | Private cognition may deserve compute without deserving user interruption; cognitive and intervention allocation remain separate decisions. |
 | Cognitive ecology shares control | Future cognitive loop classes propose evidence-bearing demand into the existing allocator and produce typed assessments; none owns a bespoke scheduler, effect path, or durable scratchpad. |
 | Development must remain falsifiable | Intervention feedback and later outcomes link to the original causal cut so effectiveness, correction, intrusion, and harm can be evaluated rather than inferred from silence. |
 

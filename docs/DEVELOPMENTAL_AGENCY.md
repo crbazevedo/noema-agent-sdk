@@ -1,7 +1,7 @@
 # Durable Developmental Agency
 
-Status: Proposed architecture direction. No developmental-intervention runtime
-is implemented or authorized by this document.
+Status: Accepted architecture direction. Developmental-intervention runtime
+remains staged and is not implemented by this document.
 
 Noema's long-range purpose is to support applications that can run durable
 work, improve decisions, and help users improve while preserving current
@@ -106,15 +106,22 @@ historical reconsideration, and cognitive compilation. They share one control
 shape:
 
 ```text
-detectors and governed evidence
--> Inquiry proposals
--> one scarce-cognition portfolio
--> bounded proposal-only cognition
--> typed assessments
--> intervention candidates
--> intervention policy
--> silence, advise, challenge, teach, coach, or prepare
+Observation
+-> CognitiveDemand
+-> CognitiveAllocation
+-> Assessment
+-> InterventionOpportunity
+-> InterventionAllocation
+-> silence / remember / defer / wake
 ```
+
+`CognitivePriority != InterventionPriority`. An observation may justify scarce
+private compute without justifying an interruption. Cognitive allocation pays
+for bounded thought; intervention allocation later decides whether and when the
+result may consume user attention. A separately admitted intervention may then
+carry a permitted advise, challenge, teach, coach, prepare, or ask mode. The
+future mixed portfolio and intervention allocator must reuse existing scarce-
+cognition machinery and are not implemented yet.
 
 Detectors identify possible cognitive demand. They do not own timers, budgets,
 workers, or effects. `Inquiry`, `IntrinsicActivity`, the background cognitive
@@ -207,10 +214,10 @@ The SDK does not define:
 - application notification or interface behavior; or
 - a second scheduler, work plane, effect plane, or memory substrate.
 
-## Proposed delivery boundary
+## Staged delivery boundary
 
-This architecture is intended for a later developmental-intervention
-foundation after review and acceptance. The first implementation should be a
+This accepted architecture is intended for a later developmental-intervention
+foundation. The first implementation should be a
 small deterministic vertical slice that proves:
 
 1. exact current outcome, intent, role, and assistance provenance;
