@@ -51,36 +51,32 @@ class _FixtureDispositionProvider:
     def __init__(self, information_id: str) -> None:
         self.information_id = information_id
         self.calls: list[str] = []
+        self.dispositions: dict[str, AttentionDisposition] = {}
+        self.safe_views: list[AttentionOpportunity] = []
         self.fail_once_for: str | None = None
 
     async def decide(
         self, opportunity: AttentionOpportunity
     ) -> AttentionDispositionDecision:
-        event = opportunity.source_event
-        self.calls.append(event.id)
-        if self.fail_once_for == event.id:
+        self.calls.append(opportunity.source_event_id)
+        self.safe_views.append(opportunity)
+        if self.fail_once_for == opportunity.source_event_id:
             self.fail_once_for = None
             raise RuntimeError("synthetic provider interruption")
-        features = {
-            name: event.payload[name]
-            for name in ("deep_work", "requires_user_decision", "urgency")
-            if name in event.payload
-        }
-        assert event.sequence is not None
         return AttentionDispositionDecision(
-            disposition=AttentionDisposition(str(event.payload["actual_disposition"])),
-            features=features,
-            situation_causal_cursor=event.sequence,
+            disposition=self.dispositions[opportunity.source_event_id],
+            features=opportunity.features,
+            situation_causal_cursor=opportunity.situation_causal_cursor,
             decision_mechanism_id="fixture-baseline-adviser",
             decision_mechanism_version="1",
             decision_configuration_ref="fixture-config:v1",
             decision_refs=("intent-current",),
             governing_intent_refs=("intent-current",),
             authority_ceiling=AttentionAuthorityCeiling.INTERNAL_ATTENTION_ONLY,
-            governed_information_ids=(self.information_id,),
-            valid_at=event.timestamp,
-            known_at=event.timestamp,
-            decided_at=event.timestamp,
+            governed_information_ids=opportunity.governed_information_ids,
+            valid_at=opportunity.source_event_timestamp,
+            known_at=opportunity.source_event_timestamp,
+            decided_at=opportunity.source_event_timestamp,
             costs=AttentionCostSnapshot(
                 model_call_count=None,
                 input_tokens=None,
@@ -174,6 +170,7 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
             source_event_types=("companion.attention_opportunity",),
             source_prefixes=("companion:",),
             required_payload_fields=("kind",),
+            information_id_payload_fields=("governed_information_id",),
             scope="synthetic-companion",
             recorded_at=START + timedelta(seconds=2),
         )
@@ -239,14 +236,16 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
             "kind": "message",
             "deep_work": index % 2 == 0,
             "requires_user_decision": index % 3 == 0,
-            "actual_disposition": disposition.value,
+            "governed_information_id": self.information_ref.information_id,
             "protected_text": PROTECTED_TEXT,
         }
         if include_urgency:
             payload["urgency"] = round((index % 10) / 10, 2)
+        event_id = f"attention-source-{index}"
+        self.provider.dispositions[event_id] = disposition
         return await self.kernel.emit(
             Event(
-                id=f"attention-source-{index}",
+                id=event_id,
                 type="companion.attention_opportunity",
                 source="companion:fixture",
                 subject=f"opportunity:{index}",
@@ -276,6 +275,22 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
 
         records = await self._worker().process_available()
         self.assertEqual(len(records), 12)
+        self.assertEqual(len(self.provider.safe_views), 12)
+        for view in self.provider.safe_views:
+            self.assertFalse(hasattr(view, "source_event"))
+            self.assertFalse(hasattr(view, "source"))
+            self.assertFalse(hasattr(view, "subject"))
+            self.assertFalse(hasattr(view, "payload"))
+            self.assertNotIn(PROTECTED_TEXT, repr(view))
+            self.assertLessEqual(
+                set(view.features),
+                {"deep_work", "urgency", "requires_user_decision"},
+            )
+            self.assertEqual(
+                view.governed_information_ids,
+                (self.information_ref.information_id,),
+            )
+            self.assertEqual(len(view.source_information_access_decision_ids), 1)
         projection = await self.recorder.current_projection()
         audit = projection.audit(
             source_policy_id=self.source_policy.policy_id,
@@ -404,6 +419,7 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
             source_event_types=("companion.attention_opportunity",),
             source_prefixes=("companion:",),
             required_payload_fields=("kind",),
+            information_id_payload_fields=("governed_information_id",),
             scope="late-only",
             recorded_at=early.timestamp + timedelta(seconds=1),
         )
@@ -431,6 +447,112 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaisesRegex(ValueError, "not policy-safe"):
             unsafe_schema.validate_snapshot({"raw_content": "secret"})
+
+        with self.assertRaisesRegex(ValueError, "must be non-empty"):
+            AttentionSourcePolicySnapshot.create(
+                version="missing-lineage-v1",
+                feature_schema_id=self.schema.schema_id,
+                source_event_types=("companion.attention_opportunity",),
+                scope="invalid",
+                information_id_payload_fields=(),
+                recorded_at=early.timestamp,
+            )
+
+    async def test_source_access_precedes_provider_and_lineage_cannot_be_self_asserted(
+        self,
+    ) -> None:
+        source = await self._opportunity(26, disposition=AttentionDisposition.WAKE)
+        opportunity = await self.recorder.prepare_opportunity(
+            source_event_id=source.id,
+            source_policy_id=self.source_policy.policy_id,
+            telemetry_context=self.context,
+        )
+        decision = await self.provider.decide(opportunity)
+        extra_information = GovernedInformationRef.create(
+            namespace="attention-test",
+            stable_key="undeclared-source",
+            deriver=ID_DERIVER,
+        )
+        with self.assertRaisesRegex(ValueError, "differs from prepared opportunity"):
+            await self.recorder.record_disposition(
+                opportunity=opportunity,
+                decision=replace(
+                    decision,
+                    governed_information_ids=(
+                        *decision.governed_information_ids,
+                        extra_information.information_id,
+                    ),
+                ),
+                telemetry_context=self.context,
+            )
+
+        denied_ref = GovernedInformationRef.create(
+            namespace="attention-test",
+            stable_key="telemetry-denied-source",
+            deriver=ID_DERIVER,
+        )
+        denied_policy = InformationPolicy.create(
+            version=2,
+            origin_domains=("telemetry-denied",),
+            classification=Classification.CONFIDENTIAL,
+            allowed_purposes=("different-purpose",),
+            allowed_recipients=("companion",),
+            allowed_trust_domains=("local",),
+            allowed_localities=("local",),
+            allowed_providers=(),
+            cross_agent_sharing=False,
+            retention=RetentionPolicy(),
+            disclosure_forms=(DisclosureForm.REDACTED,),
+            declassification_authorities=(),
+            recorded_at=START,
+            allowed_secondary_uses=(),
+        )
+        denied_lineage = InformationLineage.create(
+            information_id=denied_ref.information_id,
+            source_information_ids=(),
+            transformation=LineageTransformation.SOURCE,
+            recorded_at=START,
+        )
+        denied_binding = PolicyBinding.create(
+            information_id=denied_ref.information_id,
+            lineage_id=denied_lineage.lineage_id,
+            policy_ids=(denied_policy.policy_id,),
+            bound_at=START,
+        )
+        await self.kernel.emit_many(
+            (
+                denied_policy.to_event(source="test:governance"),
+                denied_lineage.to_event(source="test:governance"),
+                denied_binding.to_event(source="test:governance"),
+            )
+        )
+        denied_id = "attention-source-denied"
+        self.provider.dispositions[denied_id] = AttentionDisposition.SUPPRESS
+        await self.kernel.emit(
+            Event(
+                id=denied_id,
+                type="companion.attention_opportunity",
+                source="companion:fixture",
+                subject="opportunity:denied",
+                timestamp=START + timedelta(hours=1),
+                payload={
+                    "kind": "message",
+                    "deep_work": False,
+                    "requires_user_decision": False,
+                    "urgency": 0.1,
+                    "governed_information_id": denied_ref.information_id,
+                    "protected_text": PROTECTED_TEXT,
+                },
+            )
+        )
+        calls_before = tuple(self.provider.calls)
+        with self.assertRaisesRegex(PermissionError, "denies attention telemetry"):
+            await self.recorder.prepare_opportunity(
+                source_event_id=denied_id,
+                source_policy_id=self.source_policy.policy_id,
+                telemetry_context=self.context,
+            )
+        self.assertEqual(tuple(self.provider.calls), calls_before)
 
     async def test_provider_failure_and_post_append_crash_recover_exactly_once(self) -> None:
         source = await self._opportunity(30, disposition=AttentionDisposition.DEFER)
@@ -480,7 +602,11 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_concurrent_equal_observations_converge_and_conflicts_fail_closed(self) -> None:
         source = await self._opportunity(40, disposition=AttentionDisposition.WAKE)
-        opportunity = AttentionOpportunity(source, self.source_policy, self.schema)
+        opportunity = await self.recorder.prepare_opportunity(
+            source_event_id=source.id,
+            source_policy_id=self.source_policy.policy_id,
+            telemetry_context=self.context,
+        )
         decision = await self.provider.decide(opportunity)
         first = DeliberativeAttentionRecorder(
             self.kernel,
@@ -494,14 +620,12 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
         )
         equal = await asyncio.gather(
             first.record_disposition(
-                source_event_id=source.id,
-                source_policy_id=self.source_policy.policy_id,
+                opportunity=opportunity,
                 decision=decision,
                 telemetry_context=self.context,
             ),
             second.record_disposition(
-                source_event_id=source.id,
-                source_policy_id=self.source_policy.policy_id,
+                opportunity=opportunity,
                 decision=decision,
                 telemetry_context=self.context,
             ),
@@ -509,20 +633,20 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(equal[0], equal[1])
 
         conflict_source = await self._opportunity(41, disposition=AttentionDisposition.DEFER)
-        conflict_opportunity = AttentionOpportunity(
-            conflict_source, self.source_policy, self.schema
+        conflict_opportunity = await self.recorder.prepare_opportunity(
+            source_event_id=conflict_source.id,
+            source_policy_id=self.source_policy.policy_id,
+            telemetry_context=self.context,
         )
         base = await self.provider.decide(conflict_opportunity)
         results = await asyncio.gather(
             first.record_disposition(
-                source_event_id=conflict_source.id,
-                source_policy_id=self.source_policy.policy_id,
+                opportunity=conflict_opportunity,
                 decision=base,
                 telemetry_context=self.context,
             ),
             second.record_disposition(
-                source_event_id=conflict_source.id,
-                source_policy_id=self.source_policy.policy_id,
+                opportunity=conflict_opportunity,
                 decision=replace(base, disposition=AttentionDisposition.SUPPRESS),
                 telemetry_context=self.context,
             ),
@@ -619,12 +743,14 @@ class DeliberativeAttentionTests(unittest.IsolatedAsyncioTestCase):
         causal_source = await self._opportunity(
             51, disposition=AttentionDisposition.SUPPRESS
         )
-        causal_decision = await self.provider.decide(
-            AttentionOpportunity(causal_source, self.source_policy, self.schema)
-        )
-        causal_record = await self.recorder.record_disposition(
+        causal_opportunity = await self.recorder.prepare_opportunity(
             source_event_id=causal_source.id,
             source_policy_id=self.source_policy.policy_id,
+            telemetry_context=self.context,
+        )
+        causal_decision = await self.provider.decide(causal_opportunity)
+        causal_record = await self.recorder.record_disposition(
+            opportunity=causal_opportunity,
             decision=causal_decision,
             telemetry_context=self.context,
         )

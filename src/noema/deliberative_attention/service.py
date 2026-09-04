@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
+from types import MappingProxyType
 from typing import Protocol
 
 from ..checkpoints import ConsumerCheckpoint, ConsumerCheckpointProjection
@@ -22,10 +23,11 @@ from ..information import (
     PolicyBinding,
     PrincipalSnapshot,
     StaleGovernanceDecisionError,
+    validate_opaque_governance_id,
 )
 from ..kernel import NoemaKernel
 from ..store import ConcurrentAppendError
-from ..types import JSONValue
+from ..types import JSONScalar, JSONValue
 from .models import (
     AttentionDispositionDecision,
     AttentionDispositionFeedbackRecord,
@@ -64,11 +66,44 @@ class AttentionTelemetryContext:
 
 @dataclass(frozen=True, slots=True)
 class AttentionOpportunity:
-    """Transient provider input; the canonical denominator stays event-derived."""
+    """Policy-safe provider view with no raw event, source, subject, or payload."""
 
-    source_event: Event
-    source_policy: AttentionSourcePolicySnapshot
-    feature_schema: AttentionFeatureSchemaSnapshot
+    source_event_id: str
+    source_event_sequence: int
+    source_event_type: str
+    source_event_timestamp: datetime
+    source_policy_id: str
+    feature_schema_id: str
+    features: Mapping[str, JSONScalar]
+    governed_information_ids: tuple[str, ...]
+    source_information_access_decision_ids: tuple[str, ...]
+    situation_causal_cursor: int
+
+    def __post_init__(self) -> None:
+        for value, name in (
+            (self.source_event_id, "attention source event id"),
+            (self.source_event_type, "attention source event type"),
+            (self.source_policy_id, "attention source policy id"),
+            (self.feature_schema_id, "attention feature schema id"),
+        ):
+            if not value.strip():
+                raise ValueError(f"{name} must be non-empty")
+        if self.source_event_sequence <= 0:
+            raise ValueError("attention source event sequence must be positive")
+        if self.source_event_timestamp.tzinfo is None:
+            raise ValueError("attention source event timestamp must be timezone-aware")
+        if self.situation_causal_cursor < self.source_event_sequence:
+            raise ValueError("attention situation cut cannot precede its source event")
+        if not self.governed_information_ids:
+            raise ValueError("attention opportunity requires governed information")
+        if not self.source_information_access_decision_ids:
+            raise ValueError("attention opportunity requires prior source access evidence")
+        for value in (
+            *self.governed_information_ids,
+            *self.source_information_access_decision_ids,
+        ):
+            validate_opaque_governance_id(value, "attention governance reference")
+        object.__setattr__(self, "features", MappingProxyType(dict(self.features)))
 
 
 class AttentionDispositionProvider(Protocol):
@@ -106,6 +141,12 @@ class DeliberativeAttentionRecorder:
     ) -> None:
         if source_policy.feature_schema_id != feature_schema.schema_id:
             raise ValueError("attention source policy and feature schema do not match")
+        if {
+            value.name for value in feature_schema.features
+        }.intersection(source_policy.information_id_payload_fields):
+            raise ValueError(
+                "attention feature fields and information-id fields must be disjoint"
+            )
         for event in (
             feature_schema.to_event(source=self.source),
             source_policy.to_event(source=self.source),
@@ -121,30 +162,24 @@ class DeliberativeAttentionRecorder:
         projection.rebuild(await self._normalized_history())
         return projection
 
-    async def record_disposition(
+    async def prepare_opportunity(
         self,
         *,
         source_event_id: str,
         source_policy_id: str,
-        decision: AttentionDispositionDecision,
         telemetry_context: AttentionTelemetryContext,
-    ) -> AttentionDispositionRecord:
+    ) -> AttentionOpportunity:
         projection = await self.current_projection()
         policy = projection.policy(source_policy_id)
         if policy is None:
-            raise ValueError("attention disposition references an unknown source policy")
-        existing = projection.disposition_for(
-            source_event_id=source_event_id,
-            source_policy_id=source_policy_id,
-            feature_schema_id=policy.feature_schema_id,
-        )
-        if existing is not None:
-            return self._reuse_disposition(existing, decision)
-        source_ref = projection.event_reference(source_event_id)
+            raise ValueError("attention opportunity references an unknown source policy")
         policy_sequence = projection.policy_sequence(source_policy_id)
-        if source_ref is None or policy_sequence is None:
-            raise ValueError("attention disposition source is not canonical")
-        _, source_sequence, _ = source_ref
+        if policy_sequence is None:
+            raise ValueError("attention source policy is not canonical")
+        history = await self._normalized_history()
+        source_event = next((event for event in history if event.id == source_event_id), None)
+        if source_event is None or source_event.sequence is None:
+            raise ValueError("attention opportunity source is not canonical")
         if projection.recognized_opportunity(
             source_event_id=source_event_id,
             source_policy_id=source_policy_id,
@@ -153,15 +188,77 @@ class DeliberativeAttentionRecorder:
             raise ValueError("attention source is not a recognized opportunity")
         schema = projection.schema(policy.feature_schema_id)
         if schema is None:
-            raise ValueError("attention disposition feature schema is not canonical")
-        schema.validate_snapshot(decision.features)
+            raise ValueError("attention opportunity feature schema is not canonical")
+        features = schema.extract_snapshot(source_event.payload)
+        governed_information_ids = policy.extract_governed_information_ids(
+            source_event.payload
+        )
+        admitted_source_access: list[str] = []
+        for information_id in governed_information_ids:
+            admitted_source_access.append(
+                await self._admit_telemetry_access(
+                    information_id=information_id,
+                    context=telemetry_context,
+                    at=source_event.timestamp,
+                    reuse_allowed=True,
+                )
+            )
+        source_access_decision_ids = tuple(sorted(admitted_source_access))
+        prepared_projection = await self.current_projection()
+        return AttentionOpportunity(
+            source_event_id=source_event.id,
+            source_event_sequence=source_event.sequence,
+            source_event_type=source_event.type,
+            source_event_timestamp=source_event.timestamp,
+            source_policy_id=policy.policy_id,
+            feature_schema_id=schema.schema_id,
+            features=features,
+            governed_information_ids=governed_information_ids,
+            source_information_access_decision_ids=source_access_decision_ids,
+            situation_causal_cursor=prepared_projection.event_cursor,
+        )
+
+    async def record_disposition(
+        self,
+        *,
+        opportunity: AttentionOpportunity,
+        decision: AttentionDispositionDecision,
+        telemetry_context: AttentionTelemetryContext,
+    ) -> AttentionDispositionRecord:
+        self._require_matching_opportunity(opportunity, decision)
+        projection = await self.current_projection()
+        policy = projection.policy(opportunity.source_policy_id)
+        if policy is None or policy.feature_schema_id != opportunity.feature_schema_id:
+            raise ValueError("attention disposition references an unknown source policy")
+        if projection.event_reference(opportunity.source_event_id) != (
+            opportunity.source_event_type,
+            opportunity.source_event_sequence,
+            opportunity.source_event_timestamp,
+        ):
+            raise ValueError("attention opportunity differs from its canonical source")
+        if projection.recognized_opportunity(
+            source_event_id=opportunity.source_event_id,
+            source_policy_id=opportunity.source_policy_id,
+            feature_schema_id=opportunity.feature_schema_id,
+        ) is None:
+            raise ValueError("attention source is not a recognized opportunity")
+        existing = projection.disposition_for(
+            source_event_id=opportunity.source_event_id,
+            source_policy_id=opportunity.source_policy_id,
+            feature_schema_id=opportunity.feature_schema_id,
+        )
+        if existing is not None:
+            return self._reuse_disposition(existing, decision)
         derived_information_id = self._derived_information_id(
             namespace="attention-disposition",
-            stable_key=f"{source_event_id}:{source_policy_id}:{policy.feature_schema_id}",
+            stable_key=(
+                f"{opportunity.source_event_id}:{opportunity.source_policy_id}:"
+                f"{opportunity.feature_schema_id}"
+            ),
         )
         policy_ids = await self._ensure_derived_governance(
             information_id=derived_information_id,
-            source_information_ids=decision.governed_information_ids,
+            source_information_ids=opportunity.governed_information_ids,
             recorded_at=decision.decided_at,
         )
         access_decision_id = await self._admit_telemetry_access(
@@ -173,21 +270,24 @@ class DeliberativeAttentionRecorder:
         while True:
             projection = await self.current_projection()
             existing = projection.disposition_for(
-                source_event_id=source_event_id,
-                source_policy_id=source_policy_id,
-                feature_schema_id=policy.feature_schema_id,
+                source_event_id=opportunity.source_event_id,
+                source_policy_id=opportunity.source_policy_id,
+                feature_schema_id=opportunity.feature_schema_id,
             )
             if existing is not None:
                 return self._reuse_disposition(existing, decision)
             candidate = AttentionDispositionRecord.create(
-                source_event_id=source_event_id,
-                source_event_sequence=source_sequence,
-                source_policy_id=source_policy_id,
-                feature_schema_id=policy.feature_schema_id,
+                source_event_id=opportunity.source_event_id,
+                source_event_sequence=opportunity.source_event_sequence,
+                source_policy_id=opportunity.source_policy_id,
+                feature_schema_id=opportunity.feature_schema_id,
                 decision=decision,
                 derived_information_id=derived_information_id,
                 information_policy_ids=policy_ids,
-                information_access_decision_ids=(access_decision_id,),
+                source_information_access_decision_ids=(
+                    opportunity.source_information_access_decision_ids
+                ),
+                derived_information_access_decision_ids=(access_decision_id,),
                 admitted_predecessor_head=projection.event_cursor,
             )
             try:
@@ -490,6 +590,7 @@ class DeliberativeAttentionRecorder:
         information_id: str,
         context: AttentionTelemetryContext,
         at: datetime,
+        reuse_allowed: bool = False,
     ) -> str:
         while True:
             projection = await self.current_projection()
@@ -510,6 +611,17 @@ class DeliberativeAttentionRecorder:
                     locality=context.locality,
                 ),
             )
+            if reuse_allowed:
+                current = engine.decide_access(request)
+                for existing in projection.information.access_decisions:
+                    if (
+                        existing.request == request
+                        and existing.composition_id == current.composition_id
+                        and existing.policy_decision == current.policy_decision
+                        and existing.policy_decision.disposition
+                        is DecisionDisposition.ALLOW
+                    ):
+                        return existing.decision_id
             try:
                 receipt = await InformationGovernanceAdmission(
                     self.kernel,
@@ -556,6 +668,20 @@ class DeliberativeAttentionRecorder:
             namespace=namespace,
             stable_key=stable_key,
         )
+
+    @staticmethod
+    def _require_matching_opportunity(
+        opportunity: AttentionOpportunity,
+        decision: AttentionDispositionDecision,
+    ) -> None:
+        if dict(decision.features) != dict(opportunity.features):
+            raise ValueError("attention decision features differ from prepared opportunity")
+        if decision.governed_information_ids != opportunity.governed_information_ids:
+            raise ValueError(
+                "attention decision information lineage differs from prepared opportunity"
+            )
+        if decision.situation_causal_cursor != opportunity.situation_causal_cursor:
+            raise ValueError("attention decision causal cut differs from prepared opportunity")
 
     @staticmethod
     def _reuse_disposition(
@@ -632,16 +758,14 @@ class DeliberativeAttentionWorker:
                 feature_schema_id=self.feature_schema.schema_id,
             )
             if existing is None:
-                decision = await self.provider.decide(
-                    AttentionOpportunity(
-                        source_event=event,
-                        source_policy=self.source_policy,
-                        feature_schema=self.feature_schema,
-                    )
-                )
-                existing = await self.recorder.record_disposition(
+                opportunity = await self.recorder.prepare_opportunity(
                     source_event_id=event.id,
                     source_policy_id=self.source_policy.policy_id,
+                    telemetry_context=self.telemetry_context,
+                )
+                decision = await self.provider.decide(opportunity)
+                existing = await self.recorder.record_disposition(
+                    opportunity=opportunity,
                     decision=decision,
                     telemetry_context=self.telemetry_context,
                 )

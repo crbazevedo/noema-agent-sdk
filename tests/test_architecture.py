@@ -637,6 +637,8 @@ class ArchitectureFitnessTests(unittest.TestCase):
         self.assertEqual(violations, [])
 
     def test_deliberative_attention_is_observation_not_agency_or_learning(self) -> None:
+        from noema import AttentionOpportunity
+
         source_root = Path(__file__).parents[1] / "src" / "noema"
         attention_root = source_root / "deliberative_attention"
         forbidden_modules = {"adapters", "authority", "capabilities", "models", "work"}
@@ -692,4 +694,19 @@ class ArchitectureFitnessTests(unittest.TestCase):
                     violations.append(
                         f"{path.relative_to(source_root)} calls {node.func.attr}"
                     )
+        self.assertEqual(
+            set(AttentionOpportunity.__dataclass_fields__),
+            {
+                "feature_schema_id",
+                "features",
+                "governed_information_ids",
+                "situation_causal_cursor",
+                "source_event_id",
+                "source_event_sequence",
+                "source_event_timestamp",
+                "source_event_type",
+                "source_information_access_decision_ids",
+                "source_policy_id",
+            },
+        )
         self.assertEqual(violations, [])

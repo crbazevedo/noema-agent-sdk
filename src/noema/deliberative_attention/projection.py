@@ -16,7 +16,7 @@ from ..information import (
     InformationOperation,
     LineageTransformation,
 )
-from ..types import JSONObject
+from ..types import JSONObject, JSONScalar
 from .models import (
     DELIBERATIVE_ATTENTION_EVENT_TYPES,
     DISPOSITION_FEEDBACK_RECORDED_EVENT,
@@ -45,6 +45,12 @@ class _EventReference:
     timestamp: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class _RecognizedSourceFacts:
+    features: dict[str, JSONScalar]
+    governed_information_ids: tuple[str, ...]
+
+
 class AttentionExposureProjection:
     """Canonical denominator, dispositions, outcomes, and explicit feedback.
 
@@ -65,6 +71,9 @@ class AttentionExposureProjection:
         self._policy_sequences: dict[str, int] = {}
         self._recognized: dict[
             tuple[str, str, str], RecognizedAttentionOpportunity
+        ] = {}
+        self._recognized_source_facts: dict[
+            tuple[str, str, str], _RecognizedSourceFacts
         ] = {}
         self._dispositions: dict[str, AttentionDispositionRecord] = {}
         self._dispositions_by_key: dict[
@@ -194,6 +203,13 @@ class AttentionExposureProjection:
             policy = AttentionSourcePolicySnapshot.from_event(event)
             if policy.feature_schema_id not in self._schemas:
                 raise ValueError("attention source policy references an unknown feature schema")
+            schema = self._schemas[policy.feature_schema_id]
+            if {value.name for value in schema.features}.intersection(
+                policy.information_id_payload_fields
+            ):
+                raise ValueError(
+                    "attention feature fields and information-id fields must be disjoint"
+                )
             self._put_immutable(self._policies, policy.policy_id, policy, "source policy")
             self._policy_sequences[policy.policy_id] = event.sequence
             handled = True
@@ -365,6 +381,7 @@ class AttentionExposureProjection:
         for policy_id, policy in self._policies.items():
             activated = self._policy_sequences[policy_id]
             if policy.recognizes(event, activated_at_sequence=activated):
+                schema = self._schemas[policy.feature_schema_id]
                 opportunity = RecognizedAttentionOpportunity(
                     source_event_id=event.id,
                     source_event_sequence=event.sequence or 0,
@@ -372,6 +389,12 @@ class AttentionExposureProjection:
                     feature_schema_id=policy.feature_schema_id,
                 )
                 self._recognized[opportunity.key] = opportunity
+                self._recognized_source_facts[opportunity.key] = _RecognizedSourceFacts(
+                    features=schema.extract_snapshot(event.payload),
+                    governed_information_ids=policy.extract_governed_information_ids(
+                        event.payload
+                    ),
+                )
 
     def _validate_disposition(
         self,
@@ -395,6 +418,18 @@ class AttentionExposureProjection:
         if schema is None:
             raise ValueError("attention disposition references an unknown feature schema")
         schema.validate_snapshot(record.decision.features)
+        source_facts = self._recognized_source_facts[key]
+        if dict(record.decision.features) != source_facts.features:
+            raise ValueError(
+                "attention disposition features differ from its canonical source"
+            )
+        if (
+            record.decision.governed_information_ids
+            != source_facts.governed_information_ids
+        ):
+            raise ValueError(
+                "attention disposition lineage differs from its canonical source declaration"
+            )
         source = self._events[record.source_event_id]
         if source.timestamp > record.decision.decided_at:
             raise ValueError("attention disposition predates its source event")
@@ -406,11 +441,20 @@ class AttentionExposureProjection:
             cited = self._events.get(reference)
             if cited is None or cited.sequence > record.decision.situation_causal_cursor:
                 raise ValueError("attention decision reference was unavailable at its causal cut")
+        self._validate_source_access(
+            governed_information_ids=source_facts.governed_information_ids,
+            information_access_decision_ids=(
+                record.source_information_access_decision_ids
+            ),
+            situation_causal_cursor=record.decision.situation_causal_cursor,
+        )
         self._validate_governance(
             governed_information_ids=record.decision.governed_information_ids,
             derived_information_id=record.derived_information_id,
             information_policy_ids=record.information_policy_ids,
-            information_access_decision_ids=record.information_access_decision_ids,
+            information_access_decision_ids=(
+                record.derived_information_access_decision_ids
+            ),
         )
 
     def _validate_outcome(
@@ -508,6 +552,37 @@ class AttentionExposureProjection:
             accessed.add(decision.request.information_ref.information_id)
         if accessed != {derived_information_id}:
             raise ValueError("attention telemetry access does not cover its derived artifact")
+
+    def _validate_source_access(
+        self,
+        *,
+        governed_information_ids: tuple[str, ...],
+        information_access_decision_ids: tuple[str, ...],
+        situation_causal_cursor: int,
+    ) -> None:
+        if len(information_access_decision_ids) != len(governed_information_ids):
+            raise ValueError(
+                "attention source access receipts do not exactly cover source information"
+            )
+        accessed: set[str] = set()
+        for decision_id in information_access_decision_ids:
+            decision = self._information.access_decision(decision_id)
+            event = self._events.get(f"information-access-decided:{decision_id}")
+            if (
+                decision is None
+                or event is None
+                or event.sequence > situation_causal_cursor
+                or decision.policy_decision.disposition is not DecisionDisposition.ALLOW
+                or decision.request.context.operation is not InformationOperation.TELEMETRY
+            ):
+                raise ValueError(
+                    "attention source requires prior allowed telemetry access decisions"
+                )
+            accessed.add(decision.request.information_ref.information_id)
+        if accessed != set(governed_information_ids):
+            raise ValueError(
+                "attention source access receipts do not exactly cover source information"
+            )
 
     def _require_actual_cut(self, sequence: int) -> None:
         if sequence != 0 and not any(

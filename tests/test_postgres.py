@@ -15,6 +15,7 @@ from noema import (
     AttentionFeatureDefinition,
     AttentionFeatureSchemaSnapshot,
     AttentionFeatureType,
+    AttentionOpportunity,
     AttentionSemanticConflictError,
     AttentionSourcePolicySnapshot,
     AttentionTelemetryContext,
@@ -277,6 +278,7 @@ class PostgresConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             version=f"postgres-v1-{unique}",
             feature_schema_id=schema.schema_id,
             source_event_types=(source_type,),
+            information_id_payload_fields=("governed_information_id",),
             scope=f"postgres-{unique}",
             recorded_at=recorded_at + timedelta(seconds=2),
         )
@@ -318,27 +320,30 @@ class PostgresConcurrencyTests(unittest.IsolatedAsyncioTestCase):
                     type=source_type,
                     source="test:postgres-attention",
                     timestamp=recorded_at + timedelta(minutes=index + 1),
+                    payload={
+                        "deep_work": True,
+                        "governed_information_id": information_ref.information_id,
+                    },
                 )
             )
 
         def decision(
-            event: Event, disposition: AttentionDisposition
+            opportunity: AttentionOpportunity, disposition: AttentionDisposition
         ) -> AttentionDispositionDecision:
-            assert event.sequence is not None
             return AttentionDispositionDecision(
                 disposition=disposition,
-                features={"deep_work": True},
-                situation_causal_cursor=event.sequence,
+                features=opportunity.features,
+                situation_causal_cursor=opportunity.situation_causal_cursor,
                 decision_mechanism_id="postgres-fixture-provider",
                 decision_mechanism_version="1",
                 decision_configuration_ref=f"fixture:{unique}",
                 decision_refs=(f"postgres-attention-intent-{unique}",),
                 governing_intent_refs=(f"postgres-attention-intent-{unique}",),
                 authority_ceiling=AttentionAuthorityCeiling.INTERNAL_ATTENTION_ONLY,
-                governed_information_ids=(information_ref.information_id,),
-                valid_at=event.timestamp,
-                known_at=event.timestamp,
-                decided_at=event.timestamp,
+                governed_information_ids=opportunity.governed_information_ids,
+                valid_at=opportunity.source_event_timestamp,
+                known_at=opportunity.source_event_timestamp,
+                decided_at=opportunity.source_event_timestamp,
             )
 
         gap_source = await source_event(0)
@@ -371,10 +376,14 @@ class PostgresConcurrencyTests(unittest.IsolatedAsyncioTestCase):
                 self.second_store = second_store
 
         gap_recorder = _GapRecorder(self.second)
-        gap_record = await gap_recorder.record_disposition(
+        gap_opportunity = await base_recorder.prepare_opportunity(
             source_event_id=gap_source.id,
             source_policy_id=source_policy.policy_id,
-            decision=decision(gap_source, AttentionDisposition.REMEMBER),
+            telemetry_context=context,
+        )
+        gap_record = await gap_recorder.record_disposition(
+            opportunity=gap_opportunity,
+            decision=decision(gap_opportunity, AttentionDisposition.REMEMBER),
             telemetry_context=context,
         )
         disposition_event = next(
@@ -406,17 +415,20 @@ class PostgresConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             source="test:postgres-attention-distributed",
         )
         equal_source = await source_event(1)
-        equal_decision = decision(equal_source, AttentionDisposition.WAKE)
+        equal_opportunity = await first_recorder.prepare_opportunity(
+            source_event_id=equal_source.id,
+            source_policy_id=source_policy.policy_id,
+            telemetry_context=context,
+        )
+        equal_decision = decision(equal_opportunity, AttentionDisposition.WAKE)
         equal = await asyncio.gather(
             first_recorder.record_disposition(
-                source_event_id=equal_source.id,
-                source_policy_id=source_policy.policy_id,
+                opportunity=equal_opportunity,
                 decision=equal_decision,
                 telemetry_context=context,
             ),
             second_recorder.record_disposition(
-                source_event_id=equal_source.id,
-                source_policy_id=source_policy.policy_id,
+                opportunity=equal_opportunity,
                 decision=equal_decision,
                 telemetry_context=context,
             ),
@@ -424,17 +436,20 @@ class PostgresConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(equal[0], equal[1])
 
         conflict_source = await source_event(2)
+        conflict_opportunity = await first_recorder.prepare_opportunity(
+            source_event_id=conflict_source.id,
+            source_policy_id=source_policy.policy_id,
+            telemetry_context=context,
+        )
         conflict = await asyncio.gather(
             first_recorder.record_disposition(
-                source_event_id=conflict_source.id,
-                source_policy_id=source_policy.policy_id,
-                decision=decision(conflict_source, AttentionDisposition.DEFER),
+                opportunity=conflict_opportunity,
+                decision=decision(conflict_opportunity, AttentionDisposition.DEFER),
                 telemetry_context=context,
             ),
             second_recorder.record_disposition(
-                source_event_id=conflict_source.id,
-                source_policy_id=source_policy.policy_id,
-                decision=decision(conflict_source, AttentionDisposition.SUPPRESS),
+                opportunity=conflict_opportunity,
+                decision=decision(conflict_opportunity, AttentionDisposition.SUPPRESS),
                 telemetry_context=context,
             ),
             return_exceptions=True,

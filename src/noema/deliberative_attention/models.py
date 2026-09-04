@@ -330,6 +330,22 @@ class AttentionFeatureSchemaSnapshot:
             for definition in self.features
         )
 
+    def extract_snapshot(self, payload: Mapping[str, JSONValue]) -> dict[str, JSONScalar]:
+        """Extract only declared policy-safe scalars from a source payload."""
+
+        values: dict[str, JSONScalar] = {}
+        for definition in self.features:
+            if definition.name not in payload:
+                continue
+            raw = payload[definition.name]
+            if raw is not None and not isinstance(raw, (str, int, float, bool)):
+                raise ValueError(
+                    f"attention feature {definition.name} is not a JSON scalar"
+                )
+            values[definition.name] = raw
+        self.validate_snapshot(values)
+        return values
+
     def to_dict(self) -> JSONObject:
         return {
             "schema_id": self.schema_id,
@@ -390,6 +406,7 @@ class AttentionSourcePolicySnapshot:
     feature_schema_id: str
     source_event_types: tuple[str, ...]
     scope: str
+    information_id_payload_fields: tuple[str, ...]
     recorded_at: datetime
     source_prefixes: tuple[str, ...] = ()
     subject_prefixes: tuple[str, ...] = ()
@@ -403,6 +420,7 @@ class AttentionSourcePolicySnapshot:
         feature_schema_id: str,
         source_event_types: tuple[str, ...],
         scope: str,
+        information_id_payload_fields: tuple[str, ...],
         recorded_at: datetime,
         source_prefixes: tuple[str, ...] = (),
         subject_prefixes: tuple[str, ...] = (),
@@ -412,11 +430,15 @@ class AttentionSourcePolicySnapshot:
         normalized_source_prefixes = tuple(sorted(set(source_prefixes)))
         normalized_subject_prefixes = tuple(sorted(set(subject_prefixes)))
         normalized_required_fields = tuple(sorted(set(required_payload_fields)))
+        normalized_information_fields = tuple(
+            sorted(set(information_id_payload_fields))
+        )
         identity: JSONObject = {
             "version": version,
             "feature_schema_id": feature_schema_id,
             "source_event_types": list(normalized_event_types),
             "scope": scope,
+            "information_id_payload_fields": list(normalized_information_fields),
             "source_prefixes": list(normalized_source_prefixes),
             "subject_prefixes": list(normalized_subject_prefixes),
             "required_payload_fields": list(normalized_required_fields),
@@ -428,6 +450,7 @@ class AttentionSourcePolicySnapshot:
             feature_schema_id=feature_schema_id,
             source_event_types=normalized_event_types,
             scope=scope,
+            information_id_payload_fields=normalized_information_fields,
             recorded_at=recorded_at,
             source_prefixes=normalized_source_prefixes,
             subject_prefixes=normalized_subject_prefixes,
@@ -444,6 +467,11 @@ class AttentionSourcePolicySnapshot:
             (self.source_prefixes, "attention source prefixes", False),
             (self.subject_prefixes, "attention subject prefixes", False),
             (self.required_payload_fields, "attention required payload fields", False),
+            (
+                self.information_id_payload_fields,
+                "attention information-id payload fields",
+                True,
+            ),
         ):
             _unique_text(values, name, required=required)
         if any(
@@ -467,7 +495,32 @@ class AttentionSourcePolicySnapshot:
             or not any(event.subject.startswith(prefix) for prefix in self.subject_prefixes)
         ):
             return False
-        return all(field in event.payload for field in self.required_payload_fields)
+        return all(
+            field in event.payload
+            for field in (
+                *self.required_payload_fields,
+                *self.information_id_payload_fields,
+            )
+        )
+
+    def extract_governed_information_ids(
+        self, payload: Mapping[str, JSONValue]
+    ) -> tuple[str, ...]:
+        """Extract only the opaque information IDs named by this policy."""
+
+        values: list[str] = []
+        for field_name in self.information_id_payload_fields:
+            raw = payload.get(field_name)
+            if not isinstance(raw, str):
+                raise ValueError(
+                    f"attention information-id field {field_name} must contain an opaque id"
+                )
+            validate_opaque_governance_id(raw, "attention governed information id")
+            values.append(raw)
+        result = tuple(sorted(set(values)))
+        if not result:
+            raise ValueError("attention source policy yielded no governed information")
+        return result
 
     def to_dict(self) -> JSONObject:
         return {
@@ -476,6 +529,9 @@ class AttentionSourcePolicySnapshot:
             "feature_schema_id": self.feature_schema_id,
             "source_event_types": list(self.source_event_types),
             "scope": self.scope,
+            "information_id_payload_fields": list(
+                self.information_id_payload_fields
+            ),
             "source_prefixes": list(self.source_prefixes),
             "subject_prefixes": list(self.subject_prefixes),
             "required_payload_fields": list(self.required_payload_fields),
@@ -490,6 +546,9 @@ class AttentionSourcePolicySnapshot:
             feature_schema_id=str(data["feature_schema_id"]),
             source_event_types=_strings(data, "source_event_types"),
             scope=str(data["scope"]),
+            information_id_payload_fields=_strings(
+                data, "information_id_payload_fields"
+            ),
             source_prefixes=_strings(data, "source_prefixes"),
             subject_prefixes=_strings(data, "subject_prefixes"),
             required_payload_fields=_strings(data, "required_payload_fields"),
@@ -500,6 +559,7 @@ class AttentionSourcePolicySnapshot:
             feature_schema_id=value.feature_schema_id,
             source_event_types=value.source_event_types,
             scope=value.scope,
+            information_id_payload_fields=value.information_id_payload_fields,
             source_prefixes=value.source_prefixes,
             subject_prefixes=value.subject_prefixes,
             required_payload_fields=value.required_payload_fields,
@@ -690,7 +750,8 @@ class AttentionDispositionRecord:
     decision: AttentionDispositionDecision
     derived_information_id: str
     information_policy_ids: tuple[str, ...]
-    information_access_decision_ids: tuple[str, ...]
+    source_information_access_decision_ids: tuple[str, ...]
+    derived_information_access_decision_ids: tuple[str, ...]
     admitted_predecessor_head: int
 
     @classmethod
@@ -704,7 +765,8 @@ class AttentionDispositionRecord:
         decision: AttentionDispositionDecision,
         derived_information_id: str,
         information_policy_ids: tuple[str, ...],
-        information_access_decision_ids: tuple[str, ...],
+        source_information_access_decision_ids: tuple[str, ...],
+        derived_information_access_decision_ids: tuple[str, ...],
         admitted_predecessor_head: int,
     ) -> AttentionDispositionRecord:
         identity: JSONObject = {
@@ -721,8 +783,11 @@ class AttentionDispositionRecord:
             decision=decision,
             derived_information_id=derived_information_id,
             information_policy_ids=tuple(sorted(set(information_policy_ids))),
-            information_access_decision_ids=tuple(
-                sorted(set(information_access_decision_ids))
+            source_information_access_decision_ids=tuple(
+                sorted(set(source_information_access_decision_ids))
+            ),
+            derived_information_access_decision_ids=tuple(
+                sorted(set(derived_information_access_decision_ids))
             ),
             admitted_predecessor_head=admitted_predecessor_head,
         )
@@ -748,11 +813,20 @@ class AttentionDispositionRecord:
         )
         _unique_text(self.information_policy_ids, "attention information policy ids", required=True)
         _unique_text(
-            self.information_access_decision_ids,
-            "attention access decision ids",
+            self.source_information_access_decision_ids,
+            "attention source access decision ids",
             required=True,
         )
-        for value in (*self.information_policy_ids, *self.information_access_decision_ids):
+        _unique_text(
+            self.derived_information_access_decision_ids,
+            "attention derived access decision ids",
+            required=True,
+        )
+        for value in (
+            *self.information_policy_ids,
+            *self.source_information_access_decision_ids,
+            *self.derived_information_access_decision_ids,
+        ):
             validate_opaque_governance_id(value, "attention governance reference")
 
     def to_dict(self) -> JSONObject:
@@ -765,7 +839,12 @@ class AttentionDispositionRecord:
             "decision": self.decision.to_dict(),
             "derived_information_id": self.derived_information_id,
             "information_policy_ids": list(self.information_policy_ids),
-            "information_access_decision_ids": list(self.information_access_decision_ids),
+            "source_information_access_decision_ids": list(
+                self.source_information_access_decision_ids
+            ),
+            "derived_information_access_decision_ids": list(
+                self.derived_information_access_decision_ids
+            ),
             "admitted_predecessor_head": self.admitted_predecessor_head,
         }
 
@@ -782,8 +861,11 @@ class AttentionDispositionRecord:
             ),
             derived_information_id=str(data["derived_information_id"]),
             information_policy_ids=_strings(data, "information_policy_ids"),
-            information_access_decision_ids=_strings(
-                data, "information_access_decision_ids"
+            source_information_access_decision_ids=_strings(
+                data, "source_information_access_decision_ids"
+            ),
+            derived_information_access_decision_ids=_strings(
+                data, "derived_information_access_decision_ids"
             ),
             admitted_predecessor_head=int(cast(int, data["admitted_predecessor_head"])),
         )
@@ -795,7 +877,12 @@ class AttentionDispositionRecord:
             decision=value.decision,
             derived_information_id=value.derived_information_id,
             information_policy_ids=value.information_policy_ids,
-            information_access_decision_ids=value.information_access_decision_ids,
+            source_information_access_decision_ids=(
+                value.source_information_access_decision_ids
+            ),
+            derived_information_access_decision_ids=(
+                value.derived_information_access_decision_ids
+            ),
             admitted_predecessor_head=value.admitted_predecessor_head,
         )
         if value != expected:
