@@ -1,6 +1,6 @@
 # Noema Agent SDK
 
-**Local-first, event-sourced infrastructure for portable durable agents.**
+**Local-first, event-sourced infrastructure for durable developmental agency.**
 
 Noema is not a persona framework and does not encode one preferred cognitive style. It provides general primitives from which sophisticated agent instances can be composed:
 
@@ -12,6 +12,21 @@ Noema is not a persona framework and does not encode one preferred cognitive sty
 - policy-bounded but human-independent autonomy;
 - event-driven scheduling, sensing, action, recovery, and reflection;
 - multi-agent operation over a shared world model.
+
+The long-term product promise is: **Run my work. Improve my decisions. Help me
+improve.** Applications may use Noema to provide sentinel, chief-of-staff,
+thought-partner, technical-mentor, development-coach, or epistemic-steward
+functions. Those are application functions, not SDK personas. The core supplies
+portable contracts for continuity, cognition, advice, work, authority, learning,
+and recovery without choosing a personality or a user's terminal values.
+
+Noema is designed around the developer jobs of building a persistent agent,
+reconstructing its current world, starting bounded background cognition,
+preserving current intent, representing advisory and developmental
+interventions, connecting governed environments, learning repetitive cognition
+without authority inflation, comparing model/prompt/retrieval configurations
+reproducibly, surviving crashes and distribution, and building
+application-specific companions without contaminating the core.
 
 **Why Noema?** `Noema` is not an acronym. The name refers to something as
 apprehended or understood from a situated perspective. It reflects a central
@@ -108,6 +123,22 @@ and competent but lack information access. Production encrypted artifacts,
 real restricted ingestion, and exhaustive sink/connector coverage remain
 staged under ADR 0009.
 
+[ADR 0012](docs/adr/0012-governed-habit-learning-and-cognitive-compilation.md)
+is an accepted architecture direction for governed Habit Learning. The current
+feature branch contains the implementation candidate for its prerequisite,
+`deliberative_attention_v1`: label-blind opportunity recognition, explicit
+actual dispositions, denominator auditing, causally later outcomes and typed
+feedback, independently governed `LEARN`/`EVALUATE` reuse, replay, checkpoint
+recovery, and PostgreSQL-gap-safe admission. These mechanics are not yet a
+qualifying real corpus, so runtime mining remains blocked.
+
+The next cross-cutting design track is **Developmental Partnership**. It will
+reuse outcome, assistance, intent, evidence, and scarce-cognition contracts so
+applications can safely advise, challenge, teach, coach, prepare, or remain
+silent. [Proposed ADR 0013](docs/adr/0013-durable-developmental-intervention.md)
+is the decision boundary for that extension; no runtime contract is claimed by
+this README.
+
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
 
@@ -164,6 +195,9 @@ environment / agents / timers
 - **Information-governed:** explicitly bound knowledge is usable only for a
   permitted purpose, principal, locality, provider, and trust boundary; replay
   uses the historical decision context.
+- **Developmentally bounded:** future advice may target an explicit current user
+  outcome, but challenge authority cannot become decision authority and
+  personalization cannot become ownership of terminal values.
 
 ## Install locally
 
@@ -482,6 +516,9 @@ The test suite covers:
 - deterministic historical-inquiry reconsideration under live intent or an
   explicit mandate, Information Governance, scarce-budget allocation,
   immutable traces, replay, crash recovery, and proposal-only surfacing;
+- learning-grade attention telemetry mechanics, including complete recognized
+  opportunity denominators, explicit dispositions, later outcome/feedback
+  links, recovery, concurrency, and information-purpose isolation;
 - multi-step autonomous incident recovery.
 
 The CI acceptance suite also runs the incident application against real
@@ -502,6 +539,18 @@ v0.6.2 derives dormant historical-inquiry candidates from target-specific
 current evidence, assembles v0.6.1 seeds automatically, and preserves separate
 discovery, revalidation, allocation, and surfacing stages. It remains
 deterministic, bounded, proposal-only, and effect-free.
+
+On this feature branch, proposed v0.6.3 packages learning-grade attention
+telemetry mechanics; a real governed operating corpus is still an acceptance
+dependency. Proposed v0.6.4 introduces the narrow developmental-intervention
+foundation. v0.7 Habit Learning remains a runtime NO-GO until that corpus
+exists, and proposed v0.7.x then extends the same bounded cognitive portfolio
+into a private cognitive ecology. Exact numbering remains provisional pending
+architecture acceptance. None of these releases may create a second scheduler,
+a second effect path, or a durable model scratchpad: typed evidence and
+assessments enter the canonical log, while all cognitive demand competes in one
+shared scarce-cognition portfolio.
+
 The deterministic Information Governance foundation is implemented as a
 separate cross-cutting layer. Its remaining artifact, sink, and connector slices
 must precede production use of restricted real-world context.
@@ -528,4 +577,13 @@ with its implemented
 and its
 [ADR 0011](docs/adr/0011-governed-allocation-of-scarce-cognition-and-historical-reconsideration.md),
 the [Information Governance Foundation](docs/INFORMATION_GOVERNANCE.md), and
-[ADR 0009](docs/adr/0009-information-governance-and-confidential-context.md).
+[ADR 0009](docs/adr/0009-information-governance-and-confidential-context.md),
+plus accepted [ADR 0012](docs/adr/0012-governed-habit-learning-and-cognitive-compilation.md)
+and proposed [ADR 0013](docs/adr/0013-durable-developmental-intervention.md).
+The cross-cutting programme contracts are summarized in
+[Durable Developmental Agency](docs/DEVELOPMENTAL_AGENCY.md),
+[non-functional requirements](docs/NFRS.md), and
+[provider-neutral evaluation](docs/EVALUATION.md). The flagship application
+boundary is documented in the
+[Companion P0 pilot](docs/pilot/NOEMA_COMPANION_P0.md) and its
+[acceptance requirements](docs/pilot/COMPANION_REQUIREMENTS.md).

@@ -6,6 +6,7 @@ principle they change.
 | Principle | Enforced consequence |
 |---|---|
 | Core is provider-neutral | Model, broker, database, and cloud SDK imports stay in adapters. |
+| Application functions are not SDK personas | Sentinel, chief-of-staff, thought-partner, mentor, coach, and epistemic-steward behavior compose general contracts in applications; core defines no preferred identity or cognitive style. |
 | Local is first-class | Embedded operation requires no network or external service. |
 | Events are canonical | Situation state, recovery state, and transport messages derive from the event log. |
 | Causal admission is atomic | State validated through head `H` becomes canonical only through an expected-head conditional append at `H`. |
@@ -31,6 +32,9 @@ principle they change.
 | External work remains external truth | External observations may create support demand but cannot become a Noema work graph or authoritative roadmap copy. |
 | Strategic execution requires a current cut | New roadmaps, commitments, proposals, admission, and reactivation cannot rely on known-stale goal or roadmap revisions. |
 | Assistance bounds agent work | Non-agent execution requires canonical roles and assistance; declared intervention/support cannot exceed that envelope. |
+| Challenge authority differs from decision authority | Permission to question, advise, or teach cannot transfer ownership of a user decision or mutate governing intent. |
+| Development serves a current outcome | Every future material developmental intervention names the current user outcome it expects to improve; longer-term capability effects remain secondary evidence. |
+| Personalization is not terminal value | Historical behavior, inferred preference, and developmental hypotheses cannot become current intent or sovereign utility. |
 | Coverage means criterion sufficiency | An obligation is covered only when admitted work covers every required outcome criterion. |
 | Replay defends strategic legality | Deterministic cross-object invariants are checked during reconstruction, not only at the command facade. |
 | Planners propose structure | A planner cannot admit a graph, select a worker, grant a lease, authorize, or execute. |
@@ -65,6 +69,9 @@ principle they change.
 | Observation precedes learning | A complete eligible-exposure denominator plus causally observed outcomes, corrections, and costs must ground HabitForge fitness before learned policy can advance. |
 | Intrinsic goals are subordinate | Future endogenous processes may propose instrumental, epistemic, maintenance, and exploratory goals, never terminal values. |
 | Background cognition is leased | Future dream/maintenance work consumes explicit preemptible budgets and cannot silently act externally. |
+| Cognitive demand has one portfolio | Foreground, endogenous, reconsideration, hazard, scenario, epistemic, developmental, and compilation demand compete through one scarce-cognition allocation boundary; no loop class owns a second scheduler. |
+| Always-on is not always-model-on | Cheap detectors may run continuously, but expensive cognition is explicitly triggered, budgeted, preemptible, and allowed to remain silent. |
+| Durable cognition is typed evidence | Canonical state may retain typed claims, evidence, assessments, proposals, and decisions, never a model's private scratchpad or hidden reasoning transcript as truth. |
 | Cognitive demand is layered | `Signal`, `Inquiry`, `IntrinsicActivity`, `WorkOrder`, and `ActionIntent` cannot substitute for one another. |
 | Curiosity is not novelty | Novelty may seed a candidate inquiry but does not establish positive Value of Cognition. |
 | Endogenous intent is subordinate | New inquiries require exact current `ACTIVE` or `BLOCKED` governing goal revisions; terminal intent admits none. |
@@ -80,9 +87,9 @@ principle they change.
 
 These principles govern the implemented v0.6.1 deterministic reconsideration
 foundation, the v0.6.2 dormant-discovery bridge, and the staged learned-
-allocation direction. Habit Learning architecture is accepted in ADR 0012 and
-its telemetry mechanics are implemented, but runtime mining remains blocked on
-a qualifying real corpus.
+allocation direction. Habit Learning architecture is accepted in ADR 0012. Its
+telemetry mechanics are an implementation candidate on the current feature
+branch, but runtime mining remains blocked on a qualifying real corpus.
 
 | Principle | Enforced or staged consequence |
 |---|---|
@@ -132,7 +139,23 @@ Governance prerequisites are implemented claims:
 | Authority cannot compile upward | Learned policy cannot gain intent, information, effect, or capability authority from support or frequency. |
 | Novelty restores cognition | Missing, unknown, stale, contradictory, novel, out-of-scope, corrected, inhibited, or privacy-incompatible state causes abstention rather than imputation. |
 | Habit and reconsideration are complements | Compilation never deletes cognition history; correction or drift can make deliberation valuable again. |
-| Runtime waits for evidence | The attention source mechanics are implemented, but HabitForge mining is a NO-GO until real operation records every eligible exposure plus causally linkable outcomes and feedback for a qualifying corpus. |
+| Runtime waits for evidence | The attention source mechanics are an implementation candidate on the current feature branch, but HabitForge mining is a NO-GO until real operation records every eligible exposure plus causally linkable outcomes and feedback for a qualifying corpus. |
+
+## Proposed Developmental Partnership principles
+
+[ADR 0013](adr/0013-durable-developmental-intervention.md) is proposed and
+awaiting acceptance. These are design constraints, not implemented runtime
+claims:
+
+| Principle | Required consequence |
+|---|---|
+| Immediate outcome is primary | Every material advisory/developmental intervention identifies the current user outcome it expects to improve before claiming a longer-term development benefit. |
+| Developmental effects are secondary evidence | Expected capability or agency growth is represented separately, evaluated later, and cannot justify an intervention that fails current intent, assistance, authority, safety, or information gates. |
+| Advice cannot rewrite intent | An intervention may expose assumptions, tradeoffs, hazards, or alternatives, but only existing intent authority may create or revise a governing goal. |
+| Affected parties remain visible | Material stakeholder impacts, assumptions, expected effort, reversibility, and intervention cost are inspectable rather than hidden in prose. |
+| Application voice stays outside core | Applications may render a permitted governed intervention as advice, challenge, teaching, coaching, or preparation—or decline to admit/present one—without adding SDK personas. |
+| Cognitive ecology shares control | Future cognitive loop classes propose evidence-bearing demand into the existing allocator and produce typed assessments; none owns a bespoke scheduler, effect path, or durable scratchpad. |
+| Development must remain falsifiable | Intervention feedback and later outcomes link to the original causal cut so effectiveness, correction, intrusion, and harm can be evaluated rather than inferred from silence. |
 
 Structural enforcement lives in `tests/test_architecture.py`, schema/replay
 tests, and distributed fault tests. Documentation alone is not considered an

@@ -4,10 +4,11 @@
 >
 > **Current revision:** 2026-09-04
 >
-> **Status:** v0.1 through the deterministic v0.6.2 Dormant Cognition Discovery
-> foundation and Information Governance implemented; v0.7 architecture is
-> accepted and its attention telemetry precursor is implemented, while runtime
-> Habit Learning remains blocked on a qualifying real corpus
+> **Status:** `main` implements v0.1 through the deterministic v0.6.2 Dormant
+> Cognition Discovery foundation and Information Governance; ADR 0012 is an
+> accepted direction, and the current feature branch contains a v0.6.3
+> learning-grade attention-telemetry implementation candidate. A qualifying
+> real corpus does not yet exist, so runtime Habit Learning remains blocked.
 
 Noema is infrastructure for agents that maintain a coherent relationship with
 a changing world. Its releases should therefore tell a story of increasing
@@ -18,6 +19,24 @@ The project thesis is:
 > Useful long-lived agency emerges not from keeping a reasoning model running,
 > but from giving intelligence a durable architecture for memory, situation,
 > attention, intent, work, authority, and development.
+
+The program is now explicitly aimed at **durable developmental agency**:
+
+> **Run my work. Improve my decisions. Help me improve.**
+
+Sentinel, chief-of-staff, thought-partner, technical-mentor,
+development-coach, and epistemic-steward behavior are application functions,
+not SDK personas. Noema supplies the general mechanisms applications need to:
+
+- build a persistent agent and reconstruct its current world;
+- start bounded background cognition while preserving current intent;
+- represent governed advisory and developmental interventions;
+- connect real environments without moving policy into connectors;
+- learn repetitive cognition without authority inflation;
+- evaluate model, prompt, tool, retrieval, and policy configurations
+  reproducibly;
+- recover under crash and distribution; and
+- build application-specific companions without contaminating core semantics.
 
 ## How to read this roadmap
 
@@ -50,6 +69,10 @@ Status terms in this document mean:
   change;
 - **Beyond v1.0:** intentionally excluded from the stable core milestone.
 
+The v0.6.3, v0.6.4, and v0.7.x labels below express the proposed dependency
+sequence. Their exact numbering remains provisional until their respective
+architecture decisions are accepted.
+
 Security, observability, deterministic replay, and local operation are
 cross-cutting release gates, not a final wave.
 
@@ -66,7 +89,10 @@ cross-cutting release gates, not a final wave.
 | **v0.6 — Endogenous Cognition** | Useful cognition can begin without an external prompt. | **I know what is worth thinking about.** | Deterministic shadow slice implemented |
 | **v0.6.1 — Deterministic Cognitive Reconsideration** | Historical inquiries can be revalidated under current intent or an explicit mandate and compete for scarce cognitive slack without blind resumption. | **I know what may deserve thought again.** | Deterministic shadow foundation implemented; learned allocation staged |
 | **v0.6.2 — Dormant Cognition Discovery & Evidence Qualification** | Durable history can nominate target-specific historical inquiries for governed reconsideration without manual seed assembly. | **I know which dormant thoughts deserve reconsideration.** | Deterministic shadow slice implemented |
-| **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Architecture accepted; telemetry mechanics implemented; runtime NO-GO pending qualifying real corpus |
+| **v0.6.3 — Learning-Grade Attention Telemetry** *(proposed number)* | Real attention opportunities, actual dispositions, outcomes, explicit feedback, and cost form a denominator-complete governed learning corpus. | **I can observe what deserved attention and what happened next.** | Implementation candidate on the current feature branch; real qualifying corpus pending |
+| **v0.6.4 — Developmental Intervention Foundation** *(proposed number)* | Applications can represent an intervention aimed at an immediate user outcome and/or long-term agency without taking ownership of terminal values. | **I can help improve a decision without owning it.** | Proposed in ADR 0013; not implemented |
+| **v0.7 — Habit Learning** | Repeated reasoning compiles into cheaper governed behavior. | **I learn what no longer needs thought.** | Architecture accepted in ADR 0012; runtime NO-GO pending qualifying real corpus |
+| **v0.7.x — Private Cognitive Ecology** *(proposed number)* | Multiple bounded background loops maintain situation, hazards, scenarios, stakeholder effects, epistemic challenges, and developmental hypotheses through one scarce-cognition portfolio. | **I can keep a bounded private watch over what may matter.** | Proposed; not implemented |
 | **v0.8 — Situated Presence** | The abstract agent inhabits a real environment through governed perception. | **I live somewhere.** | Planned |
 | **v0.9 — Integrated Autonomous Runtime** | All cognitive systems operate together continuously under faults and budgets. | **I can keep going without being babysat.** | Planned |
 | **v1.0 — Durable Cognitive Agency** | Developers can build production long-lived agents without inventing another agent operating system around Noema. | **I persist, orient, steward, coordinate, act, and improve over time.** | Planned |
@@ -85,18 +111,29 @@ Situated Continuity → Durable Work Coordination
 Cross-cutting before restricted real-world context
 Information Governance and Confidential Context
 
-Arc III — developmental agency
+Arc III — cognitive self-regulation and learning
 Endogenous Cognition → Cognitive Reconsideration & Allocation
                       → Dormant Cognition Discovery
-                      → attention-disposition telemetry
+                      → Learning-Grade Attention Telemetry
                       → Habit Learning → Situated Presence
 
 Arc IV — proof
 Situated Presence → Integrated Autonomous Runtime → Durable Cognitive Agency
+
+Arc V — Developmental Partnership (cross-cutting)
+Intent & Outcome Stewardship + Persistent Cognition
+    → Developmental Intervention Foundation
+    → bounded private cognitive ecology
+    → application-level advise / challenge / teach / coach / prepare / silence
 ```
 
 The dependency order is architectural. Calendar versions or parallel research
 may overlap, but a later capability cannot bypass an earlier invariant.
+Arc III governs cognitive self-regulation and learning: what deserves thought,
+what can be reconsidered, and what repeated cognition may safely compress.
+Arc V uses those foundations to improve current user outcomes and durable user
+agency. It does not grant the SDK a persona, a second user-development control
+plane, or ownership of user values.
 
 ## Implemented foundations
 
@@ -500,6 +537,80 @@ the accepted governing allocation decision. Learned allocation, broader
 historical sources, automatic subjective inference, and Habit Learning remain
 staged.
 
+## v0.6.3 — Learning-Grade Attention Telemetry *(proposed number)*
+
+Question: **Can actual attention behavior become a governed, denominator-
+complete source of learning evidence?**
+
+Outcome:
+
+> Every recognized opportunity in an approved source family records an explicit
+> actual disposition, with typed features and observable cost, before later
+> outcome and explicit feedback are linked causally.
+
+Status: **Implementation candidate on the current feature branch. The mechanics
+are implemented there; a qualifying real operating corpus is not.**
+
+```text
+label-blind source policy + feature schema
+    → every recognized opportunity
+    → explicit WAKE / REMEMBER / DEFER / SUPPRESS disposition
+    → causally later outcome + explicit feedback
+    → denominator audit under LEARN / EVALUATE policy
+```
+
+The `deliberative_attention_v1` candidate keeps opportunity recognition
+independent of later labels, never infers disposition from model calls or
+actions, treats unknown outcome and absent feedback as censored, records
+unknown cost components as unknown rather than zero, and inherits Information
+Governance lineage into every derived view. Source policies declare the opaque
+information-ID fields; source access is admitted before the provider receives a
+schema-only safe view, and admission rejects any returned feature, lineage, or
+causal-cut mismatch. Exact-head admission is safe across PostgreSQL sequence
+gaps; deterministic replay, concurrency convergence, and `ConsumerCheckpoint`
+recovery protect the denominator.
+
+Synthetic acceptance fixtures prove these mechanics only. Exit requires real
+operation to produce a policy-approved corpus with complete eligible exposure,
+actual disposition, causally linkable outcomes, corrections, and representative
+counterexamples. Until then, the telemetry layer is observation infrastructure,
+not evidence that Habit Learning is safe.
+
+## v0.6.4 — Developmental Intervention Foundation *(proposed number)*
+
+Question: **How can an application improve a user's present decision and
+long-term agency without claiming the right to choose for them?**
+
+Outcome:
+
+> A material advisory intervention names the current user outcome it expects to
+> improve, its mode, costs, assumptions, affected parties, authority boundary,
+> and later feedback/outcome; developmental effects remain secondary evidence.
+
+Status: **Proposed in
+[ADR 0013](adr/0013-durable-developmental-intervention.md); not implemented.**
+
+The smallest contract should extend, not replace, existing outcome roles,
+`AssistanceEnvelope`, current intent, Information Governance, and evidence
+links. Candidate modes may include advise, challenge, teach, coach, prepare,
+and ask. Defer and silence are presentation/admission dispositions, not
+intervention modes. The architecture audit must still prove which new
+object—if any—is necessary before adding an intervention ontology.
+
+Required boundaries are:
+
+```text
+challenge authority != decision authority
+developmental advice != user-goal mutation
+past behavior != current intent
+personalization != terminal values
+```
+
+This release creates neither effect authority nor a parallel development
+control plane. Applications choose how to embody mentor, coach, or thought-
+partner functions; the SDK records general outcome, evidence, policy, and
+authority semantics.
+
 ## v0.7 — Habit Learning
 
 Question: **Which cognition has the agent earned the right not to perform?**
@@ -513,9 +624,10 @@ canonical deliberative-attention telemetry
     → governed SHADOW rule
 ```
 
-Status: **Architecture accepted; telemetry mechanics implemented; runtime
-HabitForge remains a NO-GO until actual operation supplies a qualifying,
-denominator-complete corpus.**
+Status: **Architecture accepted in ADR 0012; runtime HabitForge remains a NO-GO
+until actual operation supplies a qualifying, denominator-complete corpus. The
+telemetry mechanics exist only as an implementation candidate on the current
+feature branch until reviewed and merged.**
 
 Repository inspection found no current canonical family that combines a typed
 attention situation, a complete eligible-exposure denominator, the actual
@@ -525,13 +637,14 @@ cost. `decision.proposed` and action events are incomplete; autonomic traces are
 counterfactual; cognitive-allocation traces describe whether thought was
 selected rather than whether its eventual attention decision was correct.
 
-The implemented prerequisite is one narrow `deliberative_attention_v1` source
-family that records every recognized attention disposition plus causally later
-outcome and typed feedback links. Explicit `LEARN` and `EVALUATE` information
-operations are independently governed and source policies establish the
-denominator before labels. Silence or absence of correction is censored, never
-positive evidence. Synthetic acceptance fixtures demonstrate mechanics, not a
-production-ready learning corpus.
+The v0.6.3 implementation candidate supplies one narrow
+`deliberative_attention_v1` source family that records every recognized
+attention disposition plus causally later outcome and typed feedback links.
+Explicit `LEARN` and `EVALUATE` information operations are independently
+governed and source policies establish the denominator before labels. Silence
+or absence of correction is censored, never positive evidence. Synthetic
+acceptance fixtures demonstrate mechanics, not a production-ready learning
+corpus.
 
 Once unblocked, the first HabitForge slice remains model-free and
 `RuleFamily.PREDICATE`-only. It derives `HabitEpisode` as a projection, creates
@@ -552,6 +665,45 @@ and exact-ruleset collision gates all pass.
 The proposed architecture, readiness audit, prerequisite, object/event map, and
 explicit deferrals are recorded in
 [ADR 0012](adr/0012-governed-habit-learning-and-cognitive-compilation.md).
+
+## v0.7.x — Private Cognitive Ecology *(proposed number)*
+
+Question: **Can several always-on cognitive concerns remain useful and bounded
+without becoming several schedulers or an endless private monologue?**
+
+Outcome:
+
+> Situation continuity, goal coherence, hazards, scenarios, stakeholder impact,
+> epistemic health, developmental hypotheses, reconsideration, and cognitive
+> compilation all propose demand into one governed scarce-cognition portfolio.
+
+Status: **Proposed; not implemented.**
+
+```text
+detectors + typed evidence
+    → Inquiry proposals
+    → one common scarce-cognition allocator
+    → bounded cognition
+    → typed internal assessments
+    → governed intervention candidate
+    → silence / advise / challenge / teach / coach / prepare
+```
+
+This track must reuse `Signal`, `Inquiry`, `IntrinsicActivity`, existing
+cognitive-allocation traces and budgets, DREAM epochs, autonomic rules, and
+`ConsumerCheckpoint`. A future shared `CognitiveAllocation` portfolio is a
+missing integration boundary, not an implemented class today. There is one
+shared cognitive portfolio, no bespoke scheduler per concern, and no second
+effect path. Always-on means cheap detectors and bounded, preemptible
+cognition—not continuous large-model invocation. Durable state contains typed
+claims, evidence, assessments, and decisions; a model's private scratchpad or
+hidden reasoning transcript is never persisted as durable truth.
+
+Hazards, scenarios, tradeoffs, stakeholder impacts, and epistemic challenges
+should initially compose existing assertion, evidence, inquiry, outcome, and
+intervention semantics. New core types require repeated application evidence;
+the SDK should not preemptively become a universal personal-development
+ontology.
 
 ## v0.8 — Situated Presence
 
@@ -663,6 +815,22 @@ applicable, and later outcomes so counterfactual evaluation is identifiable.
 Active exploration for high-stakes or identity-sensitive resurfacing remains
 separately authorized.
 
+### Developmental Partnership
+
+Arc V is cross-cutting because developmental help draws on current intent,
+outcome ownership, memory, evidence, cognition, work, and later evaluation. It
+does not sit above them as a new sovereign planner. Proposed ADR 0013 defines
+the first decision point: every material intervention must identify the current
+user outcome it expects to improve, while any longer-term capability or agency
+effect remains separately observed secondary evidence.
+
+The same shared cognitive portfolio later admits situation, hazard, scenario,
+stakeholder, epistemic, and developmental inquiries under finite budgets.
+Detectors propose; the common allocator selects; typed assessments may propose
+an intervention; existing policy, authority, work, and effect paths remain the
+only paths to consequence. Application products decide whether that appears as
+sentinel, coach, mentor, chief of staff, or thought partner behavior.
+
 ### User value
 
 Outcome ownership, minimal intervention, user-development value, and restraint
@@ -714,6 +882,10 @@ Supporting measures include:
 - **Cognitive sparsity:** material events handled without expensive reasoning;
 - **Deliberative compression:** repeated situations requiring progressively
   less deliberate cognition without increased regret;
+- **Decision improvement:** interventions improve an explicitly named current
+  user outcome without taking decision ownership or mutating terminal values;
+- **Developmental integrity:** later capability or agency evidence is visible
+  without being used as a proxy that overrides current intent;
 - **Epistemic integrity:** important beliefs retain provenance, time, conflict,
   and freshness;
 - **recoverability:** replay reconstructs the same semantic state and duplicates
@@ -742,6 +914,10 @@ later research program.
 5. **Kill -9:** terminate runtimes, workers, connections, brokers, and agents;
    duplicate, delay, and retry events and effects; restart without producing a
    causally, epistemically, intentionally, or operationally impossible state.
+6. **Developmental restraint:** present a consequential, identity-bound user
+   decision; improve preparation and expose tradeoffs while preserving the
+   user's decision authority, accepting correction, and learning nothing from
+   protected evidence without explicit secondary-use permission.
 
 The strongest long-term signal is behavioral: a mature Noema agent becomes
 quieter, cheaper, safer, and more useful as experience accumulates.

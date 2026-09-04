@@ -75,7 +75,7 @@ episode occurred; it cannot grant current authority to a compiled rule.
 | `SemanticAssertion`, `EvidenceLink`, memory projection | yes | yes | supporting evidence only | Reuse epistemic provenance; do not make memory a habit label store. |
 | Information policies, lineage, bindings, access decisions | yes | yes | sufficient governance substrate | Distinct `LEARN` and `EVALUATE` operations and intersected secondary-use policy are implemented; legacy policies grant neither. |
 | `InformationGovernanceProjection` | yes | projection | sufficient governance substrate | Reused by attention telemetry; it remains the policy view, not a training store. |
-| `deliberative_attention_v1` contracts and exposure projection | yes | yes / projection | mechanics ready; real corpus absent | Records source policy, feature schema, actual disposition, later outcomes and explicit feedback; denominator audit fails closed. |
+| `deliberative_attention_v1` contracts and exposure projection | yes | yes / projection | mechanics ready; real corpus absent | Records source policy, feature schema, actual disposition, later outcomes and explicit feedback; provider input is restricted to schema-approved features after source access admission, and denominator audit fails closed. |
 | `AutonomicRule`, `PredicateSpec`, `SignalTemplate` | yes | registration event | sufficient first target IR | Reuse unchanged for the bounded predicate compiler; candidate governance does not become rule code. |
 | `RuleRegistry` | yes | projection | sufficient inventory | Reuse unchanged; it must not own lifecycle. |
 | `RulesetSnapshot` | yes | materialization event | sufficient artifact | Reuse `snapshot(refs=...)`; no direct mutation. |
@@ -125,10 +125,12 @@ The first source family is deliberately narrow:
 deliberative attention disposition v1
 ```
 
-It covers only an attention opportunity whose sanctioned feature schema can
-represent `deep_work`, `requires_user_decision`, and `urgency`, and whose actual
-baseline choice is `WAKE`, `REMEMBER`, `DEFER`, or `SUPPRESS`. It is not a
-generic “learn from all history” envelope.
+It covers only an attention opportunity whose sanctioned feature schema names
+the policy-safe context available to the actual decision and whose baseline
+choice is `WAKE`, `REMEMBER`, `DEFER`, or `SUPPRESS`. The first Companion
+acceptance profile declares `deep_work`, `requires_user_decision`, and `urgency`
+as schema data; those fields are not branches in generic SDK logic. This is not
+a generic “learn from all history” envelope.
 
 The prerequisite implements three canonical observation contracts plus
 content-addressed source-policy and feature-schema records:
@@ -138,8 +140,8 @@ content-addressed source-policy and feature-schema records:
    causal situation cursor, label-blind source-eligibility policy ID/version,
    feature-schema identity and policy-safe typed feature snapshot,
    decision/proposal refs, governing-intent refs, authority ceiling,
-   cognitive/latency/human-attention costs, valid and known time, and governed-
-   information refs.
+   cognitive/latency/human-attention costs, valid and known time, governed-
+   information refs, and separate source-use and derived-artifact access refs.
 2. `attention.disposition_outcome_linked` links a causally later observed
    outcome without rewriting the decision. Typed outcomes include at least
    timely user decision, item handled within its declared window, missed
@@ -159,6 +161,16 @@ The source-eligibility policy is versioned, deterministic, and fixed before it
 observes a disposition or outcome. It selects triggers only from typed source
 fields and the declared situation cut. A policy that chooses examples by their
 later label cannot define a denominator.
+
+The immutable source policy also declares which payload fields contain opaque
+governed-information IDs. Before the application disposition provider is
+called, the worker resolves those canonical lineages and records allowed source
+`TELEMETRY` decisions. The provider sees only opaque source references,
+schema-approved scalar features, governance references, and the admitted causal
+cut—not the raw event, source, subject, or payload. Admission requires the
+returned feature snapshot, information lineage, and causal cut to match that
+prepared view exactly; replay separately verifies complete source-access and
+derived-artifact access coverage.
 
 Telemetry mechanics are complete. HabitForge data readiness is not: the
 training and temporal-validation cuts must still contain policy-permitted,
