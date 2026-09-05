@@ -60,6 +60,7 @@ all = [
 ]
 dev = [
   "build>=1.2",
+  "jsonschema>=4.23",
   "mypy>=1.11",
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
