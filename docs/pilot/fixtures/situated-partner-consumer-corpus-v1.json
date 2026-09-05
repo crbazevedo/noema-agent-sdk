@@ -1,0 +1,303 @@
+{
+  "corpus_revision": "situated-partner-consumer-conformance-2026-09-05-v1",
+  "contract_revision": "situated-partner-2026-09-05-v1",
+  "frozen_contract_source_sha": "2907b1fb6d9fac0d613a8574f6dea4bfa11c6ec8",
+  "base_fixture": "docs/pilot/fixtures/project-meridian-g1.json",
+  "use_time": "2031-05-14T14:10:00+00:00",
+  "layers": {
+    "shape": "strict JSON transport followed by Draft 2020-12 validation",
+    "referential_relational": "cross-field identity, finite values, budget ceilings and playback ranges",
+    "permission_currentness": "canonical admission resolution plus freshness, expiry, cancellation and supersession"
+  },
+  "permission_profiles": {
+    "admitted_sdk_records": "replace governance references with records admitted through SDK canonical governance APIs",
+    "frozen_synthetic_placeholders": "retain syntactically plausible fixture references; these are synthetic-only and cannot prove authorization"
+  },
+  "cases": [
+    {
+      "case_id": "positive_admitted_current_request",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "admitted_sdk_records",
+      "mutations": [],
+      "expected": {
+        "shape": "PASS",
+        "referential_relational": "PASS",
+        "permission_currentness": "PASS"
+      }
+    },
+    {
+      "case_id": "forbidden_source_result_object",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/source_result",
+          "value": {}
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "forbidden_material_output_object",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/material_output",
+          "value": {}
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "forbidden_source_request_object",
+      "base_envelope_id": "envelope:meridian:context:1",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/source_request",
+          "value": {}
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "missing_nested_governance_purpose",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "remove",
+          "path": "/governance/purpose"
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "mismatched_acquisition_request_identity",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/source_request/acquisition_request_id",
+          "value": "request:different"
+        }
+      ],
+      "expected": {
+        "shape": "PASS",
+        "referential_relational": "FAIL",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "negative_usage_measurement",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/task/usage/query_calls",
+          "value": -1
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "boolean_usage_measurement",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/task/usage/query_calls",
+          "value": true
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "nonfinite_usage_measurement",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set_non_finite",
+          "path": "/task/usage/cost",
+          "token": "NaN"
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "infinite_budget_measurement",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set_non_finite",
+          "path": "/source_request/budget/max_cost",
+          "token": "Infinity"
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "usage_above_declared_budget",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/task/usage/query_calls",
+          "value": 3
+        }
+      ],
+      "expected": {
+        "shape": "PASS",
+        "referential_relational": "FAIL",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "invalid_played_range",
+      "base_envelope_id": "envelope:meridian:decision-card:1",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/material_output/played_ranges",
+          "value": [
+            {
+              "start_ms": 2000,
+              "end_ms": 1000
+            }
+          ]
+        }
+      ],
+      "expected": {
+        "shape": "PASS",
+        "referential_relational": "FAIL",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "missing_required_lifecycle_field",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "remove",
+          "path": "/lifecycle/valid_until"
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "unknown_schema_revision",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/schema_version",
+          "value": 2
+        }
+      ],
+      "expected": {
+        "shape": "FAIL",
+        "referential_relational": "NOT_EVALUATED",
+        "permission_currentness": "NOT_EVALUATED"
+      }
+    },
+    {
+      "case_id": "plausible_but_unresolved_authorization",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "frozen_synthetic_placeholders",
+      "mutations": [],
+      "expected": {
+        "shape": "PASS",
+        "referential_relational": "PASS",
+        "permission_currentness": "FAIL"
+      }
+    },
+    {
+      "case_id": "expired_admitted_request",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "admitted_sdk_records",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/lifecycle/valid_until",
+          "value": "2031-05-14T14:00:00+00:00"
+        }
+      ],
+      "expected": {
+        "shape": "PASS",
+        "referential_relational": "PASS",
+        "permission_currentness": "FAIL"
+      }
+    },
+    {
+      "case_id": "cancelled_admitted_request",
+      "base_envelope_id": "envelope:meridian:notes-request:2",
+      "permission_profile": "admitted_sdk_records",
+      "mutations": [
+        {
+          "op": "set",
+          "path": "/lifecycle/cancelled_by_event_id",
+          "value": "event:fictional-cancellation"
+        },
+        {
+          "op": "set",
+          "path": "/lifecycle/cancellation_reason",
+          "value": "fictional user cancellation"
+        }
+      ],
+      "expected": {
+        "shape": "PASS",
+        "referential_relational": "PASS",
+        "permission_currentness": "FAIL"
+      }
+    }
+  ]
+}

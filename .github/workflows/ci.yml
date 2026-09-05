@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e '.[dev]'
+      - run: python -m pip install -e '.[dev,all]'
       - run: make lint typecheck build
 
   distributed-acceptance:
