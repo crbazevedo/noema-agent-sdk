@@ -114,7 +114,16 @@ Arc III — cognitive self-regulation and learning
 Endogenous Cognition → Cognitive Reconsideration & Allocation
                       → Dormant Cognition Discovery
                       → Learning-Grade Attention Telemetry
-                      → Habit Learning → Situated Presence
+                      → Habit Learning
+
+Pilot-driven cross-cutting evidence path
+Governed narrow application observation
+    → source-grounded supervised operation
+    → learning-grade operational corpus
+    → conditional ADR 0012 corpus review
+
+Broad environment integration
+Situated Presence
 
 Arc IV — proof
 Situated Presence → Integrated Autonomous Runtime → Durable Cognitive Agency
@@ -133,6 +142,15 @@ what can be reconsidered, and what repeated cognition may safely compress.
 Arc V uses those foundations to improve current user outcomes and durable user
 agency. It does not grant the SDK a persona, a second user-development control
 plane, or ownership of user values.
+
+The pilot path is deliberately cross-cutting rather than another SDK release
+sequence. Narrow, explicitly authorized source observation may begin before
+Habit Learning and before broad v0.8 Situated Presence. It can supply future
+operational evidence, but it cannot grant `LEARN`, satisfy ADR 0012's real-corpus
+gate by assertion, or activate compiled behavior. The shared backlog expresses
+this as `W09 -> W10 -> W11 -> W14`; application milestone IDs do not rename SDK
+versions. See the
+[Situated Partner integration contract](pilot/SITUATED_PARTNER_INTEGRATION.md).
 
 ## Implemented foundations
 
@@ -716,6 +734,14 @@ source?**
 Planned: substrate and sensor contracts, perception policy, progressive sensing,
 artifact and situation capsules, opportunity windows, active wake, retention
 controls, and reference adapters for real environments.
+
+This is broad reusable environment integration. It is not a prerequisite for a
+narrow application-owned observation adapter operating under an explicit scope,
+Information Governance, and the pilot contract. The generic durable
+watch/acquisition/scope boundary remains proposed in
+[ADR 0014](adr/0014-durable-situation-watch-and-source-acquisition.md); the
+material presentation boundary remains proposed in
+[ADR 0015](adr/0015-durable-material-output-presentation.md).
 
 Perception escalates by expected value of information:
 

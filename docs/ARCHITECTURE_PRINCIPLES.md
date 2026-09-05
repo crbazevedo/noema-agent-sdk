@@ -158,6 +158,25 @@ contracts, not claims of implementation:
 | Cognitive ecology shares control | Future cognitive loop classes propose evidence-bearing demand into the existing allocator and produce typed assessments; none owns a bespoke scheduler, effect path, or durable scratchpad. |
 | Development must remain falsifiable | Intervention feedback and later outcomes link to the original causal cut so effectiveness, correction, intrusion, and harm can be evaluated rather than inferred from silence. |
 
+## Situated Partner contract principles
+
+The [Situated Partner integration contract](pilot/SITUATED_PARTNER_INTEGRATION.md)
+is synthetically verified as an exchange/conformance boundary. Proposed ADRs
+0014 and 0015 remain unimplemented architecture candidates.
+
+| Principle | Required consequence |
+|---|---|
+| One context, not a second truth store | Cross-surface context is a versioned projection at a canonical causal cut; realtime sessions, prompts, cards, and caches cannot become durable authority. |
+| Acquisition, cognition, interruption, and effects stay independent | A source lookup cannot spend cognitive or human-attention budget implicitly, and no result can create an effect grant. |
+| Result absence remains typed | Not-yet-available, unavailable, denied, ambiguous, no-match, not-established, and contradicted remain different from found and from one another. |
+| Execution and freshness are separate axes | Queued/running/blocked/completed state cannot be used as evidence that inputs are current; stale/unknown evidence cannot be hidden in a task label. |
+| Presentation requires current basis | Material output names its generation context and is revalidated against current intent, evidence, artifact versions, policy, cancellation, and supersession before presentation or effect. |
+| Delivery dimensions do not imply one another | Generation, transport receipt, display, played range, acknowledgement, understanding, action, and outcome require independent evidence. |
+| The Observatory is disposable | An optional application read model derives from canonical projections; OTel is a non-authorizing overlay and the UI owns no queue or scheduler. |
+| Narrow observation may precede learning | An explicitly governed application scope may collect operational evidence before broad Situated Presence, but observation never grants `LEARN` or satisfies Habit Learning gates. |
+| Local availability is reported honestly | Sleep/offline time creates a coverage gap and bounded catch-up demand; “always on” never means the host observed while unavailable. |
+| Retrieved content is inert | Source and tool content is evidence, never an instruction that may expand scope, revise intent, dispatch work, or authorize effects. |
+
 Structural enforcement lives in `tests/test_architecture.py`, schema/replay
 tests, and distributed fault tests. Documentation alone is not considered an
 enforcement mechanism.

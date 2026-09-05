@@ -1,5 +1,13 @@
 # Companion pilot requirements
 
+> **Scope note (2026-09-05):** These `CP-*` requirements remain normative for
+> the earlier attention-telemetry evidence pilot. They are not replacements or
+> aliases for `REQ-01` through `REQ-26`. The Companion owns that newer product
+> ledger; the SDK carries its pinned sanitized mirror and synthetic G1 contract
+> in [Situated Partner integration](SITUATED_PARTNER_INTEGRATION.md). Existing
+> `CP-*` IDs retain their meanings and are reused as supporting evidence where
+> applicable.
+
 This document is normative for the first Companion attention-telemetry pilot.
 “Must” and “shall” indicate acceptance requirements. The requirements preserve a
 general SDK boundary: product behavior stays in the Companion; durable safety

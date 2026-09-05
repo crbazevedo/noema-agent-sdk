@@ -1,0 +1,787 @@
+{
+  "fixture_id": "situated-partner:project-meridian:g1:v1",
+  "fictional": true,
+  "platform": "fictional-linux-workstation",
+  "contract_revision": "situated-partner-2026-09-05-v1",
+  "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+  "scenario": {
+    "situation_id": "situation:project-meridian-review",
+    "goal_id": "goal:prepare-project-meridian-review",
+    "outcome_id": "outcome:decision-ready-review",
+    "independent_business_cutoff": "2031-05-14T18:30:00+00:00",
+    "initial_scheduled_start": "2031-05-14T16:00:00+00:00",
+    "rescheduled_start": "2031-05-14T17:00:00+00:00"
+  },
+  "canonical_timeline": [
+    "goal-revision-recorded:goal-revision:7b043c69cdb047712a36f37951fafee3",
+    "event:fictional-review-selected",
+    "memory-assertion:assertion:65098c6b347f4c014b355b52e6162dde",
+    "memory-assertion:assertion:15715ca7be4971544e9a2a97c9988c9d",
+    "memory-assertion:assertion:008b4f88c05f086644b2992cbf3f509f",
+    "work-order-recorded:work-order:468307d51c15b35056ba9b6b96b5433e",
+    "event:envelope:meridian:context:1",
+    "event:envelope:meridian:calendar-request:1",
+    "event:calendar-rescheduled",
+    "memory-assertion:assertion:72255002d82da82ce3751081ea91270f",
+    "event:envelope:meridian:calendar-cancelled:1",
+    "event:envelope:meridian:notes-request:2",
+    "event:envelope:meridian:notes-result:2",
+    "memory-assertion:assertion:5ff08b442eef47560cc82393000340b3",
+    "event:envelope:meridian:decision-card:1",
+    "goal-revision-recorded:goal-revision:e8bd23a1d935663889bde622ce718e95",
+    "event:topic-switched",
+    "goal-revision-recorded:goal-revision:e513cccf816ae6f19a5b92b88c8db1b0",
+    "event:envelope:river:context:3",
+    "event:envelope:meridian:calendar-result:late"
+  ],
+  "envelopes": [
+    {
+      "contract_revision": "situated-partner-2026-09-05-v1",
+      "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+      "schema_version": 1,
+      "envelope_id": "envelope:meridian:context:1",
+      "message_kind": "context_snapshot",
+      "recorded_at": "2031-05-14T14:00:00+00:00",
+      "correlation": {
+        "session_id": "session:meridian-prep",
+        "turn_id": null,
+        "topic_id": "topic:meridian-decision",
+        "request_id": null,
+        "causation_event_id": "work-order-recorded:work-order:468307d51c15b35056ba9b6b96b5433e"
+      },
+      "context": {
+        "context_id": "context:meridian-prep",
+        "situation_id": "situation:project-meridian-review",
+        "context_revision": 1,
+        "causal_cut": 6,
+        "goal_revision_id": "goal-revision:7b043c69cdb047712a36f37951fafee3",
+        "outcome_id": "outcome:decision-ready-review",
+        "immediate_intent_ref": "intent:prepare-decision-review",
+        "supported_assertion_refs": ["assertion:65098c6b347f4c014b355b52e6162dde"],
+        "unresolved_assertion_refs": ["assertion:15715ca7be4971544e9a2a97c9988c9d"],
+        "artifact_versions": []
+      },
+      "task": null,
+      "freshness": {
+        "state": "current",
+        "evaluated_at": "2031-05-14T14:00:00+00:00",
+        "basis_refs": [
+          "goal-revision-recorded:goal-revision:7b043c69cdb047712a36f37951fafee3"
+        ]
+      },
+      "source_request": null,
+      "source_result": null,
+      "governance": {
+        "purpose": "prepare-authorized-review",
+        "principal_id": "principal:fictional-user",
+        "information_refs": [],
+        "lineage_refs": [],
+        "policy_binding_refs": [],
+        "policy_snapshot_refs": ["policy_11111111111111111111111111111111"],
+        "access_decision_refs": [],
+        "disclosure_decision_refs": [],
+        "source_trust_domain": "trust-domain:fictional-local",
+        "target_trust_domain": "trust-domain:fictional-local",
+        "disclosure_view_ref": null,
+        "payload_fingerprint": null,
+        "admitted_payload_fingerprint": null
+      },
+      "lifecycle": {
+        "supersedes_envelope_id": null,
+        "superseded_by_envelope_id": null,
+        "cancelled_by_event_id": null,
+        "cancellation_reason": null,
+        "valid_until": "2031-05-14T18:30:00+00:00"
+      },
+      "material_output": null,
+      "payload": {
+        "immediate_intent_ref": "intent:prepare-decision-review",
+        "coverage_claim": "awake_only"
+      }
+    },
+    {
+      "contract_revision": "situated-partner-2026-09-05-v1",
+      "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+      "schema_version": 1,
+      "envelope_id": "envelope:meridian:calendar-request:1",
+      "message_kind": "source_acquisition_request",
+      "recorded_at": "2031-05-14T14:01:00+00:00",
+      "correlation": {
+        "session_id": "session:meridian-prep",
+        "turn_id": null,
+        "topic_id": "topic:meridian-decision",
+        "request_id": "request:calendar:meridian:1",
+        "causation_event_id": "event:envelope:meridian:context:1"
+      },
+      "context": {
+        "context_id": "context:meridian-prep",
+        "situation_id": "situation:project-meridian-review",
+        "context_revision": 1,
+        "causal_cut": 7,
+        "goal_revision_id": "goal-revision:7b043c69cdb047712a36f37951fafee3",
+        "outcome_id": "outcome:decision-ready-review",
+        "immediate_intent_ref": "intent:prepare-decision-review",
+        "supported_assertion_refs": ["assertion:65098c6b347f4c014b355b52e6162dde"],
+        "unresolved_assertion_refs": ["assertion:15715ca7be4971544e9a2a97c9988c9d"],
+        "artifact_versions": []
+      },
+      "task": {
+        "work_order_id": "work-order:468307d51c15b35056ba9b6b96b5433e",
+        "work_node_id": "node:refresh-calendar",
+        "state": "awaiting_source",
+        "deadline": "2031-05-14T15:45:00+00:00",
+        "next_check_at": "2031-05-14T14:06:00+00:00",
+        "budget": {
+          "max_query_calls": 2,
+          "max_content_reads": 0,
+          "max_model_calls": 0,
+          "max_cost": 2.0
+        },
+        "usage": {
+          "query_calls": 0,
+          "content_reads": 0,
+          "model_calls": 0,
+          "cost": null
+        }
+      },
+      "freshness": {
+        "state": "current",
+        "evaluated_at": "2031-05-14T14:01:00+00:00",
+        "basis_refs": ["source-state:calendar:16"]
+      },
+      "source_request": {
+        "acquisition_request_id": "request:calendar:meridian:1",
+        "target_fact_ref": "fact:meridian-scheduled-start",
+        "reason_ref": "reason:decision-window",
+        "source_scope_ref": "scope:calendar:selected-review",
+        "source_account_ref": "account:calendar:fictional",
+        "match_policy_ref": "match:calendar:selected-event:v1",
+        "deadline": "2031-05-14T15:45:00+00:00",
+        "budget": {
+          "max_query_calls": 2,
+          "max_content_reads": 0,
+          "max_model_calls": 0,
+          "max_elapsed_ms": 5000,
+          "max_cost": 2.0
+        }
+      },
+      "source_result": null,
+      "governance": {
+        "purpose": "refresh-selected-review-time",
+        "principal_id": "principal:fictional-user",
+        "information_refs": ["info_22222222222222222222222222222222"],
+        "lineage_refs": ["lineage_33333333333333333333333333333333"],
+        "policy_binding_refs": ["binding_44444444444444444444444444444444"],
+        "policy_snapshot_refs": ["policy_11111111111111111111111111111111"],
+        "access_decision_refs": ["access_55555555555555555555555555555555"],
+        "disclosure_decision_refs": [],
+        "source_trust_domain": "trust-domain:fictional-local",
+        "target_trust_domain": "trust-domain:fictional-local",
+        "disclosure_view_ref": null,
+        "payload_fingerprint": null,
+        "admitted_payload_fingerprint": null
+      },
+      "lifecycle": {
+        "supersedes_envelope_id": null,
+        "superseded_by_envelope_id": null,
+        "cancelled_by_event_id": null,
+        "cancellation_reason": null,
+        "valid_until": "2031-05-14T15:45:00+00:00"
+      },
+      "material_output": null,
+      "payload": {}
+    },
+    {
+      "contract_revision": "situated-partner-2026-09-05-v1",
+      "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+      "schema_version": 1,
+      "envelope_id": "envelope:meridian:calendar-cancelled:1",
+      "message_kind": "cancellation",
+      "recorded_at": "2031-05-14T14:03:00+00:00",
+      "correlation": {
+        "session_id": "session:meridian-prep",
+        "turn_id": null,
+        "topic_id": "topic:meridian-decision",
+        "request_id": "request:calendar:meridian:1",
+        "causation_event_id": "event:calendar-rescheduled"
+      },
+      "context": {
+        "context_id": "context:meridian-prep",
+        "situation_id": "situation:project-meridian-review",
+        "context_revision": 2,
+        "causal_cut": 10,
+        "goal_revision_id": "goal-revision:7b043c69cdb047712a36f37951fafee3",
+        "outcome_id": "outcome:decision-ready-review",
+        "immediate_intent_ref": "intent:prepare-decision-review",
+        "supported_assertion_refs": ["assertion:72255002d82da82ce3751081ea91270f"],
+        "unresolved_assertion_refs": ["assertion:15715ca7be4971544e9a2a97c9988c9d"],
+        "artifact_versions": []
+      },
+      "task": {
+        "work_order_id": "work-order:468307d51c15b35056ba9b6b96b5433e",
+        "work_node_id": "node:refresh-calendar",
+        "state": "cancelled",
+        "deadline": "2031-05-14T15:45:00+00:00",
+        "next_check_at": null,
+        "budget": {
+          "max_query_calls": 2,
+          "max_content_reads": 0,
+          "max_model_calls": 0,
+          "max_cost": 2.0
+        },
+        "usage": {
+          "query_calls": 0,
+          "content_reads": 0,
+          "model_calls": 0,
+          "cost": 0.0
+        }
+      },
+      "freshness": {
+        "state": "stale",
+        "evaluated_at": "2031-05-14T14:03:00+00:00",
+        "basis_refs": ["event:calendar-rescheduled"]
+      },
+      "source_request": null,
+      "source_result": null,
+      "governance": {
+        "purpose": "refresh-selected-review-time",
+        "principal_id": "principal:fictional-user",
+        "information_refs": ["info_22222222222222222222222222222222"],
+        "lineage_refs": ["lineage_33333333333333333333333333333333"],
+        "policy_binding_refs": ["binding_44444444444444444444444444444444"],
+        "policy_snapshot_refs": ["policy_11111111111111111111111111111111"],
+        "access_decision_refs": ["access_55555555555555555555555555555555"],
+        "disclosure_decision_refs": [],
+        "source_trust_domain": "trust-domain:fictional-local",
+        "target_trust_domain": "trust-domain:fictional-local",
+        "disclosure_view_ref": null,
+        "payload_fingerprint": null,
+        "admitted_payload_fingerprint": null
+      },
+      "lifecycle": {
+        "supersedes_envelope_id": "envelope:meridian:calendar-request:1",
+        "superseded_by_envelope_id": null,
+        "cancelled_by_event_id": "event:calendar-rescheduled",
+        "cancellation_reason": "scheduled-time-changed",
+        "valid_until": null
+      },
+      "material_output": null,
+      "payload": {
+        "old_scheduled_start": "2031-05-14T16:00:00+00:00",
+        "new_scheduled_start": "2031-05-14T17:00:00+00:00",
+        "business_cutoff_unchanged": true
+      }
+    },
+    {
+      "contract_revision": "situated-partner-2026-09-05-v1",
+      "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+      "schema_version": 1,
+      "envelope_id": "envelope:meridian:notes-request:2",
+      "message_kind": "source_acquisition_request",
+      "recorded_at": "2031-05-14T14:04:00+00:00",
+      "correlation": {
+        "session_id": "session:meridian-prep",
+        "turn_id": null,
+        "topic_id": "topic:meridian-decision",
+        "request_id": "request:notes:meridian:2",
+        "causation_event_id": "event:calendar-rescheduled"
+      },
+      "context": {
+        "context_id": "context:meridian-prep",
+        "situation_id": "situation:project-meridian-review",
+        "context_revision": 2,
+        "causal_cut": 11,
+        "goal_revision_id": "goal-revision:7b043c69cdb047712a36f37951fafee3",
+        "outcome_id": "outcome:decision-ready-review",
+        "immediate_intent_ref": "intent:prepare-decision-review",
+        "supported_assertion_refs": ["assertion:72255002d82da82ce3751081ea91270f"],
+        "unresolved_assertion_refs": ["assertion:15715ca7be4971544e9a2a97c9988c9d"],
+        "artifact_versions": []
+      },
+      "task": {
+        "work_order_id": "work-order:468307d51c15b35056ba9b6b96b5433e",
+        "work_node_id": "node:find-decision-evidence",
+        "state": "awaiting_source",
+        "deadline": "2031-05-14T16:30:00+00:00",
+        "next_check_at": "2031-05-14T14:09:00+00:00",
+        "budget": {
+          "max_query_calls": 2,
+          "max_content_reads": 1,
+          "max_model_calls": 0,
+          "max_cost": 3.0
+        },
+        "usage": {
+          "query_calls": 0,
+          "content_reads": 0,
+          "model_calls": 0,
+          "cost": null
+        }
+      },
+      "freshness": {
+        "state": "current",
+        "evaluated_at": "2031-05-14T14:04:00+00:00",
+        "basis_refs": ["event:calendar-rescheduled"]
+      },
+      "source_request": {
+        "acquisition_request_id": "request:notes:meridian:2",
+        "target_fact_ref": "fact:meridian-decision-owner",
+        "reason_ref": "reason:owner-changes-handoff",
+        "source_scope_ref": "scope:notes:meridian",
+        "source_account_ref": "account:notes:fictional",
+        "match_policy_ref": "match:notes:meridian:v1",
+        "deadline": "2031-05-14T16:30:00+00:00",
+        "budget": {
+          "max_query_calls": 2,
+          "max_content_reads": 1,
+          "max_model_calls": 0,
+          "max_elapsed_ms": 8000,
+          "max_cost": 3.0
+        }
+      },
+      "source_result": null,
+      "governance": {
+        "purpose": "resolve-decision-owner",
+        "principal_id": "principal:fictional-user",
+        "information_refs": ["info_66666666666666666666666666666666"],
+        "lineage_refs": ["lineage_77777777777777777777777777777777"],
+        "policy_binding_refs": ["binding_88888888888888888888888888888888"],
+        "policy_snapshot_refs": ["policy_11111111111111111111111111111111"],
+        "access_decision_refs": ["access_99999999999999999999999999999999"],
+        "disclosure_decision_refs": [],
+        "source_trust_domain": "trust-domain:fictional-local",
+        "target_trust_domain": "trust-domain:fictional-local",
+        "disclosure_view_ref": null,
+        "payload_fingerprint": null,
+        "admitted_payload_fingerprint": null
+      },
+      "lifecycle": {
+        "supersedes_envelope_id": null,
+        "superseded_by_envelope_id": null,
+        "cancelled_by_event_id": null,
+        "cancellation_reason": null,
+        "valid_until": "2031-05-14T16:30:00+00:00"
+      },
+      "material_output": null,
+      "payload": {}
+    },
+    {
+      "contract_revision": "situated-partner-2026-09-05-v1",
+      "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+      "schema_version": 1,
+      "envelope_id": "envelope:meridian:notes-result:2",
+      "message_kind": "source_acquisition_result",
+      "recorded_at": "2031-05-14T14:05:00+00:00",
+      "correlation": {
+        "session_id": "session:meridian-prep",
+        "turn_id": null,
+        "topic_id": "topic:meridian-decision",
+        "request_id": "request:notes:meridian:2",
+        "causation_event_id": "event:envelope:meridian:notes-request:2"
+      },
+      "context": {
+        "context_id": "context:meridian-prep",
+        "situation_id": "situation:project-meridian-review",
+        "context_revision": 2,
+        "causal_cut": 12,
+        "goal_revision_id": "goal-revision:7b043c69cdb047712a36f37951fafee3",
+        "outcome_id": "outcome:decision-ready-review",
+        "immediate_intent_ref": "intent:prepare-decision-review",
+        "supported_assertion_refs": [
+          "assertion:72255002d82da82ce3751081ea91270f",
+          "assertion:5ff08b442eef47560cc82393000340b3"
+        ],
+        "unresolved_assertion_refs": [],
+        "artifact_versions": []
+      },
+      "task": {
+        "work_order_id": "work-order:468307d51c15b35056ba9b6b96b5433e",
+        "work_node_id": "node:find-decision-evidence",
+        "state": "completed",
+        "deadline": "2031-05-14T16:30:00+00:00",
+        "next_check_at": null,
+        "budget": {
+          "max_query_calls": 2,
+          "max_content_reads": 1,
+          "max_model_calls": 0,
+          "max_cost": 3.0
+        },
+        "usage": {
+          "query_calls": 1,
+          "content_reads": 1,
+          "model_calls": 0,
+          "cost": 1.5
+        }
+      },
+      "freshness": {
+        "state": "current",
+        "evaluated_at": "2031-05-14T14:05:00+00:00",
+        "basis_refs": ["evidence:notes:meridian:17"]
+      },
+      "source_request": null,
+      "source_result": {
+        "acquisition_request_id": "request:notes:meridian:2",
+        "request_context_id": "context:meridian-prep",
+        "request_context_revision": 2,
+        "request_causal_cut": 11,
+        "source_version": "17",
+        "source_cursor": "cursor:notes:17",
+        "observed_at": "2031-05-14T14:05:00+00:00",
+        "status": "FOUND",
+        "evidence_refs": ["evidence:notes:meridian:17"],
+        "coverage": {
+          "scope_ref": "scope:notes:meridian",
+          "completeness": "partial",
+          "limitation_refs": ["limitation:single-authorized-section"]
+        },
+        "retry_eligible": false,
+        "expires_at": "2031-05-14T18:30:00+00:00"
+      },
+      "governance": {
+        "purpose": "resolve-decision-owner",
+        "principal_id": "principal:fictional-user",
+        "information_refs": ["info_66666666666666666666666666666666"],
+        "lineage_refs": ["lineage_77777777777777777777777777777777"],
+        "policy_binding_refs": ["binding_88888888888888888888888888888888"],
+        "policy_snapshot_refs": ["policy_11111111111111111111111111111111"],
+        "access_decision_refs": ["access_99999999999999999999999999999999"],
+        "disclosure_decision_refs": [],
+        "source_trust_domain": "trust-domain:fictional-local",
+        "target_trust_domain": "trust-domain:fictional-local",
+        "disclosure_view_ref": null,
+        "payload_fingerprint": null,
+        "admitted_payload_fingerprint": null
+      },
+      "lifecycle": {
+        "supersedes_envelope_id": null,
+        "superseded_by_envelope_id": null,
+        "cancelled_by_event_id": null,
+        "cancellation_reason": null,
+        "valid_until": "2031-05-14T18:30:00+00:00"
+      },
+      "material_output": null,
+      "payload": {
+        "fact_assertion_ref": "assertion:5ff08b442eef47560cc82393000340b3"
+      }
+    },
+    {
+      "contract_revision": "situated-partner-2026-09-05-v1",
+      "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+      "schema_version": 1,
+      "envelope_id": "envelope:meridian:decision-card:1",
+      "message_kind": "material_output",
+      "recorded_at": "2031-05-14T14:06:00+00:00",
+      "correlation": {
+        "session_id": "session:meridian-prep",
+        "turn_id": "turn:opening",
+        "topic_id": "topic:meridian-decision",
+        "request_id": "request:brief:meridian:1",
+        "causation_event_id": "memory-assertion:assertion:5ff08b442eef47560cc82393000340b3"
+      },
+      "context": {
+        "context_id": "context:meridian-prep",
+        "situation_id": "situation:project-meridian-review",
+        "context_revision": 2,
+        "causal_cut": 14,
+        "goal_revision_id": "goal-revision:7b043c69cdb047712a36f37951fafee3",
+        "outcome_id": "outcome:decision-ready-review",
+        "immediate_intent_ref": "intent:prepare-decision-review",
+        "supported_assertion_refs": [
+          "assertion:72255002d82da82ce3751081ea91270f",
+          "assertion:5ff08b442eef47560cc82393000340b3"
+        ],
+        "unresolved_assertion_refs": [],
+        "artifact_versions": [
+          {
+            "artifact_id": "artifact:meridian-decision-card",
+            "version": 1,
+            "selection_ref": null
+          }
+        ]
+      },
+      "task": {
+        "work_order_id": "work-order:468307d51c15b35056ba9b6b96b5433e",
+        "work_node_id": "node:prepare-brief",
+        "state": "completed",
+        "deadline": "2031-05-14T16:45:00+00:00",
+        "next_check_at": null,
+        "budget": {
+          "max_query_calls": 0,
+          "max_content_reads": 0,
+          "max_model_calls": 1,
+          "max_cost": 4.0
+        },
+        "usage": {
+          "query_calls": 0,
+          "content_reads": 0,
+          "model_calls": 1,
+          "cost": 2.0
+        }
+      },
+      "freshness": {
+        "state": "current",
+        "evaluated_at": "2031-05-14T14:06:00+00:00",
+        "basis_refs": [
+          "assertion:5ff08b442eef47560cc82393000340b3",
+          "event:calendar-rescheduled"
+        ]
+      },
+      "source_request": null,
+      "source_result": null,
+      "governance": {
+        "purpose": "prepare-authorized-review",
+        "principal_id": "principal:fictional-user",
+        "information_refs": ["info_66666666666666666666666666666666"],
+        "lineage_refs": [
+          "lineage_77777777777777777777777777777777",
+          "lineage_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ],
+        "policy_binding_refs": [
+          "binding_88888888888888888888888888888888",
+          "binding_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "policy_snapshot_refs": ["policy_11111111111111111111111111111111"],
+        "access_decision_refs": ["access_99999999999999999999999999999999"],
+        "disclosure_decision_refs": [],
+        "source_trust_domain": "trust-domain:fictional-local",
+        "target_trust_domain": "trust-domain:fictional-local",
+        "disclosure_view_ref": null,
+        "payload_fingerprint": null,
+        "admitted_payload_fingerprint": null
+      },
+      "lifecycle": {
+        "supersedes_envelope_id": null,
+        "superseded_by_envelope_id": null,
+        "cancelled_by_event_id": null,
+        "cancellation_reason": null,
+        "valid_until": "2031-05-14T16:45:00+00:00"
+      },
+      "material_output": {
+        "artifact_id": "artifact:meridian-decision-card",
+        "artifact_version": 1,
+        "generated_against_context_revision": 2,
+        "generated_at_causal_cut": 14,
+        "revalidated_context_revision": 2,
+        "revalidated_at_causal_cut": 14,
+        "generated_at": "2031-05-14T14:05:30+00:00",
+        "received_at": null,
+        "displayed_at": null,
+        "played_ranges": [],
+        "transport_receipt_event_id": null,
+        "user_acknowledgement_event_id": null,
+        "understanding_evidence_refs": [],
+        "action_evidence_refs": [],
+        "requires_revalidation": false
+      },
+      "payload": {
+        "content_ref": "artifact-content:meridian-decision-card:1"
+      }
+    },
+    {
+      "contract_revision": "situated-partner-2026-09-05-v1",
+      "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+      "schema_version": 1,
+      "envelope_id": "envelope:river:context:3",
+      "message_kind": "context_snapshot",
+      "recorded_at": "2031-05-14T14:07:00+00:00",
+      "correlation": {
+        "session_id": "session:river-planning",
+        "turn_id": "turn:1",
+        "topic_id": "topic:river-plan",
+        "request_id": null,
+        "causation_event_id": "event:topic-switched"
+      },
+      "context": {
+        "context_id": "context:river-planning",
+        "situation_id": "situation:project-river-plan",
+        "context_revision": 3,
+        "causal_cut": 18,
+        "goal_revision_id": "goal-revision:e513cccf816ae6f19a5b92b88c8db1b0",
+        "outcome_id": "outcome:river-plan",
+        "immediate_intent_ref": "intent:plan-river-project",
+        "supported_assertion_refs": [],
+        "unresolved_assertion_refs": [],
+        "artifact_versions": []
+      },
+      "task": null,
+      "freshness": {
+        "state": "current",
+        "evaluated_at": "2031-05-14T14:07:00+00:00",
+        "basis_refs": ["event:topic-switched"]
+      },
+      "source_request": null,
+      "source_result": null,
+      "governance": {
+        "purpose": "plan-fictional-project",
+        "principal_id": "principal:fictional-user",
+        "information_refs": [],
+        "lineage_refs": [],
+        "policy_binding_refs": [],
+        "policy_snapshot_refs": ["policy_cccccccccccccccccccccccccccccccc"],
+        "access_decision_refs": [],
+        "disclosure_decision_refs": [],
+        "source_trust_domain": "trust-domain:fictional-local",
+        "target_trust_domain": "trust-domain:fictional-local",
+        "disclosure_view_ref": null,
+        "payload_fingerprint": null,
+        "admitted_payload_fingerprint": null
+      },
+      "lifecycle": {
+        "supersedes_envelope_id": null,
+        "superseded_by_envelope_id": null,
+        "cancelled_by_event_id": null,
+        "cancellation_reason": null,
+        "valid_until": null
+      },
+      "material_output": null,
+      "payload": {
+        "immediate_intent_ref": "intent:plan-river-project"
+      }
+    },
+    {
+      "contract_revision": "situated-partner-2026-09-05-v1",
+      "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+      "schema_version": 1,
+      "envelope_id": "envelope:meridian:calendar-result:late",
+      "message_kind": "source_acquisition_result",
+      "recorded_at": "2031-05-14T14:08:00+00:00",
+      "correlation": {
+        "session_id": "session:meridian-prep",
+        "turn_id": null,
+        "topic_id": "topic:meridian-decision",
+        "request_id": "request:calendar:meridian:1",
+        "causation_event_id": "event:envelope:meridian:calendar-request:1"
+      },
+      "context": {
+        "context_id": "context:meridian-prep",
+        "situation_id": "situation:project-meridian-review",
+        "context_revision": 1,
+        "causal_cut": 19,
+        "goal_revision_id": "goal-revision:7b043c69cdb047712a36f37951fafee3",
+        "outcome_id": "outcome:decision-ready-review",
+        "immediate_intent_ref": "intent:prepare-decision-review",
+        "supported_assertion_refs": ["assertion:65098c6b347f4c014b355b52e6162dde"],
+        "unresolved_assertion_refs": ["assertion:15715ca7be4971544e9a2a97c9988c9d"],
+        "artifact_versions": []
+      },
+      "task": {
+        "work_order_id": "work-order:468307d51c15b35056ba9b6b96b5433e",
+        "work_node_id": "node:refresh-calendar",
+        "state": "cancelled",
+        "deadline": "2031-05-14T15:45:00+00:00",
+        "next_check_at": null,
+        "budget": {
+          "max_query_calls": 2,
+          "max_content_reads": 0,
+          "max_model_calls": 0,
+          "max_cost": 2.0
+        },
+        "usage": {
+          "query_calls": 1,
+          "content_reads": 0,
+          "model_calls": 0,
+          "cost": 1.0
+        }
+      },
+      "freshness": {
+        "state": "stale",
+        "evaluated_at": "2031-05-14T14:08:00+00:00",
+        "basis_refs": ["event:calendar-rescheduled", "event:topic-switched"]
+      },
+      "source_request": null,
+      "source_result": {
+        "acquisition_request_id": "request:calendar:meridian:1",
+        "request_context_id": "context:meridian-prep",
+        "request_context_revision": 1,
+        "request_causal_cut": 7,
+        "source_version": "16",
+        "source_cursor": "cursor:calendar:16",
+        "observed_at": "2031-05-14T14:02:00+00:00",
+        "status": "FOUND",
+        "evidence_refs": ["evidence:calendar:meridian:16"],
+        "coverage": {
+          "scope_ref": "scope:calendar:selected-review",
+          "completeness": "complete",
+          "limitation_refs": []
+        },
+        "retry_eligible": false,
+        "expires_at": "2031-05-14T15:45:00+00:00"
+      },
+      "governance": {
+        "purpose": "refresh-selected-review-time",
+        "principal_id": "principal:fictional-user",
+        "information_refs": ["info_22222222222222222222222222222222"],
+        "lineage_refs": ["lineage_33333333333333333333333333333333"],
+        "policy_binding_refs": ["binding_44444444444444444444444444444444"],
+        "policy_snapshot_refs": ["policy_11111111111111111111111111111111"],
+        "access_decision_refs": ["access_55555555555555555555555555555555"],
+        "disclosure_decision_refs": [],
+        "source_trust_domain": "trust-domain:fictional-local",
+        "target_trust_domain": "trust-domain:fictional-local",
+        "disclosure_view_ref": null,
+        "payload_fingerprint": null,
+        "admitted_payload_fingerprint": null
+      },
+      "lifecycle": {
+        "supersedes_envelope_id": null,
+        "superseded_by_envelope_id": "envelope:meridian:calendar-cancelled:1",
+        "cancelled_by_event_id": "event:calendar-rescheduled",
+        "cancellation_reason": "stale-context-and-request",
+        "valid_until": null
+      },
+      "material_output": null,
+      "payload": {
+        "surface_eligible": false,
+        "arrived_at_canonical_head": 19
+      }
+    }
+  ],
+  "case_inputs": {
+    "T02": {
+      "scheduled_end_passed": true,
+      "actual_outcome_evidence": null,
+      "expected_belief": "unknown"
+    },
+    "T09": {
+      "slept_from": "2031-05-14T13:00:00+00:00",
+      "woke_at": "2031-05-14T14:00:00+00:00",
+      "coverage_claim": "awake_only",
+      "catch_up_required": true
+    },
+    "T10": {
+      "goal_status": "cancelled",
+      "in_flight_request_id": "request:cancelled-goal:1",
+      "surface_eligible": false
+    },
+    "T11": {
+      "budget": {"max_query_calls": 1, "max_content_reads": 1, "max_model_calls": 1},
+      "usage": {"query_calls": 1, "content_reads": 1, "model_calls": 1},
+      "next_state": "blocked",
+      "additional_calls": 0
+    },
+    "T13": {
+      "otel_available": false,
+      "canonical_observer_available": true
+    },
+    "T25": {
+      "scope_state": "excluded",
+      "source_ref": "source:excluded-editor",
+      "observations": [],
+      "durable_observation_scope_runtime": "unimplemented"
+    },
+    "T30": {
+      "source_event_families": ["conversation.requested"],
+      "unsolicited_denominator_present": false,
+      "learning_eligible": false
+    },
+    "T31": {
+      "classification": "restricted",
+      "storage_gate": "blocked",
+      "access_disposition": "deny"
+    },
+    "T35": {
+      "historical_goal_revision_id": "goal-revision:7b043c69cdb047712a36f37951fafee3",
+      "current_goal_revision_id": "goal-revision:e513cccf816ae6f19a5b92b88c8db1b0",
+      "governing_revision_id": "goal-revision:e513cccf816ae6f19a5b92b88c8db1b0"
+    }
+  }
+}

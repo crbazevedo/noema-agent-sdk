@@ -1226,6 +1226,40 @@ invariants.
 | Habit Learning (accepted direction; runtime blocked on a real corpus) | projected `HabitEpisode` / `HabitEvidenceBundle` / deterministic predicate miner / fitness and collision reports / `RuleLifecycleProjection` |
 | Developmental intervention (accepted ADR 0013; runtime staged) | existing outcome roles and `AssistanceEnvelope`, plus the smallest future intervention/outcome/feedback seam proven necessary |
 | Private cognitive ecology (proposed) | existing `Signal` / `Inquiry` / DREAM budget / common cognitive allocator / `ConsumerCheckpoint`; concern-specific detectors and typed assessment schemas |
+| Situated Partner exchange (synthetic contract candidate) | versioned context/correlation/source/task/governance/cancellation envelope over existing canonical projections; never a second truth store |
+| Durable situation watch and source acquisition (proposed ADR 0014) | explicit observation scope, semantic watch cause, bounded request/result taxonomy, cancellation and catch-up; no second scheduler |
+| Material output and presentation truth (proposed ADR 0015) | generation basis, exact-head revalidation, transport/display/playback/acknowledgement/understanding/action evidence kept independent |
+
+## Situated Partner conformance boundary
+
+The SDK carries a sanitized, pinned mirror of the Companion-owned situated
+partner program and one fictional G1 rehearsal. The contract composes existing
+intent, memory, continuity, work, governance, authority, event, checkpoint, and
+tracing APIs. It does not import meeting or desktop-product concepts into core.
+
+```text
+current authorized outcome
+  → bounded evidence demand
+  → application source request/result envelope
+  → current epistemic state and explicit unknowns
+  → proposal-only work
+  → context-revision revalidation
+  → application presentation or separately authorized effect
+```
+
+The exchange envelope is a content-pinned projection at a canonical cut.
+Realtime sessions, provider state, Observatory cards, and indexes are disposable
+consumers. OTel may enrich a runtime overlay but cannot define task state,
+repair canonical history, or authorize work. Acquisition priority, cognitive
+priority, intervention priority, and effect authority remain independent.
+
+The synthetic proof demonstrates causal cuts, cancellation/supersession,
+fact/forecast separation, finite budgets, replay, stale-result rejection, and
+the work/effect boundary. It does not prove durable autonomous scheduling,
+continuous observation, generic delivery receipts, protected storage, live
+voice, or field effectiveness. Those truth ceilings and the exact consumer pin
+are in the
+[Situated Partner integration contract](pilot/SITUATED_PARTNER_INTEGRATION.md).
 
 ## Non-goals of the core
 
@@ -1269,5 +1303,11 @@ policy.
 - [ADR 0013](adr/0013-durable-developmental-intervention.md): accepted
   developmental-intervention boundary for improving a named current user
   outcome without owning user values or decision authority; runtime staged.
+- [ADR 0014](adr/0014-durable-situation-watch-and-source-acquisition.md):
+  proposed durable observation-scope, situation-watch, and bounded source-
+  acquisition lifecycle; no runtime implementation authorized;
+- [ADR 0015](adr/0015-durable-material-output-presentation.md): proposed
+  material-output revalidation and independently evidenced presentation/
+  playback lifecycle; no runtime implementation authorized.
 
 See the [roadmap](ROADMAP.md) for delivery order and release acceptances.

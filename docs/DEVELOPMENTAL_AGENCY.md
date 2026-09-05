@@ -135,6 +135,43 @@ counterevidence, uncertainty, provenance, validity, and policy lineage. Model
 scratchpads and hidden reasoning transcripts are not canonical state and are
 not a durable memory format.
 
+## Situated acquisition and presentation boundary
+
+The first situated-partner application proof sharpens the developmental chain
+without implementing the intervention runtime:
+
+```text
+governed observation scope
+  -> bounded source acquisition
+  -> private cognition
+  -> typed assessment
+  -> possible intervention allocation
+  -> silence / remember / defer / wake
+  -> application presentation or separately authorized effect
+```
+
+Source acquisition answers whether bounded permitted evidence can be obtained.
+Cognitive allocation answers whether that evidence deserves private compute.
+Intervention allocation later answers whether an assessment deserves user
+attention. Effect admission answers whether a specific capability may act.
+None implies the next.
+
+The application may maintain one versioned context across background work,
+text, voice, and visual artifacts, but that context is a projection at a
+canonical cut rather than memory truth. A material output names the context in
+which it was generated and must be revalidated against current intent,
+evidence, artifact versions, policy, cancellation, and supersession before it
+is presented or acted on. Generated, received, displayed, played,
+acknowledged, understood, and acted-on evidence remain separate.
+
+The SDK-side projection contract and fictional G1 proof are in
+[Situated Partner integration](pilot/SITUATED_PARTNER_INTEGRATION.md). Durable
+situation-watch/source-acquisition and material-presentation runtime semantics
+are proposed in [ADR 0014](adr/0014-durable-situation-watch-and-source-acquisition.md)
+and [ADR 0015](adr/0015-durable-material-output-presentation.md). Both remain
+unimplemented. Meeting readiness, dialogue, Observatory UX, workflow
+hypotheses, and development modes stay application-local.
+
 ## Evidence after intervention
 
 An admitted intervention proves only what was proposed and admitted at a

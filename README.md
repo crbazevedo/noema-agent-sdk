@@ -139,6 +139,19 @@ silent. [Accepted ADR 0013](docs/adr/0013-durable-developmental-intervention.md)
 defines the architecture boundary for that extension; its runtime remains
 staged.
 
+The [Situated Partner integration contract](docs/pilot/SITUATED_PARTNER_INTEGRATION.md)
+is the conformance-first bridge to the next Companion evidence wave. Its
+fictional Project Meridian rehearsal demonstrates current intent, epistemic
+fact/forecast separation, bounded evidence work, causal cancellation, a
+versioned cross-surface context envelope, OTel-independent observer replay,
+stale-result suppression, and proposal-only work with separate effect
+authority. This is synthetic contract evidence, not a claim that live voice,
+durable no-prompt watches, protected ingestion, or field effectiveness exists.
+Proposed [ADR 0014](docs/adr/0014-durable-situation-watch-and-source-acquisition.md)
+and [ADR 0015](docs/adr/0015-durable-material-output-presentation.md) record the
+two generic runtime lanes that require architecture review; neither is
+implemented.
+
 The embedded core has **no runtime dependencies outside Python 3.11+**.
 PostgreSQL, NATS, OpenAI, and OpenTelemetry integrations are optional adapters.
 
@@ -545,10 +558,13 @@ operating corpus is still required before learning runtime may begin. v0.6.4 is
 the accepted, runtime-staged developmental-intervention foundation. v0.7 Habit
 Learning remains a runtime NO-GO until real Companion evidence supplies that
 corpus, and proposed v0.7.x then extends the same bounded cognitive portfolio
-into a private cognitive ecology. None of these releases may create a second scheduler,
-a second effect path, or a durable model scratchpad: typed evidence and
-assessments enter the canonical log, while all cognitive demand competes in one
-shared scarce-cognition portfolio.
+into a private cognitive ecology. A pilot-driven cross-cutting path may begin
+narrow authorized source observation before Habit Learning and before broad
+v0.8 Situated Presence; observation supplies possible evidence but never
+bypasses `LEARN` or the real-corpus gate. None of these releases may create a
+second scheduler, a second effect path, or a durable model scratchpad: typed
+evidence and assessments enter the canonical log, while all cognitive demand
+competes in one shared scarce-cognition portfolio.
 
 The deterministic Information Governance foundation is implemented as a
 separate cross-cutting layer. Its remaining artifact, sink, and connector slices
@@ -586,4 +602,8 @@ The cross-cutting programme contracts are summarized in
 [provider-neutral evaluation](docs/EVALUATION.md). The flagship application
 boundary is documented in the
 [Companion P0 pilot](docs/pilot/NOEMA_COMPANION_P0.md) and its
-[acceptance requirements](docs/pilot/COMPANION_REQUIREMENTS.md).
+[attention-telemetry acceptance requirements](docs/pilot/COMPANION_REQUIREMENTS.md).
+The newer shared situated-partner program is pinned by the
+[SDK integration contract](docs/pilot/SITUATED_PARTNER_INTEGRATION.md), its
+[sanitized requirement mirror](docs/pilot/situated-partner-contract-v1.json),
+and the exact-SHA lock recorded on the review branch.

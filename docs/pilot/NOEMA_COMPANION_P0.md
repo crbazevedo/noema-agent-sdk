@@ -1,5 +1,13 @@
 # Companion P0 pilot
 
+> **Scope note (2026-09-05):** This document remains the normative narrow
+> attention-telemetry pilot specification and historical evidence baseline. It
+> does not contain the newer situated-partner product ledger or schedule. The
+> current sanitized cross-repository requirement mirror, G1 envelope, status
+> truth, and exact consumer-pin procedure are in
+> [Situated Partner integration](SITUATED_PARTNER_INTEGRATION.md). The older
+> commit table below must not be read as the current situated-partner pin.
+
 ## Purpose
 
 The product promise is:

@@ -223,6 +223,16 @@ The record does not mean the advice was correct, accepted, delivered, or acted
 upon. If presentation or notification is an external effect in a deployment,
 the normal effect policy and delivery contract remain separately mandatory.
 
+The situated-partner pilot further separates the path into governed source
+acquisition, private cognitive allocation, assessment, intervention allocation,
+presentation, and any later effect. Acquisition priority is not cognitive
+priority, cognitive priority is not intervention priority, and none grants
+effect authority. A versioned cross-surface context may carry opaque references
+to these records, but remains a projection rather than canonical memory.
+Proposed ADR 0014 owns durable watch/acquisition/observation-scope semantics;
+proposed ADR 0015 owns material-output/presentation receipts. Neither proposal
+changes this ADR's accepted status or authorizes its staged runtime.
+
 ### Admit against exact current state
 
 Material intervention admission follows the established expected-head

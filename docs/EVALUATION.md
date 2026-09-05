@@ -30,6 +30,41 @@ OpenTelemetry is an observability transport, not the canonical evaluation
 record. A dashboard, trace backend, or exported file is always a projection of
 canonical evidence and cannot authorize access, learning, or effects.
 
+## Situated Partner evidence levels
+
+The shared situated-partner program uses the repository status vocabulary:
+
+```text
+USER_APPROVED_REQUIREMENT -> PROPOSED_DESIGN -> ACCEPTED_ARCHITECTURE
+-> IMPLEMENTED -> SYNTHETICALLY_VERIFIED -> LIVE_SUPERVISED
+-> PILOT_VALIDATED
+```
+
+`DEFERRED` and `BLOCKED` are explicit side states. A later state never follows
+from prose alone. `IMPLEMENTED` in the SDK requirement mirror describes only
+the named SDK substrate; it does not mark the whole product requirement
+implemented.
+
+The [Project Meridian G1 rehearsal](pilot/SITUATED_PARTNER_INTEGRATION.md)
+provides synthetic contract evidence for T01, T02, T09, T10, T11, T13, T16,
+T25, T30, T31, T34, and T35. Its ceiling is deliberately narrow:
+
+- T34 proves existing SDK APIs can compose the integration boundary, not that
+  the Companion, live dialogue, or field outcome works;
+- T25 proves a static fictional exclusion, not durable observation-scope
+  pause/expiry/revocation;
+- T31 proves fail-closed contract behavior, not encrypted storage, deletion,
+  backup, secure transport, or signed packaging;
+- T30 proves a solicited-only corpus is ineligible, not that a qualifying real
+  learning corpus exists; and
+- display or playback evidence never establishes comprehension, agreement,
+  action, or outcome.
+
+Every situated-partner report must name the exact SDK contract-source commit,
+Companion commit, shared requirement revision/digest, schema/mirror/fixture
+digests, application configuration, evidence level, denominator/coverage, and
+unresolved gates. Synthetic and live evidence are never pooled silently.
+
 ## Evaluation population and evidence semantics
 
 The unit of exposure is a source event recognized by a source-policy snapshot

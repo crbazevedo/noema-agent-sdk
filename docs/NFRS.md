@@ -34,6 +34,90 @@ views. None may create authority or repair canonical history silently.
 | Observability | A provider-neutral tracer protocol, null tracer, optional OpenTelemetry adapter, OTLP exporter, and scalar span attributes exist. | A centrally enforced safe-attribute allowlist and redaction verification gate do not yet exist. |
 | Configuration reproducibility | Attention records mechanism, version, configuration reference, source policy, feature schema, evidence, and costs. | `ExperimentFingerprintV1` and a canonical evaluation-run contract are staged, not implemented. |
 
+## Situated Partner contract gates
+
+These gates apply to the provider-neutral v1 envelope and its fictional G1
+rehearsal. They are not evidence that proposed ADR 0014/0015 runtime exists.
+
+### NFR-SP-01 — immutable contract identity
+
+Every consumer build must pin the shared requirement revision/digest, envelope
+schema version, exact SDK contract-source commit, and content digests from
+`docs/pilot/situated-partner.lock.json`. Unknown schema versions fail closed;
+IPC, event, and situated-envelope version domains are independent.
+
+**Synthetic target:** every committed fixture validates against exactly one
+schema version; changing the mirror, schema, fixture, example, requirement IDs,
+dates, status vocabulary, or backlog dependency graph without updating the lock
+or source commit fails the gate.
+
+### NFR-SP-02 — current context and stale-result safety
+
+Provider/tool requests and results carry opaque session, turn, topic, request,
+context ID/revision, causal cut, goal/outcome, and artifact-version references.
+Before material presentation or effect, the application compares current
+intent, evidence, artifact, policy, cancellation, and supersession state. An
+unrelated canonical advance may be revalidated; a material mismatch denies the
+old result.
+
+**Synthetic target:** 100% of late mismatched results in the frozen fixture are
+retained as history but are ineligible for the current surface. No test may
+silently rebind an old result to a new context.
+
+### NFR-SP-03 — deadline, budget, and availability truth
+
+Each bounded source/task envelope pins deadline, next check, and finite
+query/read/model/time/cost ceilings. Unknown measured cost remains `null`.
+Sleep/offline intervals create explicit observation-coverage gaps; catch-up
+rechecks relevance and expiry before work.
+
+**Synthetic target:** virtual-time T01/T09/T10/T11 runs perform no call beyond a
+ceiling, cancel the obsolete request after reschedule or terminal intent,
+preserve independent business deadlines, and never claim observation during
+host downtime.
+
+**Blocker:** `AsyncScheduler` is process-local, WorkOrder deadline fields do not
+currently gate `ReadyFrontier`, and durable watch/catch-up/cancellation semantics
+remain proposed in ADR 0014.
+
+### NFR-SP-04 — observer truth without OTel
+
+The optional Observatory rebuilds semantic state from normalized canonical
+events at one cut. Runtime telemetry is a separately timestamped overlay. A
+missing/stale OTel sink changes only overlay availability; it cannot make work
+run, complete, cancel, or gain authority.
+
+**Synthetic target:** the Project Meridian observer reaches the identical
+cursor and task map before and after replay with no OTel adapter. No lifecycle
+label is derived from animation, elapsed time, model invocation, or lease alone.
+
+### NFR-SP-05 — source and presentation evidence integrity
+
+Source results use the complete eight-status taxonomy and cite request basis,
+source version/cursor, observation time, evidence, coverage, retry, expiry, and
+policy lineage. Material output separately records generation, transport,
+display, exact played range, acknowledgement, understanding, action, and later
+outcome evidence.
+
+**Synthetic target:** schema and negative tests reject request/result mixing,
+unknown versions, stale results, over-budget usage, and impossible playback
+ranges. Empty understanding/action evidence remains unknown.
+
+**Blocker:** generic durable source/observation lifecycle and material
+presentation receipts are proposed in ADRs 0014 and 0015; synthetic envelopes
+do not implement them.
+
+### NFR-SP-06 — governed provider and source boundary
+
+Every protected reference keeps immutable lineage, policy binding, access
+decision, and required cross-domain disclosure decision. The admitted
+disclosure form must match the bytes sent. Source content is excluded from IDs,
+correlation fields, ordinary telemetry, exceptions, and committed fixtures.
+
+**Pilot gate:** remote model/source use remains disabled for a context unless
+both access and disclosure are admitted at the current causal head and the
+storage/retention/transport/package gates for its classification pass.
+
 ## Reliability and semantic integrity
 
 ### NFR-REL-01 — deterministic replay
