@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "contract_revision": "situated-partner-2026-09-05-v1",
+  "source_requirements_digest": "sha256:ce7cc401f1d4452c491acf438828dea801b5fc7e104a0a09cc6970cde1e6e587",
+  "sdk_baseline_sha": "43a2d12e031714f39816e746c07ed312d2497d1f",
+  "sdk_contract_source_sha": "2907b1fb6d9fac0d613a8574f6dea4bfa11c6ec8",
+  "sdk_lock_commit_note": "sdk_contract_source_sha identifies the immutable parent of the lock-only commit and avoids a self-referential digest",
+  "companion_reviewed_candidate_sha": "d9422f46bfec8bf43d1ee541b5b61f4fe8dfcbc6",
+  "companion_source_sha": "a3b74de4f25b9e6391ef9bd0b8dbac719b9a9e7f",
+  "companion_historical_sdk_pin": "db403bece5b4c15df0a5fa3c211fb89b9a27f013",
+  "consumer_status": "candidate; Companion W00 confirmation pending",
+  "files": {
+    "docs/pilot/situated-partner-contract-v1.json": "sha256:809828603b8cb7b0ababbba29dea64b08919b625a60ca6c362bc3ca2172ce14f",
+    "docs/pilot/contracts/situated-partner-envelope-v1.schema.json": "sha256:2e26f23a2a4b35a0489b90d89df935f116080c5b5855ade0ce85fc44ec6f69f7",
+    "docs/pilot/fixtures/project-meridian-g1.json": "sha256:495912bd4da77664848bc5bd54f09078bdacf77856bcb7e63a2b5a54a736491e",
+    "docs/pilot/SITUATED_PARTNER_INTEGRATION.md": "sha256:c6a39e0a51529d34da95ac67b1e77fbfb77c4c5892cae0ee48e2dd1cb772229b",
+    "examples/situated_partner_conformance.py": "sha256:ea47baabf560c3fec4c34948b93b7a6cff46bcfd99d9ec8e7f02a9c8a799f92b",
+    "tests/test_situated_partner_contract.py": "sha256:218a0e19a98d6e138ce2de0b14de49b4e7b066666932b50d7ff821b9d6f6c518"
+  }
+}
