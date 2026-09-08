@@ -1,0 +1,185 @@
+{
+  "schema": "proactive-examples-observations-v1",
+  "python": "3.12.13",
+  "noema_source_baseline": "621be5a8a0823c1a02c893edc69967f552e0895d",
+  "versions": {
+    "noema-agent-sdk": "0.6.2",
+    "google-adk": "2.8.0",
+    "langgraph": "1.2.11",
+    "langgraph-checkpoint-sqlite": "3.1.1"
+  },
+  "lessons": [
+    {
+      "framework": "noema",
+      "level": 1,
+      "behavior_matches": true,
+      "tool_calls": 1,
+      "notices": 1
+    },
+    {
+      "framework": "adk",
+      "level": 1,
+      "behavior_matches": true,
+      "tool_calls": 1,
+      "notices": 1
+    },
+    {
+      "framework": "langgraph",
+      "level": 1,
+      "behavior_matches": true,
+      "tool_calls": 1,
+      "notices": 1
+    },
+    {
+      "framework": "noema",
+      "level": 2,
+      "behavior_matches": true,
+      "tool_calls": 4,
+      "notices": 1
+    },
+    {
+      "framework": "adk",
+      "level": 2,
+      "behavior_matches": true,
+      "tool_calls": 4,
+      "notices": 1
+    },
+    {
+      "framework": "langgraph",
+      "level": 2,
+      "behavior_matches": true,
+      "tool_calls": 4,
+      "notices": 1
+    },
+    {
+      "framework": "noema",
+      "level": 3,
+      "behavior_matches": true,
+      "tool_calls": 7,
+      "notices": 1
+    },
+    {
+      "framework": "adk",
+      "level": 3,
+      "behavior_matches": true,
+      "tool_calls": 7,
+      "notices": 1
+    },
+    {
+      "framework": "langgraph",
+      "level": 3,
+      "behavior_matches": true,
+      "tool_calls": 7,
+      "notices": 1
+    }
+  ],
+  "code_inventory": {
+    "__init__.py": {
+      "physical_code_lines": 0,
+      "ast_statements": 0
+    },
+    "adk_agent.py": {
+      "physical_code_lines": 73,
+      "ast_statements": 43
+    },
+    "comparison.py": {
+      "physical_code_lines": 144,
+      "ast_statements": 63
+    },
+    "domain.py": {
+      "physical_code_lines": 99,
+      "ast_statements": 78
+    },
+    "langgraph_agent.py": {
+      "physical_code_lines": 50,
+      "ast_statements": 49
+    },
+    "lessons.py": {
+      "physical_code_lines": 86,
+      "ast_statements": 65
+    },
+    "live.py": {
+      "physical_code_lines": 24,
+      "ast_statements": 23
+    },
+    "noema_agent.py": {
+      "physical_code_lines": 91,
+      "ast_statements": 40
+    },
+    "notebooks.py": {
+      "physical_code_lines": 190,
+      "ast_statements": 59
+    },
+    "restart_probe.py": {
+      "physical_code_lines": 35,
+      "ast_statements": 28
+    }
+  },
+  "code_totals": {
+    "noema": {
+      "adapter": {
+        "physical_code_lines": 91,
+        "ast_statements": 40
+      },
+      "adapter_plus_shared": {
+        "physical_code_lines": 300,
+        "ast_statements": 206
+      }
+    },
+    "adk": {
+      "adapter": {
+        "physical_code_lines": 73,
+        "ast_statements": 43
+      },
+      "adapter_plus_shared": {
+        "physical_code_lines": 282,
+        "ast_statements": 209
+      }
+    },
+    "langgraph": {
+      "adapter": {
+        "physical_code_lines": 50,
+        "ast_statements": 49
+      },
+      "adapter_plus_shared": {
+        "physical_code_lines": 259,
+        "ast_statements": 215
+      }
+    }
+  },
+  "shared_application_files": [
+    "domain.py",
+    "lessons.py",
+    "live.py"
+  ],
+  "native_noema_records_in_medium_lesson": {
+    "decision.proposed": 9,
+    "decision.authorized": 4,
+    "action.succeeded": 4
+  },
+  "native_noema_authorization_and_success_have_observed_causal_parents": true,
+  "interpretation": {
+    "observed_benefit": "SDK-generated domain decision/authorization/action records and causal links, without application-written lifecycle logging.",
+    "scope": "The supplied deterministic examples; not all idiomatic implementations or a framework-wide capability benchmark.",
+    "competitor_evidence": "ADK session/node events and LangGraph state updates are retained too; they expose different native vocabularies.",
+    "not_proved": [
+      "fewer Noema lines",
+      "greater production reliability",
+      "LLM quality or cost advantage",
+      "automatic durable watches",
+      "in-flight exactly-once effects"
+    ]
+  },
+  "source_sha256": {
+    "__init__.py": "e19727038a81fbadc65eb53920a829198c2cc6c23db4e8fa7effdadac33c26e6",
+    "adk_agent.py": "446d98882bab7927f6998936e88113814bb22cf65c42d964ec094faa1ed1f92e",
+    "comparison.py": "3b56ccd2fb5aef149d026241bb87cceb7a7626a8eb2796518a035090ae5d9a8e",
+    "domain.py": "78b37c30b0b5dc12b1bf12285dde374b0631e37769844bbd444f29355cda0239",
+    "langgraph_agent.py": "bd56fe2571cea59cf626c3a8ce6fa40f99b0ee4cf77ed4b80cbc05642bb8e6bb",
+    "lessons.py": "3513a774913cde29e098080a2168f5a08cbceda33d2a9a8fb988bb4af8fd61a4",
+    "live.py": "9984b25707af014c5c74660f268a15677318e68ffd0cd27202afef743113e3b9",
+    "noema_agent.py": "235de41bd9b77c25071c984a78b6ffe6fb57bf42571ed3d1cb41884a47d14b00",
+    "notebooks.py": "2e400f4ee000b7c65a33cb9e71381484c6d6df9f9fc82fe10bceea24272c3793",
+    "restart_probe.py": "5558642b8a15633efec6ae050a102393355ff443d23feea26e0c192c993a32c7"
+  }
+}

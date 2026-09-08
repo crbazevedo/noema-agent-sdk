@@ -1,0 +1,170 @@
+[
+  {
+    "select": {
+      "proposal": null
+    }
+  },
+  {
+    "select": {
+      "proposal": {
+        "tool": "read_note",
+        "meeting": "design",
+        "revision": 1,
+        "value": 5,
+        "reason": "Resolve a missing preparation fact"
+      }
+    }
+  },
+  {
+    "act": {
+      "world": {
+        "level": 2,
+        "now": 5,
+        "enabled": true,
+        "quiet": false,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {},
+        "reads": {
+          "design:v1": 5
+        },
+        "drafts": {},
+        "notified": []
+      }
+    }
+  },
+  {
+    "select": {
+      "proposal": null
+    }
+  },
+  {
+    "select": {
+      "proposal": {
+        "tool": "read_note",
+        "meeting": "design",
+        "revision": 1,
+        "value": 5,
+        "reason": "Resolve a missing preparation fact"
+      }
+    }
+  },
+  {
+    "act": {
+      "world": {
+        "level": 2,
+        "now": 6,
+        "enabled": true,
+        "quiet": true,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {
+          "design:v1": "Compare two interface alternatives"
+        },
+        "reads": {
+          "design:v1": 6
+        },
+        "drafts": {},
+        "notified": []
+      }
+    }
+  },
+  {
+    "select": {
+      "proposal": {
+        "tool": "prepare_brief",
+        "meeting": "design",
+        "revision": 1,
+        "value": 5,
+        "reason": "Prepare from the current note"
+      }
+    }
+  },
+  {
+    "act": {
+      "world": {
+        "level": 2,
+        "now": 6,
+        "enabled": true,
+        "quiet": true,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {
+          "design:v1": "Compare two interface alternatives"
+        },
+        "reads": {
+          "design:v1": 6
+        },
+        "drafts": {
+          "design:v1": "Brief: Compare two interface alternatives"
+        },
+        "notified": []
+      }
+    }
+  },
+  {
+    "select": {
+      "proposal": null
+    }
+  },
+  {
+    "select": {
+      "proposal": {
+        "tool": "notify",
+        "meeting": "design",
+        "revision": 1,
+        "value": 5,
+        "reason": "A current brief is ready before the meeting"
+      }
+    }
+  },
+  {
+    "act": {
+      "world": {
+        "level": 2,
+        "now": 7,
+        "enabled": true,
+        "quiet": false,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {
+          "design:v1": "Compare two interface alternatives"
+        },
+        "reads": {
+          "design:v1": 6
+        },
+        "drafts": {
+          "design:v1": "Brief: Compare two interface alternatives"
+        },
+        "notified": [
+          "design:v1"
+        ]
+      }
+    }
+  },
+  {
+    "select": {
+      "proposal": null
+    }
+  }
+]
