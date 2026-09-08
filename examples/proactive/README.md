@@ -46,6 +46,13 @@ and install this repository with `pip install -e .`. Noema was tested against
 source baseline `621be5a8a0823c1a02c893edc69967f552e0895d`; the tutorial commit adds
 examples and documentation without changing SDK runtime code.
 
+The [independent reproduction run](https://github.com/crbazevedo/noema-agent-sdk/actions/runs/34264959328)
+passed all framework checks and executed the three notebooks in fresh Jupyter
+kernels: 22 code cells in total. The committed notebooks include those executed
+outputs. [Verification metadata](observed/verification.json) identifies the tested
+source commit and CI runs; [notebook receipts](observed/notebooks.json) record the
+executed files' hashes. Re-execution may change timestamps and generated event IDs.
+
 ## Why proactivity, and why now?
 
 An answer can be correct and arrive too late. Consider a meeting starting at

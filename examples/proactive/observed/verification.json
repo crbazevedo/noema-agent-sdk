@@ -1,0 +1,49 @@
+{
+  "verified_source_commit": "a3a42204a87f3d6dba773d022821536fed7c0aae",
+  "sdk_baseline_commit": "621be5a8a0823c1a02c893edc69967f552e0895d",
+  "source_note": "The verification commit adds saved notebook outputs and documentation. Notebook cell sources are unchanged from the verified source commit.",
+  "local_validation": {
+    "test_command": "python -m unittest discover -s tests",
+    "test_cases_reported": 228,
+    "skipped": 6,
+    "result": "OK",
+    "lint": "passed",
+    "compile": "passed"
+  },
+  "ci": [
+    {
+      "workflow": "ci",
+      "run_id": 34264959261,
+      "conclusion": "success",
+      "url": "https://github.com/crbazevedo/noema-agent-sdk/actions/runs/34264959261"
+    },
+    {
+      "workflow": "proactive-examples",
+      "run_id": 34264959328,
+      "job_id": 102191881951,
+      "conclusion": "success",
+      "url": "https://github.com/crbazevedo/noema-agent-sdk/actions/runs/34264959328",
+      "python": "3.12.14"
+    }
+  ],
+  "notebooks": {
+    "receipt": "notebooks.json",
+    "fresh_kernels": 3,
+    "executed_code_cells": 22,
+    "saved_outputs": "../notebooks/",
+    "artifact_id": 10071449811,
+    "artifact_zip_sha256": "b1f21db9a6d77253417e2d6d8210ba4f1b0666ab597903e4a63aa5416892de63"
+  },
+  "reference_observations": {
+    "comparison": "comparison.json",
+    "environment": "environment-freeze.txt",
+    "origin": "local reference run; CI independently reproduces comparisons; the environment snapshot is from the local reference run"
+  },
+  "observed_benefit": "Noema supplies domain proposal, authorization and action-success records with observed causal predecessors without application-written lifecycle logging.",
+  "limits": [
+    "The examples use deterministic rules, synthetic inputs and local tools with zero model calls.",
+    "Noema is longer in physical adapter source lines; general simplicity is not established.",
+    "Persistence checks span separate processes at completed observation boundaries, not crashes during effects.",
+    "Durable timer rearming, cross-worker races, external exactly-once effects and production always-on reliability are not established."
+  ]
+}

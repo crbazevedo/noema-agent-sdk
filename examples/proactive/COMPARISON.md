@@ -9,6 +9,11 @@ python -m examples.proactive.comparison --output /tmp/proactive-observations
 python -m unittest tests.test_proactive_examples -v
 ```
 
+The comparison and all three notebooks also passed in
+[independent CI](https://github.com/crbazevedo/noema-agent-sdk/actions/runs/34264959328).
+See [verification metadata](observed/verification.json) for source provenance and
+the hashes of the committed notebook outputs in [notebook receipts](observed/notebooks.json).
+
 ## Matched behavior
 
 | Lesson | Noema calls / notices | ADK calls / notices | LangGraph calls / notices |
