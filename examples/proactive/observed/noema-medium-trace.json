@@ -1,0 +1,1340 @@
+[
+  {
+    "id": "3955888e-e07c-46f5-a106-3c503a223b22",
+    "type": "agent.started",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.431512+00:00",
+    "correlation_id": null,
+    "causation_id": null,
+    "priority": 0,
+    "sequence": 1,
+    "payload": {
+      "workers": 1
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "fa2d7f33-3e4b-4300-85f3-3b716f9eb4bf",
+    "type": "fact.observed",
+    "source": "synthetic-source",
+    "subject": null,
+    "timestamp": "2026-09-08T18:41:30.431585+00:00",
+    "correlation_id": null,
+    "causation_id": null,
+    "priority": 0,
+    "sequence": 2,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 0,
+        "enabled": true,
+        "quiet": false,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {},
+        "reads": {},
+        "drafts": {},
+        "notified": []
+      }
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "abafa039-c1aa-4b94-a8dd-76513b15f685",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.431750+00:00",
+    "correlation_id": "fa2d7f33-3e4b-4300-85f3-3b716f9eb4bf",
+    "causation_id": "fa2d7f33-3e4b-4300-85f3-3b716f9eb4bf",
+    "priority": 0,
+    "sequence": 3,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe"
+      ],
+      "proposed": 0,
+      "intents": [],
+      "accepted_after_critique": 0,
+      "hypotheses": [],
+      "reviews": [],
+      "duration_seconds": 4.7e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "b6d9034f-9413-4b45-b1e6-7322c51b0a67",
+    "type": "fact.observed",
+    "source": "synthetic-source",
+    "subject": null,
+    "timestamp": "2026-09-08T18:41:30.431907+00:00",
+    "correlation_id": null,
+    "causation_id": null,
+    "priority": 0,
+    "sequence": 4,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 4,
+        "enabled": true,
+        "quiet": false,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {},
+        "reads": {},
+        "drafts": {},
+        "notified": []
+      }
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "6ffa3f1d-a130-4a6e-8624-83214593440c",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.431979+00:00",
+    "correlation_id": "b6d9034f-9413-4b45-b1e6-7322c51b0a67",
+    "causation_id": "b6d9034f-9413-4b45-b1e6-7322c51b0a67",
+    "priority": 0,
+    "sequence": 5,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe"
+      ],
+      "proposed": 0,
+      "intents": [],
+      "accepted_after_critique": 0,
+      "hypotheses": [],
+      "reviews": [],
+      "duration_seconds": 6e-06
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "type": "fact.observed",
+    "source": "synthetic-source",
+    "subject": null,
+    "timestamp": "2026-09-08T18:41:30.432124+00:00",
+    "correlation_id": null,
+    "causation_id": null,
+    "priority": 0,
+    "sequence": 6,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 5,
+        "enabled": true,
+        "quiet": false,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {},
+        "reads": {},
+        "drafts": {},
+        "notified": []
+      }
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "f41b02e0-7afa-46e1-a066-55394d18abfb",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.432227+00:00",
+    "correlation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "causation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "priority": 0,
+    "sequence": 7,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe",
+        "operationalize"
+      ],
+      "proposed": 1,
+      "intents": [
+        {
+          "intent_id": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+          "capability": "read_note",
+          "arguments": {
+            "tool": "read_note",
+            "meeting": "design",
+            "revision": 1,
+            "value": 5,
+            "reason": "Resolve a missing preparation fact"
+          },
+          "rationale": "Resolve a missing preparation fact",
+          "expected_value": 5,
+          "information_value": 0.0,
+          "risk_reduction": 0.0,
+          "attention_cost": 1,
+          "switching_cost": 0.0,
+          "branch_cost": 0.0,
+          "risk": 1,
+          "reversible": true,
+          "required_authority": 2,
+          "confidence": 1.0,
+          "alternatives": [],
+          "falsifiers": [
+            "The meeting is cancelled, rescheduled or no longer useful"
+          ],
+          "idempotency_key": "read_note:design:v1:t5",
+          "metadata": {}
+        }
+      ],
+      "accepted_after_critique": 1,
+      "hypotheses": [],
+      "reviews": [
+        {
+          "intent_id": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+          "approved": true,
+          "critiques": []
+        }
+      ],
+      "duration_seconds": 3.9e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "b903a491-5ebe-45c7-b8b1-05af1b2d75f3",
+    "type": "decision.authorized",
+    "source": "meeting-preparation",
+    "subject": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+    "timestamp": "2026-09-08T18:41:30.432289+00:00",
+    "correlation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "causation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "priority": 0,
+    "sequence": 8,
+    "payload": {
+      "intent": {
+        "intent_id": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+        "capability": "read_note",
+        "arguments": {
+          "tool": "read_note",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Resolve a missing preparation fact"
+        },
+        "rationale": "Resolve a missing preparation fact",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "read_note:design:v1:t5",
+        "metadata": {}
+      },
+      "reason": "authorized",
+      "effective_authority": 2,
+      "effective_risk": 1
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "552a910b-47ac-41cc-88f3-b0d1a2f5a162",
+    "type": "action.dispatched",
+    "source": "meeting-preparation",
+    "subject": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+    "timestamp": "2026-09-08T18:41:30.432343+00:00",
+    "correlation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "causation_id": "b903a491-5ebe-45c7-b8b1-05af1b2d75f3",
+    "priority": 0,
+    "sequence": 9,
+    "payload": {
+      "intent": {
+        "intent_id": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+        "capability": "read_note",
+        "arguments": {
+          "tool": "read_note",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Resolve a missing preparation fact"
+        },
+        "rationale": "Resolve a missing preparation fact",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "read_note:design:v1:t5",
+        "metadata": {}
+      },
+      "idempotency_key": "read_note:design:v1:t5"
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "fc06fb49-65c6-4549-b0ed-33aa96847a8b",
+    "type": "action.started",
+    "source": "meeting-preparation",
+    "subject": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+    "timestamp": "2026-09-08T18:41:30.432392+00:00",
+    "correlation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "causation_id": "552a910b-47ac-41cc-88f3-b0d1a2f5a162",
+    "priority": 0,
+    "sequence": 10,
+    "payload": {
+      "intent": {
+        "intent_id": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+        "capability": "read_note",
+        "arguments": {
+          "tool": "read_note",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Resolve a missing preparation fact"
+        },
+        "rationale": "Resolve a missing preparation fact",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "read_note:design:v1:t5",
+        "metadata": {}
+      },
+      "idempotency_key": "read_note:design:v1:t5"
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "1926cb39-90fb-461c-a8ef-c8d78e7fe1ee",
+    "type": "action.succeeded",
+    "source": "meeting-preparation",
+    "subject": "6eeeb285-7de1-44b6-8ba8-7e323f11e7fc",
+    "timestamp": "2026-09-08T18:41:30.432479+00:00",
+    "correlation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "causation_id": "fc06fb49-65c6-4549-b0ed-33aa96847a8b",
+    "priority": 0,
+    "sequence": 11,
+    "payload": {
+      "capability": "read_note",
+      "attempts": 1,
+      "output": {
+        "tool": "read_note"
+      },
+      "idempotency_key": "read_note:design:v1:t5",
+      "duration_seconds": 8.2e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "259f87e0-b4e0-4b2b-9e52-84dff393b0e4",
+    "type": "fact.observed",
+    "source": "meeting-preparation",
+    "subject": "world",
+    "timestamp": "2026-09-08T18:41:30.432500+00:00",
+    "correlation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "causation_id": "1926cb39-90fb-461c-a8ef-c8d78e7fe1ee",
+    "priority": 0,
+    "sequence": 12,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 5,
+        "enabled": true,
+        "quiet": false,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {},
+        "reads": {
+          "design:v1": 5
+        },
+        "drafts": {},
+        "notified": []
+      },
+      "confidence": 1.0
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "4f0591c7-47fb-40dd-b6e1-92b0aa9bb8f0",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.432686+00:00",
+    "correlation_id": "ec8ecda5-f292-4116-acbe-9aaa371594a3",
+    "causation_id": "259f87e0-b4e0-4b2b-9e52-84dff393b0e4",
+    "priority": 0,
+    "sequence": 13,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe"
+      ],
+      "proposed": 0,
+      "intents": [],
+      "accepted_after_critique": 0,
+      "hypotheses": [],
+      "reviews": [],
+      "duration_seconds": 8e-06
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "type": "fact.observed",
+    "source": "synthetic-source",
+    "subject": null,
+    "timestamp": "2026-09-08T18:41:30.432802+00:00",
+    "correlation_id": null,
+    "causation_id": null,
+    "priority": 0,
+    "sequence": 14,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 6,
+        "enabled": true,
+        "quiet": true,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {},
+        "reads": {
+          "design:v1": 5
+        },
+        "drafts": {},
+        "notified": []
+      }
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "728699aa-c80b-475f-8850-0696c57017fe",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.432886+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "priority": 0,
+    "sequence": 15,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe",
+        "operationalize"
+      ],
+      "proposed": 1,
+      "intents": [
+        {
+          "intent_id": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+          "capability": "read_note",
+          "arguments": {
+            "tool": "read_note",
+            "meeting": "design",
+            "revision": 1,
+            "value": 5,
+            "reason": "Resolve a missing preparation fact"
+          },
+          "rationale": "Resolve a missing preparation fact",
+          "expected_value": 5,
+          "information_value": 0.0,
+          "risk_reduction": 0.0,
+          "attention_cost": 1,
+          "switching_cost": 0.0,
+          "branch_cost": 0.0,
+          "risk": 1,
+          "reversible": true,
+          "required_authority": 2,
+          "confidence": 1.0,
+          "alternatives": [],
+          "falsifiers": [
+            "The meeting is cancelled, rescheduled or no longer useful"
+          ],
+          "idempotency_key": "read_note:design:v1:t6",
+          "metadata": {}
+        }
+      ],
+      "accepted_after_critique": 1,
+      "hypotheses": [],
+      "reviews": [
+        {
+          "intent_id": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+          "approved": true,
+          "critiques": []
+        }
+      ],
+      "duration_seconds": 2e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "f19142eb-7185-4dc1-b4eb-4aef679c25fa",
+    "type": "decision.authorized",
+    "source": "meeting-preparation",
+    "subject": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+    "timestamp": "2026-09-08T18:41:30.432930+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "priority": 0,
+    "sequence": 16,
+    "payload": {
+      "intent": {
+        "intent_id": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+        "capability": "read_note",
+        "arguments": {
+          "tool": "read_note",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Resolve a missing preparation fact"
+        },
+        "rationale": "Resolve a missing preparation fact",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "read_note:design:v1:t6",
+        "metadata": {}
+      },
+      "reason": "authorized",
+      "effective_authority": 2,
+      "effective_risk": 1
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "76787a37-9549-4541-96ec-08481f21bd71",
+    "type": "action.dispatched",
+    "source": "meeting-preparation",
+    "subject": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+    "timestamp": "2026-09-08T18:41:30.432971+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "f19142eb-7185-4dc1-b4eb-4aef679c25fa",
+    "priority": 0,
+    "sequence": 17,
+    "payload": {
+      "intent": {
+        "intent_id": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+        "capability": "read_note",
+        "arguments": {
+          "tool": "read_note",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Resolve a missing preparation fact"
+        },
+        "rationale": "Resolve a missing preparation fact",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "read_note:design:v1:t6",
+        "metadata": {}
+      },
+      "idempotency_key": "read_note:design:v1:t6"
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "2fc0b720-1eb5-40e7-b101-845a244b615c",
+    "type": "action.started",
+    "source": "meeting-preparation",
+    "subject": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+    "timestamp": "2026-09-08T18:41:30.432990+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "76787a37-9549-4541-96ec-08481f21bd71",
+    "priority": 0,
+    "sequence": 18,
+    "payload": {
+      "intent": {
+        "intent_id": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+        "capability": "read_note",
+        "arguments": {
+          "tool": "read_note",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Resolve a missing preparation fact"
+        },
+        "rationale": "Resolve a missing preparation fact",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "read_note:design:v1:t6",
+        "metadata": {}
+      },
+      "idempotency_key": "read_note:design:v1:t6"
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "9cb03335-b398-4027-bb87-33712b3acd96",
+    "type": "action.succeeded",
+    "source": "meeting-preparation",
+    "subject": "4c52c2ff-cdf2-4983-92fe-3cba7c7043b1",
+    "timestamp": "2026-09-08T18:41:30.433080+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "2fc0b720-1eb5-40e7-b101-845a244b615c",
+    "priority": 0,
+    "sequence": 19,
+    "payload": {
+      "capability": "read_note",
+      "attempts": 1,
+      "output": {
+        "tool": "read_note"
+      },
+      "idempotency_key": "read_note:design:v1:t6",
+      "duration_seconds": 8.6e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "0ffae0dd-9ceb-4d12-b33f-b154ba5b7fab",
+    "type": "fact.observed",
+    "source": "meeting-preparation",
+    "subject": "world",
+    "timestamp": "2026-09-08T18:41:30.433099+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "9cb03335-b398-4027-bb87-33712b3acd96",
+    "priority": 0,
+    "sequence": 20,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 6,
+        "enabled": true,
+        "quiet": true,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {
+          "design:v1": "Compare two interface alternatives"
+        },
+        "reads": {
+          "design:v1": 6
+        },
+        "drafts": {},
+        "notified": []
+      },
+      "confidence": 1.0
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "e2f2b673-482d-42c2-b25b-efe469cc2958",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.433205+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "0ffae0dd-9ceb-4d12-b33f-b154ba5b7fab",
+    "priority": 0,
+    "sequence": 21,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe",
+        "operationalize"
+      ],
+      "proposed": 1,
+      "intents": [
+        {
+          "intent_id": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+          "capability": "prepare_brief",
+          "arguments": {
+            "tool": "prepare_brief",
+            "meeting": "design",
+            "revision": 1,
+            "value": 5,
+            "reason": "Prepare from the current note"
+          },
+          "rationale": "Prepare from the current note",
+          "expected_value": 5,
+          "information_value": 0.0,
+          "risk_reduction": 0.0,
+          "attention_cost": 1,
+          "switching_cost": 0.0,
+          "branch_cost": 0.0,
+          "risk": 1,
+          "reversible": true,
+          "required_authority": 2,
+          "confidence": 1.0,
+          "alternatives": [],
+          "falsifiers": [
+            "The meeting is cancelled, rescheduled or no longer useful"
+          ],
+          "idempotency_key": "prepare_brief:design:v1",
+          "metadata": {}
+        }
+      ],
+      "accepted_after_critique": 1,
+      "hypotheses": [],
+      "reviews": [
+        {
+          "intent_id": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+          "approved": true,
+          "critiques": []
+        }
+      ],
+      "duration_seconds": 1.9e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "6eeca4cc-7843-44a9-b47e-25df10be956f",
+    "type": "decision.authorized",
+    "source": "meeting-preparation",
+    "subject": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+    "timestamp": "2026-09-08T18:41:30.433244+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "0ffae0dd-9ceb-4d12-b33f-b154ba5b7fab",
+    "priority": 0,
+    "sequence": 22,
+    "payload": {
+      "intent": {
+        "intent_id": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+        "capability": "prepare_brief",
+        "arguments": {
+          "tool": "prepare_brief",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Prepare from the current note"
+        },
+        "rationale": "Prepare from the current note",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "prepare_brief:design:v1",
+        "metadata": {}
+      },
+      "reason": "authorized",
+      "effective_authority": 2,
+      "effective_risk": 1
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "5936bbda-a30d-4170-94a5-311f31c65b8a",
+    "type": "action.dispatched",
+    "source": "meeting-preparation",
+    "subject": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+    "timestamp": "2026-09-08T18:41:30.433283+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "6eeca4cc-7843-44a9-b47e-25df10be956f",
+    "priority": 0,
+    "sequence": 23,
+    "payload": {
+      "intent": {
+        "intent_id": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+        "capability": "prepare_brief",
+        "arguments": {
+          "tool": "prepare_brief",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Prepare from the current note"
+        },
+        "rationale": "Prepare from the current note",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "prepare_brief:design:v1",
+        "metadata": {}
+      },
+      "idempotency_key": "prepare_brief:design:v1"
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "5c909992-1480-48ba-b1aa-953e4d3fb540",
+    "type": "action.started",
+    "source": "meeting-preparation",
+    "subject": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+    "timestamp": "2026-09-08T18:41:30.433301+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "5936bbda-a30d-4170-94a5-311f31c65b8a",
+    "priority": 0,
+    "sequence": 24,
+    "payload": {
+      "intent": {
+        "intent_id": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+        "capability": "prepare_brief",
+        "arguments": {
+          "tool": "prepare_brief",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "Prepare from the current note"
+        },
+        "rationale": "Prepare from the current note",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "prepare_brief:design:v1",
+        "metadata": {}
+      },
+      "idempotency_key": "prepare_brief:design:v1"
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "d2968c6e-8f61-432b-ada2-5d844c6aaf59",
+    "type": "action.succeeded",
+    "source": "meeting-preparation",
+    "subject": "2be0485a-aec5-46f0-a677-ee27de8ba90c",
+    "timestamp": "2026-09-08T18:41:30.433350+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "5c909992-1480-48ba-b1aa-953e4d3fb540",
+    "priority": 0,
+    "sequence": 25,
+    "payload": {
+      "capability": "prepare_brief",
+      "attempts": 1,
+      "output": {
+        "tool": "prepare_brief"
+      },
+      "idempotency_key": "prepare_brief:design:v1",
+      "duration_seconds": 4.8e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "6c580717-ed6f-4b75-8ebf-bb9ccb8acf8b",
+    "type": "fact.observed",
+    "source": "meeting-preparation",
+    "subject": "world",
+    "timestamp": "2026-09-08T18:41:30.433368+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "d2968c6e-8f61-432b-ada2-5d844c6aaf59",
+    "priority": 0,
+    "sequence": 26,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 6,
+        "enabled": true,
+        "quiet": true,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {
+          "design:v1": "Compare two interface alternatives"
+        },
+        "reads": {
+          "design:v1": 6
+        },
+        "drafts": {
+          "design:v1": "Brief: Compare two interface alternatives"
+        },
+        "notified": []
+      },
+      "confidence": 1.0
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "b49110e0-3bbb-48f6-a8b8-535856a40e40",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.433435+00:00",
+    "correlation_id": "96cb18c2-a9de-464b-bf13-6af26e99f05d",
+    "causation_id": "6c580717-ed6f-4b75-8ebf-bb9ccb8acf8b",
+    "priority": 0,
+    "sequence": 27,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe"
+      ],
+      "proposed": 0,
+      "intents": [],
+      "accepted_after_critique": 0,
+      "hypotheses": [],
+      "reviews": [],
+      "duration_seconds": 7e-06
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "type": "fact.observed",
+    "source": "synthetic-source",
+    "subject": null,
+    "timestamp": "2026-09-08T18:41:30.433529+00:00",
+    "correlation_id": null,
+    "causation_id": null,
+    "priority": 0,
+    "sequence": 28,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 7,
+        "enabled": true,
+        "quiet": false,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {
+          "design:v1": "Compare two interface alternatives"
+        },
+        "reads": {
+          "design:v1": 6
+        },
+        "drafts": {
+          "design:v1": "Brief: Compare two interface alternatives"
+        },
+        "notified": []
+      }
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "a5951e0c-1c6b-43f2-a288-ff5552cf1a81",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.433603+00:00",
+    "correlation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "causation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "priority": 0,
+    "sequence": 29,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe",
+        "operationalize"
+      ],
+      "proposed": 1,
+      "intents": [
+        {
+          "intent_id": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+          "capability": "notify",
+          "arguments": {
+            "tool": "notify",
+            "meeting": "design",
+            "revision": 1,
+            "value": 5,
+            "reason": "A current brief is ready before the meeting"
+          },
+          "rationale": "A current brief is ready before the meeting",
+          "expected_value": 5,
+          "information_value": 0.0,
+          "risk_reduction": 0.0,
+          "attention_cost": 1,
+          "switching_cost": 0.0,
+          "branch_cost": 0.0,
+          "risk": 1,
+          "reversible": true,
+          "required_authority": 2,
+          "confidence": 1.0,
+          "alternatives": [],
+          "falsifiers": [
+            "The meeting is cancelled, rescheduled or no longer useful"
+          ],
+          "idempotency_key": "notify:design:v1",
+          "metadata": {}
+        }
+      ],
+      "accepted_after_critique": 1,
+      "hypotheses": [],
+      "reviews": [
+        {
+          "intent_id": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+          "approved": true,
+          "critiques": []
+        }
+      ],
+      "duration_seconds": 1.7e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "1a5ed169-cc71-4af1-aba6-35da50d63c32",
+    "type": "decision.authorized",
+    "source": "meeting-preparation",
+    "subject": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+    "timestamp": "2026-09-08T18:41:30.433641+00:00",
+    "correlation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "causation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "priority": 0,
+    "sequence": 30,
+    "payload": {
+      "intent": {
+        "intent_id": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+        "capability": "notify",
+        "arguments": {
+          "tool": "notify",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "A current brief is ready before the meeting"
+        },
+        "rationale": "A current brief is ready before the meeting",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "notify:design:v1",
+        "metadata": {}
+      },
+      "reason": "authorized",
+      "effective_authority": 2,
+      "effective_risk": 1
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "6be43eea-431f-45b7-b814-bd3147537e20",
+    "type": "action.dispatched",
+    "source": "meeting-preparation",
+    "subject": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+    "timestamp": "2026-09-08T18:41:30.433680+00:00",
+    "correlation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "causation_id": "1a5ed169-cc71-4af1-aba6-35da50d63c32",
+    "priority": 0,
+    "sequence": 31,
+    "payload": {
+      "intent": {
+        "intent_id": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+        "capability": "notify",
+        "arguments": {
+          "tool": "notify",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "A current brief is ready before the meeting"
+        },
+        "rationale": "A current brief is ready before the meeting",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "notify:design:v1",
+        "metadata": {}
+      },
+      "idempotency_key": "notify:design:v1"
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "9b821b64-17e4-4fb8-b041-00de68715306",
+    "type": "action.started",
+    "source": "meeting-preparation",
+    "subject": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+    "timestamp": "2026-09-08T18:41:30.434621+00:00",
+    "correlation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "causation_id": "6be43eea-431f-45b7-b814-bd3147537e20",
+    "priority": 0,
+    "sequence": 32,
+    "payload": {
+      "intent": {
+        "intent_id": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+        "capability": "notify",
+        "arguments": {
+          "tool": "notify",
+          "meeting": "design",
+          "revision": 1,
+          "value": 5,
+          "reason": "A current brief is ready before the meeting"
+        },
+        "rationale": "A current brief is ready before the meeting",
+        "expected_value": 5,
+        "information_value": 0.0,
+        "risk_reduction": 0.0,
+        "attention_cost": 1,
+        "switching_cost": 0.0,
+        "branch_cost": 0.0,
+        "risk": 1,
+        "reversible": true,
+        "required_authority": 2,
+        "confidence": 1.0,
+        "alternatives": [],
+        "falsifiers": [
+          "The meeting is cancelled, rescheduled or no longer useful"
+        ],
+        "idempotency_key": "notify:design:v1",
+        "metadata": {}
+      },
+      "idempotency_key": "notify:design:v1"
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "c9fbbe2a-a126-4058-81ef-1ff533ad6b3c",
+    "type": "action.succeeded",
+    "source": "meeting-preparation",
+    "subject": "ba0d37a1-c695-46a4-963d-2e97e53f490c",
+    "timestamp": "2026-09-08T18:41:30.434691+00:00",
+    "correlation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "causation_id": "9b821b64-17e4-4fb8-b041-00de68715306",
+    "priority": 0,
+    "sequence": 33,
+    "payload": {
+      "capability": "notify",
+      "attempts": 1,
+      "output": {
+        "tool": "notify"
+      },
+      "idempotency_key": "notify:design:v1",
+      "duration_seconds": 7.3e-05
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "c3e38d06-ea59-47f8-9510-993ceb5c74ee",
+    "type": "fact.observed",
+    "source": "meeting-preparation",
+    "subject": "world",
+    "timestamp": "2026-09-08T18:41:30.434713+00:00",
+    "correlation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "causation_id": "c9fbbe2a-a126-4058-81ef-1ff533ad6b3c",
+    "priority": 0,
+    "sequence": 34,
+    "payload": {
+      "key": "world",
+      "value": {
+        "level": 2,
+        "now": 7,
+        "enabled": true,
+        "quiet": false,
+        "meetings": {
+          "design": {
+            "start": 10,
+            "revision": 1,
+            "importance": 5
+          }
+        },
+        "notes": {
+          "design:v1": "Compare two interface alternatives"
+        },
+        "reads": {
+          "design:v1": 6
+        },
+        "drafts": {
+          "design:v1": "Brief: Compare two interface alternatives"
+        },
+        "notified": [
+          "design:v1"
+        ]
+      },
+      "confidence": 1.0
+    },
+    "metadata": {},
+    "schema_version": 1
+  },
+  {
+    "id": "38d9a338-d1fa-40cf-a34b-d985d49d0d24",
+    "type": "decision.proposed",
+    "source": "meeting-preparation",
+    "subject": "meeting-preparation",
+    "timestamp": "2026-09-08T18:41:30.434973+00:00",
+    "correlation_id": "88c42440-edd7-45ee-bac9-7ffd68ed86ba",
+    "causation_id": "c3e38d06-ea59-47f8-9510-993ceb5c74ee",
+    "priority": 0,
+    "sequence": 35,
+    "payload": {
+      "trigger_type": "fact.observed",
+      "modes": [
+        "observe"
+      ],
+      "proposed": 0,
+      "intents": [],
+      "accepted_after_critique": 0,
+      "hypotheses": [],
+      "reviews": [],
+      "duration_seconds": 8e-06
+    },
+    "metadata": {},
+    "schema_version": 1
+  }
+]

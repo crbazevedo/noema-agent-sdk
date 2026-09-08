@@ -232,6 +232,19 @@ Install all runtime adapters with:
 pip install -e '.[all]'
 ```
 
+## Learn proactive agents
+
+The [proactive-agent tutorial](examples/proactive/README.md) teaches anticipation,
+information seeking and reconsideration through three runnable lessons. It includes
+Noema, ADK and LangGraph implementations, reproducible notebooks, process-persistence
+checks and an observed comparison that reports both benefits and tradeoffs.
+
+```bash
+python -m examples.proactive.lessons --level 1
+```
+
+The Noema lessons make no model calls and need no additional dependencies.
+
 ## Run the autonomous example
 
 ```bash

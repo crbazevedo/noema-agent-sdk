@@ -1,0 +1,47 @@
+name: proactive-examples
+
+on:
+  push:
+    paths:
+      - 'examples/proactive/**'
+      - 'tests/test_proactive_examples.py'
+      - '.github/workflows/proactive-examples.yml'
+  pull_request:
+    paths:
+      - 'examples/proactive/**'
+      - 'tests/test_proactive_examples.py'
+      - '.github/workflows/proactive-examples.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install pinned comparison dependencies
+        run: |
+          python -m pip install -e '.[dev]'
+          python -m pip install -r examples/proactive/requirements.txt
+      - name: Check examples and notebook source
+        run: ruff check examples/proactive tests/test_proactive_examples.py
+      - name: Exercise all frameworks and process persistence
+        run: python -m unittest tests.test_proactive_examples -v
+      - name: Reproduce matched observations
+        run: python -m examples.proactive.comparison --output examples/proactive/observed
+      - name: Execute notebooks in fresh Jupyter kernels
+        run: python -m examples.proactive.notebooks --execute
+      - name: Preserve independent reproduction artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: proactive-examples-reproduction
+          path: |
+            examples/proactive/observed/
+            examples/proactive/notebooks/*.ipynb
+          retention-days: 30

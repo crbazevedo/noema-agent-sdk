@@ -1,0 +1,20 @@
+[
+  {
+    "notebook": "01-anticipate.ipynb",
+    "status": "passed_fresh_kernel",
+    "code_cells": 7,
+    "sha256": "f11d3f2f58af043e3e083f05b883965b2f11b4b12f74dbb07d1b87d9c651c5f4"
+  },
+  {
+    "notebook": "02-investigate.ipynb",
+    "status": "passed_fresh_kernel",
+    "code_cells": 7,
+    "sha256": "c86e8e38ac20299a785f14b22f6d35f141e954554303f4989d7eecf27928f42c"
+  },
+  {
+    "notebook": "03-reconsider.ipynb",
+    "status": "passed_fresh_kernel",
+    "code_cells": 8,
+    "sha256": "9eb349c6c5d4648cd6c2df000dada23eaf230e78b476332db3abc02d66161055"
+  }
+]
