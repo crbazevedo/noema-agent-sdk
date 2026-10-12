@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- added a separate typed decision-provider contract and native OpenAI Decisions,
+  TypeSafe System One and configured LiteLLM gateway adapters, with strict response
+  validation, redacted tracing, bounded opt-in retries and offline HTTP contracts;
+- documented provider setup, capability/version limits and an explicitly opt-in
+  synthetic live smoke; decision confidence never grants action authority.
+
 - revalidate current action policy before every capability attempt, including
   queued execution and retries, and durably abandon denied continuations without
   implying that earlier attempts were effect-free or authorizing compensation;

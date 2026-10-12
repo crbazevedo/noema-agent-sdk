@@ -38,6 +38,9 @@ postgres = [
 nats = [
   "nats-py>=2.9",
 ]
+decisions = [
+  "httpx>=0.27,<1",
+]
 openai = [
   "openai>=1.66",
 ]
@@ -52,6 +55,7 @@ distributed = [
   "opentelemetry-exporter-otlp-proto-grpc>=1.27",
 ]
 all = [
+  "httpx>=0.27,<1",
   "psycopg[binary]>=3.2",
   "nats-py>=2.9",
   "openai>=1.66",
