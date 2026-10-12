@@ -238,3 +238,50 @@ class ActionReauthorizationTests(unittest.IsolatedAsyncioTestCase):
                 finally:
                     await agent.stop()
                     await kernel.stop()
+
+    async def test_recovery_retry_denial_preserves_original_authorization_and_causation(
+        self,
+    ) -> None:
+        kernel = NoemaKernel()
+        await kernel.start()
+        self.addAsyncCleanup(kernel.stop)
+        intent = ActionIntent("work", expected_value=10, idempotency_key="recovered-work")
+        original = await kernel.emit(
+            Event(
+                "decision.authorized",
+                "worker",
+                {"intent": intent.to_payload()},
+                subject=intent.intent_id,
+            )
+        )
+        registry = CapabilityRegistry()
+        calls = []
+
+        async def invoke(arguments, context):
+            calls.append(context.attempt)
+            await self.revoke(kernel)
+            return CapabilityResult.fail("temporary error", retryable=True)
+
+        registry.register_function(
+            CapabilitySpec("work", "Perform work", idempotent=True, max_retries=1), invoke
+        )
+        agent = self.make_agent(kernel, registry, [])
+        self.addAsyncCleanup(agent.stop)
+        await agent.start()
+        await agent.wait_until_idle()
+        self.assertEqual(calls, [1])
+        abandoned = await kernel.history(types=["action.abandoned"])
+        self.assertEqual(len(abandoned), 1)
+        self.assertEqual(abandoned[0].payload["original_authorization_event_id"], original.id)
+        self.assertEqual(abandoned[0].payload["attempts"], 1)
+        history = {event.id: event for event in await kernel.history()}
+        started = history[abandoned[0].causation_id]
+        self.assertEqual(started.type, "action.started")
+        dispatched = history[started.causation_id]
+        self.assertEqual(dispatched.type, "action.dispatched")
+        recovery = history[dispatched.causation_id]
+        self.assertEqual(recovery.type, "action.recovery_requested")
+        self.assertEqual(recovery.payload["authorization_event_id"], original.id)
+        reauthorized = history[recovery.causation_id]
+        self.assertEqual(reauthorized.type, "decision.reauthorized")
+        self.assertEqual(reauthorized.payload["original_authorization_event_id"], original.id)

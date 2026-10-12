@@ -377,12 +377,19 @@ class AutonomousAgent:
         request: DeliberationRequest,
         authorization_event: Event,
         lease: Any,
+        *,
+        original_authorization_event_id: str | None = None,
     ) -> ActionOutcome | None:
         async with lease:
             async with self._action_semaphore:
                 self._active_actions += 1
                 try:
-                    return await self._execute_intent(intent, request, authorization_event)
+                    return await self._execute_intent(
+                        intent,
+                        request,
+                        authorization_event,
+                        original_authorization_event_id=original_authorization_event_id,
+                    )
                 finally:
                     self._active_actions -= 1
 
@@ -391,6 +398,8 @@ class AutonomousAgent:
         intent: ActionIntent,
         request: DeliberationRequest,
         authorization_event: Event,
+        *,
+        original_authorization_event_id: str | None = None,
     ) -> ActionOutcome | None:
         capability = self.capabilities.get(intent.capability)
         if intent.idempotency_key is not None:
@@ -461,7 +470,9 @@ class AutonomousAgent:
                             "capability": intent.capability,
                             "idempotency_key": intent.idempotency_key,
                             "attempts": attempts,
-                            "original_authorization_event_id": authorization_event.id,
+                            "original_authorization_event_id": (
+                                original_authorization_event_id or authorization_event.id
+                            ),
                             "situation_version": snapshot.version,
                             "previous_attempt_error": result.error if attempts else None,
                         },
@@ -750,6 +761,7 @@ class AutonomousAgent:
                 request,
                 recovery_event,
                 lease,
+                original_authorization_event_id=authorization_event.id,
             )
             if outcome is not None:
                 for reflection_event in await self.controller.reflect(outcome, request):
