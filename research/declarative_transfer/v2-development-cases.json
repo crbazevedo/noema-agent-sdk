@@ -1,0 +1,266 @@
+[
+  {
+    "name": "t01_missing_calibration_later_passes",
+    "expected_revision": 4,
+    "commands": [
+      {
+        "op": "update",
+        "facts": {
+          "equipment_revision": 4,
+          "release_authorized": true,
+          "withdrawn": false,
+          "evidence_sources": {
+            "inspection": {
+              "available": true,
+              "cost": 1,
+              "text": "inspection result True",
+              "evidence_class": "inspection",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 20
+            },
+            "calibration": {
+              "available": true,
+              "cost": 2,
+              "text": "calibration result False",
+              "evidence_class": "calibration",
+              "passed": false,
+              "equipment_revision": 4,
+              "valid_until": 20
+            }
+          },
+          "max_source_cost": 3,
+          "logical_time": 1,
+          "release_deadline": 10,
+          "release_receipt_visible": true,
+          "functional_test": null
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "update",
+        "facts": {
+          "evidence_sources": {
+            "inspection": {
+              "available": true,
+              "cost": 1,
+              "text": "inspection result True",
+              "evidence_class": "inspection",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 20
+            },
+            "calibration": {
+              "available": true,
+              "cost": 2,
+              "text": "calibration result True",
+              "evidence_class": "calibration",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 20
+            }
+          },
+          "logical_time": 2
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "update",
+        "facts": {
+          "functional_test": {
+            "passed": true,
+            "equipment_revision": 4,
+            "effect_index": 1
+          },
+          "logical_time": 3
+        }
+      },
+      {
+        "op": "wake"
+      }
+    ]
+  },
+  {
+    "name": "t02_other_class_expires_at_release",
+    "expected_revision": 4,
+    "commands": [
+      {
+        "op": "update",
+        "facts": {
+          "equipment_revision": 4,
+          "release_authorized": true,
+          "withdrawn": false,
+          "evidence_sources": {
+            "inspection": {
+              "available": true,
+              "cost": 1,
+              "text": "inspection result True",
+              "evidence_class": "inspection",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 20
+            },
+            "calibration": {
+              "available": true,
+              "cost": 2,
+              "text": "calibration result True",
+              "evidence_class": "calibration",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 1
+            }
+          },
+          "max_source_cost": 3,
+          "logical_time": 1,
+          "release_deadline": 10,
+          "release_receipt_visible": true,
+          "functional_test": null
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake",
+        "before_effect": {
+          "logical_time": 2
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "update",
+        "facts": {
+          "evidence_sources": {
+            "inspection": {
+              "available": true,
+              "cost": 1,
+              "text": "inspection result True",
+              "evidence_class": "inspection",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 20
+            },
+            "calibration": {
+              "available": true,
+              "cost": 2,
+              "text": "calibration result True",
+              "evidence_class": "calibration",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 20
+            }
+          },
+          "logical_time": 3
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "update",
+        "facts": {
+          "functional_test": {
+            "passed": true,
+            "equipment_revision": 4,
+            "effect_index": 1
+          },
+          "logical_time": 4
+        }
+      },
+      {
+        "op": "wake"
+      }
+    ]
+  },
+  {
+    "name": "t03_failed_functional_test_must_not_close",
+    "expected_revision": 4,
+    "commands": [
+      {
+        "op": "update",
+        "facts": {
+          "equipment_revision": 4,
+          "release_authorized": true,
+          "withdrawn": false,
+          "evidence_sources": {
+            "inspection": {
+              "available": true,
+              "cost": 1,
+              "text": "inspection result True",
+              "evidence_class": "inspection",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 20
+            },
+            "calibration": {
+              "available": true,
+              "cost": 2,
+              "text": "calibration result True",
+              "evidence_class": "calibration",
+              "passed": true,
+              "equipment_revision": 4,
+              "valid_until": 20
+            }
+          },
+          "max_source_cost": 3,
+          "logical_time": 1,
+          "release_deadline": 10,
+          "release_receipt_visible": true,
+          "functional_test": null
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "update",
+        "facts": {
+          "functional_test": {
+            "passed": false,
+            "equipment_revision": 4,
+            "effect_index": 1
+          },
+          "logical_time": 2
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "update",
+        "facts": {
+          "functional_test": {
+            "passed": true,
+            "equipment_revision": 4,
+            "effect_index": 1
+          },
+          "logical_time": 3
+        }
+      },
+      {
+        "op": "wake"
+      }
+    ]
+  }
+]

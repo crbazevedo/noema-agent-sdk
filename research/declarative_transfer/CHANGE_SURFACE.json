@@ -1,0 +1,84 @@
+{
+  "baseline": "f8ae3e32d3ec7a8eb5fcd808f59f075687c17735",
+  "frozen_revision": "34ffb63e7c558ac2c063ce0f1d7000730f2b5a95",
+  "scope": "SDK experimental application and shared domain; native module-selection plumbing reported separately",
+  "caveat": "Structural artifacts only. Not developer time, productivity, or saved effort. Conjunctive contract implementation shared and charged to both arms.",
+  "changes": [
+    {
+      "path": "examples/compositional_lifecycle_domain.py",
+      "before": {
+        "bytes": 0,
+        "lines": 0,
+        "python_statements": 0
+      },
+      "after": {
+        "bytes": 7661,
+        "lines": 200,
+        "sha256": "43b3d287e9d4bd89d131130d2190a2343dbcb0f14196e67c42b598658b9b5fac",
+        "python_statements": 105
+      }
+    },
+    {
+      "path": "examples/commitment_lifecycle.py",
+      "before": {
+        "bytes": 10206,
+        "lines": 277,
+        "sha256": "13923b207a138ac22cdd44929abe5b57b0a007d8a8b00fa9e426f10aca2bd5f6",
+        "python_statements": 115
+      },
+      "after": {
+        "bytes": 10529,
+        "lines": 282,
+        "sha256": "24fd059c38e7116b9141f7449e86cd9f2b19fc202cb0b8b0fbf591c432eb181f",
+        "python_statements": 119
+      }
+    },
+    {
+      "path": "examples/declarative_transfer.py",
+      "before": {
+        "bytes": 1063,
+        "lines": 28,
+        "sha256": "eeec70942d74900ce67c721eb9471e7a742ee770d492b465b4c9ec440b45970f",
+        "python_statements": 16
+      },
+      "after": {
+        "bytes": 2402,
+        "lines": 67,
+        "sha256": "e6bf6847531e29dac7411808d182db5482a31ffefb37f0d57ad48d08bedcb988",
+        "python_statements": 42
+      }
+    },
+    {
+      "path": "tests/test_compositional_lifecycle_example.py",
+      "before": {
+        "bytes": 0,
+        "lines": 0,
+        "python_statements": 0
+      },
+      "after": {
+        "bytes": 4557,
+        "lines": 121,
+        "sha256": "9462531d96f154419062cc3137253f6acc39963b7ac48a65aa8194464bf0f021",
+        "python_statements": 46
+      }
+    },
+    {
+      "path": "research/declarative_transfer/equipment_mapping_v2.json",
+      "before": {
+        "bytes": 0,
+        "lines": 0,
+        "python_statements": 0
+      },
+      "after": {
+        "bytes": 1484,
+        "lines": 53,
+        "sha256": "3347fe60e4e78b314bbb2708b0f4aa5574d399a69dbcf13440da3f383331433b"
+      }
+    }
+  ],
+  "declared_data_changes": [
+    "Executable requirements/postcondition contract inserted as static fact",
+    "Independent postcondition report now must reference exact effect ordinal",
+    "Generic provider records trusted observation/effect arrival sequence"
+  ]
+}
