@@ -185,6 +185,13 @@ class EvidenceAnalyst:
         self.read_budget = int(scenario.get("source_read_budget", 4))
         self.activity_remaining = int(scenario.get("activity_budget", 1))
         self.preparation_budget = int(scenario.get("preparation_budget", 1))
+        # These are lifetime attempt reservations, separate from selected activities.
+        self.scan_attempt_ceiling = scenario.get("scan_attempt_ceiling", 4)
+        self.scan_retry_limit = scenario.get("scan_retry_limit", 2)
+        for value, maximum in [(self.scan_attempt_ceiling, 32), (self.scan_retry_limit, 8)]:
+            if type(value) is not int or not 0 <= value <= maximum:
+                raise ValueError("scan limits must be bounded nonnegative integers")
+        self.wake_lock = asyncio.Lock()
         self.wake_handles = []
         self.commitment_id = COMMITMENT
         self.grant_revision = None
@@ -201,6 +208,10 @@ class EvidenceAnalyst:
             "output_verifier_reads": 0,
             "output_verifier_bytes": 0,
             "scans": 0,
+            "scan_retries": 0,
+            "scan_compute_units_reserved": 0,
+            "scan_wall_time_seconds_reserved": 0,
+            "scan_attention_units_reserved": 0.0,
             "sdk_selected_activities": 0,
             "current_publications": 0,
         }
@@ -435,6 +446,187 @@ class EvidenceAnalyst:
         return None
 
     async def on_wake(self, event):
+        # Duplicate/revised wakes share irreversible lifetime counters.
+        async with self.wake_lock:
+            await self._on_wake(event)
+
+    async def retry_denial(self, event):
+        current = await self.current_goal()
+        if not current or current.status != GoalStatus.ACTIVE:
+            return "canonical goal is not active"
+        if current.revision_id != event.payload["goal_revision"]:
+            return "canonical goal revision changed"
+        if not self.authorized or self.grant_revision != current.revision_id:
+            return "exact revision permission absent"
+        if now() >= self.goal_deadline:
+            return "preparation deadline expired"
+        if self.activity_remaining <= 0:
+            return "lifetime selected activity ceiling exhausted"
+        if self.metrics["preparations_reserved"] >= self.preparation_budget:
+            return "lifetime preparation ceiling exhausted"
+        if self.read_budget - self.metrics["source_reads_reserved"] < 4:
+            return "remaining lifetime read reservation insufficient"
+        return None
+
+    async def scan_with_recovery(self, event):
+        for attempt in range(self.scan_retry_limit + 1):
+            reason = None
+            if attempt:
+                reason = await self.retry_denial(event)
+            if self.metrics["scans"] >= self.scan_attempt_ceiling:
+                reason = reason or "lifetime scan attempt ceiling exhausted"
+            if reason:
+                await self.emit(
+                    "reference.scan_recovery_stopped",
+                    {
+                        "wake_id": event.payload["wake_id"],
+                        "reason": reason,
+                        "attempts_used": self.metrics["scans"],
+                        "refund": 0,
+                    },
+                )
+                return None
+            if attempt:
+                self.metrics["scan_retries"] += 1
+            # Charge before calling the SDK, including lost cuts and empty agendas.
+            self.metrics["scans"] += 1
+            self.metrics["scan_compute_units_reserved"] += 1
+            self.metrics["scan_wall_time_seconds_reserved"] += 60
+            self.metrics["scan_attention_units_reserved"] = self.metrics["scans"] * 0.2
+            self.scan_queued.set()
+            reservation = await self.emit(
+                "reference.scan_attempt_reserved",
+                {
+                    "wake_id": event.payload["wake_id"],
+                    "goal_revision": event.payload["goal_revision"],
+                    "attempt": attempt + 1,
+                    "lifetime_attempt": self.metrics["scans"],
+                    "lifetime_ceiling": self.scan_attempt_ceiling,
+                    "compute_units": 1,
+                    "wall_time_seconds": 60,
+                    "attention_units": 0.2,
+                    "estimated_reservation_not_measured_cpu": True,
+                    "refund": 0,
+                },
+            )
+            if attempt:
+                # Public catch-up derives contradictions from the canonical prefix.
+                # Stop only our projector; concurrent external writes remain enabled.
+                await self.memory.start()
+                await self.memory.stop()
+                checkpoint = self.memory.checkpoint
+                await self.emit(
+                    "reference.retry_memory_refreshed",
+                    {
+                        "wake_id": event.payload["wake_id"],
+                        "through_sequence": checkpoint.last_completed_sequence if checkpoint else 0,
+                        "observed_head_sequence": checkpoint.observed_head_sequence
+                        if checkpoint
+                        else 0,
+                        "evidence_generation": self.evidence_generation,
+                    },
+                )
+                reason = await self.retry_denial(event)
+                if reason:
+                    await self.emit(
+                        "reference.scan_recovery_stopped",
+                        {
+                            "wake_id": event.payload["wake_id"],
+                            "reason": reason,
+                            "attempts_used": self.metrics["scans"],
+                            "refund": 0,
+                        },
+                    )
+                    return None
+            budget = BackgroundCognitiveBudget.create(
+                ceiling=CognitiveResourceVector(
+                    activities=1,
+                    compute_units=1.0,
+                    wall_time_seconds=60.0,
+                    attention_units=0.2,
+                    privacy_risk_units=0.0,
+                )
+            )
+            selection = await self.worker.run_scan(budget=budget)
+            if selection is not None:
+                if attempt:
+                    projection = await self.worker.current_projection()
+                    epoch = projection.epoch(selection.epoch_id)
+                    reason = await self.retry_denial(event)
+                    if not epoch or epoch.event_log_cursor <= reservation.sequence:
+                        reason = reason or "SDK returned a selection from an older causal cut"
+                    if reason:
+                        # Any SDK-selected resources remain charged even on refusal.
+                        used = selection.consumed.activities
+                        self.activity_remaining = max(0, self.activity_remaining - used)
+                        self.metrics["sdk_selected_activities"] += used
+                        await self.emit(
+                            "reference.scan_recovery_stopped",
+                            {
+                                "wake_id": event.payload["wake_id"],
+                                "reason": reason,
+                                "attempts_used": self.metrics["scans"],
+                                "refund": 0,
+                            },
+                        )
+                        return None
+                    await self.emit(
+                        "reference.scan_recovered",
+                        {
+                            "wake_id": event.payload["wake_id"],
+                            "selection_id": selection.selection_id,
+                            "epoch_id": epoch.epoch_id,
+                            "causal_cursor": epoch.event_log_cursor,
+                            "reservation_sequence": reservation.sequence,
+                            "attempt": attempt + 1,
+                            "evidence_generation": self.evidence_generation,
+                        },
+                    )
+                return selection
+            await self.emit(
+                "reference.scan_no_selection",
+                {
+                    "reason": (
+                        "no admitted agenda: no current candidate or "
+                        "strict causal-cut admission lost"
+                    ),
+                    "wake_id": event.payload["wake_id"],
+                    "attempt": attempt + 1,
+                },
+            )
+            reason = await self.retry_denial(event)
+            if attempt >= self.scan_retry_limit:
+                reason = reason or "per-wake retry ceiling exhausted"
+            if self.metrics["scans"] >= self.scan_attempt_ceiling:
+                reason = reason or "lifetime scan attempt ceiling exhausted"
+            if reason:
+                await self.emit(
+                    "reference.scan_recovery_stopped",
+                    {
+                        "wake_id": event.payload["wake_id"],
+                        "reason": reason,
+                        "attempts_used": self.metrics["scans"],
+                        "refund": 0,
+                    },
+                )
+                return None
+            delay = min(0.01 * 2**attempt, 0.1)
+            await self.emit(
+                "reference.scan_retry_scheduled",
+                {
+                    "wake_id": event.payload["wake_id"],
+                    "goal_revision": event.payload["goal_revision"],
+                    "reason": "re-evaluate unresolved no-selection using a fresh SDK cut",
+                    "delay_seconds": delay,
+                    "deadline": self.goal_deadline.isoformat(),
+                    "next_attempt": attempt + 2,
+                    "refund": 0,
+                },
+            )
+            await asyncio.sleep(delay)
+        return None
+
+    async def _on_wake(self, event):
         if self.wake_monotonic is None:
             self.wake_monotonic = time.monotonic()
         current = await self.current_goal()
@@ -460,25 +652,8 @@ class EvidenceAnalyst:
                 },
             )
             return
-        self.metrics["scans"] += 1
-        self.scan_queued.set()
-        budget = BackgroundCognitiveBudget.create(
-            ceiling=CognitiveResourceVector(
-                activities=1,
-                compute_units=1.0,
-                wall_time_seconds=60.0,
-                attention_units=0.2,
-                privacy_risk_units=0.0,
-            )
-        )
-        selection = await self.worker.run_scan(budget=budget)
+        selection = await self.scan_with_recovery(event)
         if selection is None:
-            await self.emit(
-                "reference.scan_no_selection",
-                {
-                    "reason": "no admitted agenda: no current candidate or strict causal-cut admission lost"  # noqa: E501 - preserve frozen fixture/event text
-                },
-            )
             return
         self.selections.append(selection.to_dict())
         used = selection.consumed.activities
@@ -1014,6 +1189,9 @@ class EvidenceAnalyst:
                 if self.wake_monotonic is None
                 else self.wake_monotonic - scheduled_monotonic,
                 "source_read_budget": self.read_budget,
+                "scan_attempt_ceiling": self.scan_attempt_ceiling,
+                "scan_retry_limit": self.scan_retry_limit,
+                "scan_recovery_scope": "preselection only; no discarded preparation retries",
                 "events": [e.to_dict() for e in history],
                 "current_artifact": json.loads(marker.read_text()) if marker.exists() else None,
                 "commitment_status": snapshot.commitments.get(self.commitment_id).status.value,
