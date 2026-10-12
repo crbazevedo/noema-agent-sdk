@@ -607,3 +607,10 @@ The newer shared situated-partner program is pinned by the
 [SDK integration contract](docs/pilot/SITUATED_PARTNER_INTEGRATION.md), its
 [sanitized requirement mirror](docs/pilot/situated-partner-contract-v1.json),
 and the exact-SHA lock recorded on the review branch.
+
+### Runnable reference: Evidence Analyst
+
+[Evidence Analyst tutorial](docs/references/EVIDENCE_ANALYST.md) runs a real local
+scheduled inquiry, read-back-verified report reconciliation, and an explicitly
+re-authorized revised wake under cumulative budgets. The example uses deterministic
+rules and an application execution bridge; endogenous SDK selection remains shadow-only.
