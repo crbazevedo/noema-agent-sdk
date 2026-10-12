@@ -158,3 +158,72 @@ class ReleaseStewardReferenceTests(unittest.IsolatedAsyncioTestCase):
                 finally:
                     result = await app.finish()
                 self.assertNotEqual(result["status"], "closed")
+
+    async def test_numeric_contract_exact_edges_and_rejections(self):
+        import tempfile
+        from fractions import Fraction
+
+        from release_steward import transform_rows
+
+        factor = "999999999999.999999"
+        fixture = "id,amount\na,999999999999.999999\nb,-0.000001\nc,1E+6\n"
+        expected = [Fraction("999999999999.999999"), Fraction("-0.000001"), Fraction("1E+6")]
+        rows = transform_rows(fixture, factor)
+        self.assertEqual(
+            [Fraction(r["amount"]) for r in rows], [x * Fraction(factor) for x in expected]
+        )
+        for value in ("12345678901234567890123456789", "1E-7", "1E+7", "NaN", "Infinity"):
+            with self.assertRaises(ValueError):
+                transform_rows(f"id,amount\na,{value}\n", "1")
+            with self.assertRaises(ValueError):
+                transform_rows("id,amount\na,1\n", value)
+        with self.assertRaises(ValueError):
+            transform_rows("id,amount\n" + "a,1\n" * 1001, "1")
+        result = await run_scenario(
+            {
+                "name": "numeric-boundary",
+                "factor": factor,
+                "source_csv": fixture,
+                "commands": [{"op": "plan"}, {"op": "step"}, {"op": "step"}, {"op": "step"}],
+            }
+        )
+        self.assertEqual(result["status"], "closed")
+        package = next(e for e in result["effects"] if e["operation"] == "package")
+        with tempfile.TemporaryDirectory() as directory:
+            with zipfile.ZipFile(package["path"]) as archive:
+                archive.extractall(directory)
+            for text, accepted in (
+                (fixture, True),
+                ("id,amount\na,12345678901234567890123456789\n", False),
+            ):
+                process = await asyncio.create_subprocess_exec(
+                    sys.executable,
+                    "-I",
+                    str(Path(directory) / "transform.py"),
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                stdout, _ = await process.communicate(text.encode())
+                self.assertEqual(process.returncode == 0, accepted)
+                if accepted:
+                    self.assertEqual(
+                        [Fraction(r["amount"]) for r in json.loads(stdout)],
+                        [x * Fraction(factor) for x in expected],
+                    )
+
+    async def test_invalid_numeric_admission_preserves_rejection_without_effect(self):
+        result = await run_scenario(
+            {
+                "name": "excessive-digits",
+                "factor": "1",
+                "source_csv": "id,amount\na,12345678901234567890123456789\n",
+                "commands": [{"op": "plan"}],
+            }
+        )
+        self.assertEqual(result["status"], "admission_rejected")
+        self.assertEqual(result["effects"], [])
+        record = await asyncio.to_thread(
+            (Path(result["artifact_root"]) / "admission-rejection.json").read_text
+        )
+        self.assertEqual(json.loads(record)["status"], "admission_rejected")

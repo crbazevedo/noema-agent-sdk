@@ -108,3 +108,16 @@ The revised verifier reads the actual prepared fixture/spec, rejects any mismatc
 with the accepted current revision/contract, executes the actual fixture, and
 binds the receipt to that tested byte snapshot. Both exposed cases are regression
 tests; they are not counted as fresh validation of the repair.
+
+## Bounded decimal contract
+
+An additional precision probe after the ten-case V3 audit exposed Decimal's
+28-digit default rounding: a 29-digit input with factor 1 was wrongly closed.
+That failure is preserved separately; ten passing cases did not establish full
+numeric correctness. The revised application and packaged program both enforce:
+finite numbers, at most 18 coefficient digits, decimal exponent -6 through +6,
+at most 64 characters per numeric value, exact id/amount CSV columns, 128-character
+identifiers, 1,000 rows and 256 KiB input. Multiplication uses a local 40-digit
+context, sufficient for the product of two admitted 18-digit coefficients.
+Unsupported values are explicitly rejected. Independent Fraction tests cover
+valid boundary products and rejection of the exposed 29-digit example.

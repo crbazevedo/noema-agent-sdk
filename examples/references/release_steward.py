@@ -10,13 +10,14 @@ import argparse
 import asyncio
 import csv
 import hashlib
+import inspect
 import io
 import json
 import sys
 import tempfile
 import zipfile
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, DecimalException, localcontext
 from pathlib import Path
 
 from noema import (
@@ -53,6 +54,51 @@ from noema import (
 )
 
 START = datetime(2026, 10, 12, 12, tzinfo=UTC)
+NUMERIC_CONTRACT = {
+    "coefficient_digits": 18,
+    "exponent_min": -6,
+    "exponent_max": 6,
+    "numeric_text_chars": 64,
+    "identifier_chars": 128,
+    "max_rows": 1000,
+    "max_csv_bytes": 262144,
+    "multiplication_precision": 40,
+}
+
+
+def bounded_decimal(text):
+    if len(str(text)) > 64:
+        raise ValueError("numeric text exceeds 64 characters")
+    try:
+        value = Decimal(text)
+    except DecimalException as error:
+        raise ValueError("invalid numeric text") from error
+    if not value.is_finite():
+        raise ValueError("numeric values must be finite")
+    parts = value.as_tuple()
+    if len(parts.digits) > 18 or not -6 <= parts.exponent <= 6:
+        raise ValueError("numeric contract: at most 18 coefficient digits and exponent -6..6")
+    return value
+
+
+def transform_rows(text, factor):
+    multiplier = bounded_decimal(factor)
+    if len(text.encode("utf-8")) > 262144:
+        raise ValueError("CSV exceeds 256 KiB")
+    reader = csv.DictReader(io.StringIO(text))
+    if reader.fieldnames != ["id", "amount"]:
+        raise ValueError("CSV requires exact id,amount columns")
+    rows = []
+    with localcontext() as context:
+        context.prec = 40  # two at-most-18-digit coefficients, with margin
+        for row in reader:
+            if len(rows) >= 1000 or None in row or any(v is None for v in row.values()):
+                raise ValueError("CSV row count or structure unsupported")
+            if len(row["id"]) > 128:
+                raise ValueError("identifier exceeds 128 characters")
+            amount = bounded_decimal(row["amount"])
+            rows.append({"id": row["id"].strip(), "amount": str(amount * multiplier)})
+    return rows
 
 
 class ReleaseSteward:
@@ -70,8 +116,7 @@ class ReleaseSteward:
         self.revision = 1
         self.features = ["trim identifiers", "scale decimal amounts"]
         self.factor = str(factor)
-        if not Decimal(self.factor).is_finite():
-            raise ValueError("factor must be finite")
+        transform_rows(source_csv, self.factor)
         self.source_csv = source_csv
         self.freshness = 1.0
         self.old_lease = None
@@ -324,14 +369,15 @@ class ReleaseSteward:
             }
             payload["factor"] = self.factor
             module = (
-                "import csv, io, json, sys\nfrom decimal import Decimal\n"
-                + f"FACTOR = {self.factor!r}\n"
-                + "def transform(text):\n"
-                + "    return [{'id': row['id'].strip(),\n"
-                + "             'amount': str(Decimal(row['amount']) * Decimal(FACTOR))}\n"
-                + "            for row in csv.DictReader(io.StringIO(text))]\n"
+                "import csv, io, json, sys\n"
+                "from decimal import Decimal, DecimalException, localcontext\n"
+                + inspect.getsource(bounded_decimal)
+                + "\n"
+                + inspect.getsource(transform_rows)
+                + f"\nFACTOR = {self.factor!r}\n"
                 + "if __name__ == '__main__':\n"
-                + "    print(json.dumps(transform(sys.stdin.read()), sort_keys=True))\n"
+                + "    result = transform_rows(sys.stdin.read(), FACTOR)\n"
+                + "    print(json.dumps(result, sort_keys=True))\n"
             )
             software = {
                 "transform.py": module,
@@ -342,6 +388,7 @@ class ReleaseSteward:
                         "factor": self.factor,
                         "input_columns": ["id", "amount"],
                         "output_fields": ["id", "amount"],
+                        "numeric_contract": NUMERIC_CONTRACT,
                     }
                 ),
             }
@@ -377,6 +424,7 @@ class ReleaseSteward:
                 "factor": self.factor,
                 "input_columns": ["id", "amount"],
                 "output_fields": ["id", "amount"],
+                "numeric_contract": NUMERIC_CONTRACT,
             }
             try:
                 fixture = tested_bytes["fixture.csv"].decode("utf-8")
@@ -392,13 +440,7 @@ class ReleaseSteward:
             tests = []
             probes = [fixture, "id,amount\n probe ,-0.50\nzero,0\n"]
             for probe in probes:
-                expected_rows = [
-                    {
-                        "id": row["id"].strip(),
-                        "amount": str(Decimal(row["amount"]) * Decimal(self.factor)),
-                    }
-                    for row in csv.DictReader(io.StringIO(probe))
-                ]
+                expected_rows = transform_rows(probe, self.factor)
                 process = await asyncio.create_subprocess_exec(
                     sys.executable,
                     "-I",
@@ -465,7 +507,11 @@ class ReleaseSteward:
             members = {
                 "prepared.json": source.read_bytes(),
                 "verification.json": receipt_path.read_bytes(),
-                "README.txt": b"Run locally: python transform.py < fixture.csv\n",
+                "README.txt": (
+                    b"Run locally: python transform.py < fixture.csv\n"
+                    b"Accepted numeric/resource bounds are in spec.json numeric_contract.\n"
+                    b"Unsupported inputs exit with an error; no rounded success is promised.\n"
+                ),
             }
             for name, file in prepared["software"].items():
                 data = await asyncio.to_thread(Path(file).read_bytes)
@@ -662,12 +708,13 @@ class ReleaseSteward:
                     },
                 )
         elif op == "constraint":
+            factor = str(command.get("factor", self.factor))
+            source_csv = command.get("source_csv", self.source_csv)
+            transform_rows(source_csv, factor)
             self.revision = command["revision"]
             self.features = command["features"]
-            self.factor = str(command.get("factor", self.factor))
-            if not Decimal(self.factor).is_finite():
-                raise ValueError("factor must be finite")
-            self.source_csv = command.get("source_csv", self.source_csv)
+            self.factor = factor
+            self.source_csv = source_csv
             await self.emit("fact.observed", {"key": "release.revision", "value": self.revision})
             await self.emit(
                 "fact.observed",
@@ -751,12 +798,30 @@ async def run_scenario(scenario, output_root=None):
     if root.exists() and any(root.iterdir()):
         raise ValueError("reference output directory must be empty to preserve prior evidence")
     await asyncio.to_thread(root.mkdir, parents=True, exist_ok=True)
-    app = ReleaseSteward(
-        root,
-        independent_verifier=scenario.get("independent_verifier", True),
-        factor=scenario.get("factor", "1"),
-        source_csv=scenario.get("source_csv", "id,amount\n a ,1.25\nb,-2.00\n"),
-    )
+    try:
+        app = ReleaseSteward(
+            root,
+            independent_verifier=scenario.get("independent_verifier", True),
+            factor=scenario.get("factor", "1"),
+            source_csv=scenario.get("source_csv", "id,amount\n a ,1.25\nb,-2.00\n"),
+        )
+    except ValueError as error:
+        rejection = {
+            "scenario": scenario["name"],
+            "status": "admission_rejected",
+            "reason": str(error),
+            "artifact_root": str(root),
+            "effects": [],
+            "events": [],
+            "graphs": [],
+            "replay_equal": True,
+            "numeric_contract": NUMERIC_CONTRACT,
+        }
+        await asyncio.to_thread(
+            (root / "admission-rejection.json").write_text,
+            json.dumps(rejection, indent=2),
+        )
+        return rejection
     try:
         await app.start()
         for command in scenario["commands"]:
