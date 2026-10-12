@@ -1,0 +1,587 @@
+[
+  {
+    "name": "revised_before_wake",
+    "files": {
+      "report_a.csv": "event_id,region,occurred_at,ingested_at,amount\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne3,North,2026-10-03T10:00:00Z,2026-10-06T09:00:00Z,30\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n",
+      "report_b.csv": "event_id,region,occurred_at,ingested_at,amount\ne0,North,2026-09-30T10:00:00Z,2026-10-01T09:00:00Z,40\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n"
+    },
+    "claims": {
+      "report_a.csv": {
+        "period_amount": "110",
+        "period_population": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "basis": "occurred_at"
+      },
+      "report_b.csv": {
+        "period_amount": "120",
+        "period_population": [
+          "e0",
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "basis": "ingested_at"
+      }
+    },
+    "window_start": "2026-10-01T00:00:00Z",
+    "window_end": "2026-10-04T00:00:00Z",
+    "region": "North",
+    "source_read_budget": 8,
+    "activity_budget": 2,
+    "authorized": true,
+    "wake_delay_seconds": 0.06,
+    "analysis_delay_seconds": 0.06,
+    "interventions": [
+      {
+        "phase": "before_wake",
+        "op": "revise_and_reauthorize",
+        "revision_kind": "report_scope",
+        "scope": {
+          "region": null,
+          "window_start": "2026-10-01T00:00:00Z",
+          "window_end": "2026-10-04T00:00:00Z"
+        },
+        "claims": {
+          "report_a.csv": {
+            "period_amount": "125",
+            "period_population": [
+              "e1",
+              "e2",
+              "e3",
+              "e4",
+              "e5"
+            ],
+            "basis": "occurred_at"
+          },
+          "report_b.csv": {
+            "period_amount": "135",
+            "period_population": [
+              "e0",
+              "e1",
+              "e2",
+              "e4",
+              "e5"
+            ],
+            "basis": "ingested_at"
+          }
+        },
+        "renew_authorization": true,
+        "wake_delay_seconds": 0.04,
+        "deadline_seconds": 60
+      }
+    ],
+    "repeat_scan": false,
+    "preparation_budget": 2
+  },
+  {
+    "name": "revised_after_reads",
+    "files": {
+      "report_a.csv": "event_id,region,occurred_at,ingested_at,amount\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne3,North,2026-10-03T10:00:00Z,2026-10-06T09:00:00Z,30\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n",
+      "report_b.csv": "event_id,region,occurred_at,ingested_at,amount\ne0,North,2026-09-30T10:00:00Z,2026-10-01T09:00:00Z,40\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n"
+    },
+    "claims": {
+      "report_a.csv": {
+        "period_amount": "110",
+        "period_population": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "basis": "occurred_at"
+      },
+      "report_b.csv": {
+        "period_amount": "120",
+        "period_population": [
+          "e0",
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "basis": "ingested_at"
+      }
+    },
+    "window_start": "2026-10-01T00:00:00Z",
+    "window_end": "2026-10-04T00:00:00Z",
+    "region": "North",
+    "source_read_budget": 8,
+    "activity_budget": 2,
+    "authorized": true,
+    "wake_delay_seconds": 0.06,
+    "analysis_delay_seconds": 0.06,
+    "interventions": [
+      {
+        "phase": "after_source_reads",
+        "op": "revise_and_reauthorize",
+        "revision_kind": "report_scope",
+        "scope": {
+          "region": null,
+          "window_start": "2026-10-01T00:00:00Z",
+          "window_end": "2026-10-04T00:00:00Z"
+        },
+        "claims": {
+          "report_a.csv": {
+            "period_amount": "125",
+            "period_population": [
+              "e1",
+              "e2",
+              "e3",
+              "e4",
+              "e5"
+            ],
+            "basis": "occurred_at"
+          },
+          "report_b.csv": {
+            "period_amount": "135",
+            "period_population": [
+              "e0",
+              "e1",
+              "e2",
+              "e4",
+              "e5"
+            ],
+            "basis": "ingested_at"
+          }
+        },
+        "renew_authorization": true,
+        "wake_delay_seconds": 0.04,
+        "deadline_seconds": 60
+      }
+    ],
+    "repeat_scan": false,
+    "preparation_budget": 2
+  },
+  {
+    "name": "revision_without_permission",
+    "files": {
+      "report_a.csv": "event_id,region,occurred_at,ingested_at,amount\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne3,North,2026-10-03T10:00:00Z,2026-10-06T09:00:00Z,30\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n",
+      "report_b.csv": "event_id,region,occurred_at,ingested_at,amount\ne0,North,2026-09-30T10:00:00Z,2026-10-01T09:00:00Z,40\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n"
+    },
+    "claims": {
+      "report_a.csv": {
+        "period_amount": "110",
+        "period_population": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "basis": "occurred_at"
+      },
+      "report_b.csv": {
+        "period_amount": "120",
+        "period_population": [
+          "e0",
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "basis": "ingested_at"
+      }
+    },
+    "window_start": "2026-10-01T00:00:00Z",
+    "window_end": "2026-10-04T00:00:00Z",
+    "region": "North",
+    "source_read_budget": 8,
+    "activity_budget": 2,
+    "authorized": true,
+    "wake_delay_seconds": 0.06,
+    "analysis_delay_seconds": 0.06,
+    "interventions": [
+      {
+        "phase": "before_wake",
+        "op": "revise_and_reauthorize",
+        "revision_kind": "report_scope",
+        "scope": {
+          "region": null,
+          "window_start": "2026-10-01T00:00:00Z",
+          "window_end": "2026-10-04T00:00:00Z"
+        },
+        "claims": {
+          "report_a.csv": {
+            "period_amount": "125",
+            "period_population": [
+              "e1",
+              "e2",
+              "e3",
+              "e4",
+              "e5"
+            ],
+            "basis": "occurred_at"
+          },
+          "report_b.csv": {
+            "period_amount": "135",
+            "period_population": [
+              "e0",
+              "e1",
+              "e2",
+              "e4",
+              "e5"
+            ],
+            "basis": "ingested_at"
+          }
+        },
+        "renew_authorization": false,
+        "wake_delay_seconds": 0.04,
+        "deadline_seconds": 60
+      }
+    ],
+    "repeat_scan": false,
+    "preparation_budget": 2
+  },
+  {
+    "name": "revision_lifetime_budget_exhausted",
+    "files": {
+      "report_a.csv": "event_id,region,occurred_at,ingested_at,amount\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne3,North,2026-10-03T10:00:00Z,2026-10-06T09:00:00Z,30\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n",
+      "report_b.csv": "event_id,region,occurred_at,ingested_at,amount\ne0,North,2026-09-30T10:00:00Z,2026-10-01T09:00:00Z,40\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n"
+    },
+    "claims": {
+      "report_a.csv": {
+        "period_amount": "110",
+        "period_population": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "basis": "occurred_at"
+      },
+      "report_b.csv": {
+        "period_amount": "120",
+        "period_population": [
+          "e0",
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "basis": "ingested_at"
+      }
+    },
+    "window_start": "2026-10-01T00:00:00Z",
+    "window_end": "2026-10-04T00:00:00Z",
+    "region": "North",
+    "source_read_budget": 4,
+    "activity_budget": 2,
+    "authorized": true,
+    "wake_delay_seconds": 0.06,
+    "analysis_delay_seconds": 0.06,
+    "interventions": [
+      {
+        "phase": "after_source_reads",
+        "op": "revise_and_reauthorize",
+        "revision_kind": "report_scope",
+        "scope": {
+          "region": null,
+          "window_start": "2026-10-01T00:00:00Z",
+          "window_end": "2026-10-04T00:00:00Z"
+        },
+        "claims": {
+          "report_a.csv": {
+            "period_amount": "125",
+            "period_population": [
+              "e1",
+              "e2",
+              "e3",
+              "e4",
+              "e5"
+            ],
+            "basis": "occurred_at"
+          },
+          "report_b.csv": {
+            "period_amount": "135",
+            "period_population": [
+              "e0",
+              "e1",
+              "e2",
+              "e4",
+              "e5"
+            ],
+            "basis": "ingested_at"
+          }
+        },
+        "renew_authorization": true,
+        "wake_delay_seconds": 0.04,
+        "deadline_seconds": 60
+      }
+    ],
+    "repeat_scan": false,
+    "preparation_budget": 2
+  },
+  {
+    "name": "unsupported_revision",
+    "files": {
+      "report_a.csv": "event_id,region,occurred_at,ingested_at,amount\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne3,North,2026-10-03T10:00:00Z,2026-10-06T09:00:00Z,30\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n",
+      "report_b.csv": "event_id,region,occurred_at,ingested_at,amount\ne0,North,2026-09-30T10:00:00Z,2026-10-01T09:00:00Z,40\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n"
+    },
+    "claims": {
+      "report_a.csv": {
+        "period_amount": "110",
+        "period_population": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "basis": "occurred_at"
+      },
+      "report_b.csv": {
+        "period_amount": "120",
+        "period_population": [
+          "e0",
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "basis": "ingested_at"
+      }
+    },
+    "window_start": "2026-10-01T00:00:00Z",
+    "window_end": "2026-10-04T00:00:00Z",
+    "region": "North",
+    "source_read_budget": 8,
+    "activity_budget": 2,
+    "authorized": true,
+    "wake_delay_seconds": 0.06,
+    "analysis_delay_seconds": 0.06,
+    "interventions": [
+      {
+        "phase": "before_wake",
+        "op": "revise_and_reauthorize",
+        "revision_kind": "new_external_effect",
+        "scope": {
+          "region": null,
+          "window_start": "2026-10-01T00:00:00Z",
+          "window_end": "2026-10-04T00:00:00Z"
+        },
+        "claims": {
+          "report_a.csv": {
+            "period_amount": "125",
+            "period_population": [
+              "e1",
+              "e2",
+              "e3",
+              "e4",
+              "e5"
+            ],
+            "basis": "occurred_at"
+          },
+          "report_b.csv": {
+            "period_amount": "135",
+            "period_population": [
+              "e0",
+              "e1",
+              "e2",
+              "e4",
+              "e5"
+            ],
+            "basis": "ingested_at"
+          }
+        },
+        "renew_authorization": true,
+        "wake_delay_seconds": 0.04,
+        "deadline_seconds": 60
+      }
+    ],
+    "repeat_scan": false,
+    "preparation_budget": 2
+  },
+  {
+    "name": "out_of_range_amount_rejected",
+    "files": {
+      "report_a.csv": "event_id,region,occurred_at,ingested_at,amount\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,123456789012345678901234567890.12\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne3,North,2026-10-03T10:00:00Z,2026-10-06T09:00:00Z,30\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\n",
+      "report_b.csv": "event_id,region,occurred_at,ingested_at,amount\ne0,North,2026-09-30T10:00:00Z,2026-10-01T09:00:00Z,40\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,123456789012345678901234567890.12\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\n"
+    },
+    "claims": {
+      "report_a.csv": {
+        "period_amount": "110",
+        "period_population": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "basis": "occurred_at"
+      },
+      "report_b.csv": {
+        "period_amount": "120",
+        "period_population": [
+          "e0",
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "basis": "ingested_at"
+      }
+    },
+    "window_start": "2026-10-01T00:00:00Z",
+    "window_end": "2026-10-04T00:00:00Z",
+    "region": "North",
+    "source_read_budget": 4,
+    "activity_budget": 1,
+    "authorized": true,
+    "wake_delay_seconds": 0.06,
+    "analysis_delay_seconds": 0.06,
+    "interventions": [],
+    "repeat_scan": false
+  },
+  {
+    "name": "malformed_revision_region",
+    "files": {
+      "report_a.csv": "event_id,region,occurred_at,ingested_at,amount\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne3,North,2026-10-03T10:00:00Z,2026-10-06T09:00:00Z,30\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n",
+      "report_b.csv": "event_id,region,occurred_at,ingested_at,amount\ne0,North,2026-09-30T10:00:00Z,2026-10-01T09:00:00Z,40\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n"
+    },
+    "claims": {
+      "report_a.csv": {
+        "period_amount": "110",
+        "period_population": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "basis": "occurred_at"
+      },
+      "report_b.csv": {
+        "period_amount": "120",
+        "period_population": [
+          "e0",
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "basis": "ingested_at"
+      }
+    },
+    "window_start": "2026-10-01T00:00:00Z",
+    "window_end": "2026-10-04T00:00:00Z",
+    "region": "North",
+    "source_read_budget": 8,
+    "activity_budget": 2,
+    "authorized": true,
+    "wake_delay_seconds": 0.06,
+    "analysis_delay_seconds": 0.06,
+    "interventions": [
+      {
+        "phase": "before_wake",
+        "op": "revise_and_reauthorize",
+        "revision_kind": "report_scope",
+        "scope": {
+          "region": 123,
+          "window_start": "2026-10-01T00:00:00Z",
+          "window_end": "2026-10-04T00:00:00Z"
+        },
+        "claims": {
+          "report_a.csv": {
+            "period_amount": "125",
+            "period_population": [
+              "e1",
+              "e2",
+              "e3",
+              "e4",
+              "e5"
+            ],
+            "basis": "occurred_at"
+          },
+          "report_b.csv": {
+            "period_amount": "135",
+            "period_population": [
+              "e0",
+              "e1",
+              "e2",
+              "e4",
+              "e5"
+            ],
+            "basis": "ingested_at"
+          }
+        },
+        "renew_authorization": true,
+        "wake_delay_seconds": 0.04,
+        "deadline_seconds": 60
+      }
+    ],
+    "repeat_scan": false,
+    "preparation_budget": 2
+  },
+  {
+    "name": "missing_revision_deadline",
+    "files": {
+      "report_a.csv": "event_id,region,occurred_at,ingested_at,amount\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne3,North,2026-10-03T10:00:00Z,2026-10-06T09:00:00Z,30\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n",
+      "report_b.csv": "event_id,region,occurred_at,ingested_at,amount\ne0,North,2026-09-30T10:00:00Z,2026-10-01T09:00:00Z,40\ne1,North,2026-10-01T10:00:00Z,2026-10-01T11:00:00Z,10\ne2,North,2026-10-02T10:00:00Z,2026-10-03T09:00:00Z,20\ne4,North,2026-10-03T11:00:00Z,2026-10-03T12:00:00Z,50\ne5,South,2026-10-02T00:00:00Z,2026-10-02T01:00:00Z,15\n"
+    },
+    "claims": {
+      "report_a.csv": {
+        "period_amount": "110",
+        "period_population": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "basis": "occurred_at"
+      },
+      "report_b.csv": {
+        "period_amount": "120",
+        "period_population": [
+          "e0",
+          "e1",
+          "e2",
+          "e4"
+        ],
+        "basis": "ingested_at"
+      }
+    },
+    "window_start": "2026-10-01T00:00:00Z",
+    "window_end": "2026-10-04T00:00:00Z",
+    "region": "North",
+    "source_read_budget": 8,
+    "activity_budget": 2,
+    "authorized": true,
+    "wake_delay_seconds": 0.06,
+    "analysis_delay_seconds": 0.06,
+    "interventions": [
+      {
+        "phase": "before_wake",
+        "op": "revise_and_reauthorize",
+        "revision_kind": "report_scope",
+        "scope": {
+          "region": null,
+          "window_start": "2026-10-01T00:00:00Z",
+          "window_end": "2026-10-04T00:00:00Z"
+        },
+        "claims": {
+          "report_a.csv": {
+            "period_amount": "125",
+            "period_population": [
+              "e1",
+              "e2",
+              "e3",
+              "e4",
+              "e5"
+            ],
+            "basis": "occurred_at"
+          },
+          "report_b.csv": {
+            "period_amount": "135",
+            "period_population": [
+              "e0",
+              "e1",
+              "e2",
+              "e4",
+              "e5"
+            ],
+            "basis": "ingested_at"
+          }
+        },
+        "renew_authorization": true,
+        "wake_delay_seconds": 0.04,
+        "deadline_seconds": null
+      }
+    ],
+    "repeat_scan": false,
+    "preparation_budget": 2
+  }
+]
