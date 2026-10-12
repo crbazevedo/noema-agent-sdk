@@ -696,9 +696,12 @@ class AgentPresence:
     max_concurrency: int
     observed_at: datetime
     valid_until: datetime
+    observation_id: str | None = None
 
     def __post_init__(self) -> None:
         _require_text(self.agent_id, "agent presence id")
+        if self.observation_id is not None:
+            _require_text(self.observation_id, "presence observation id")
         if self.max_concurrency <= 0:
             raise ValueError("agent max concurrency must be positive")
         _require_aware(self.observed_at, "agent presence observed_at")
@@ -711,13 +714,16 @@ class AgentPresence:
         return self.observed_at <= at < self.valid_until
 
     def to_dict(self) -> JSONObject:
-        return {
+        payload: JSONObject = {
             "agent_id": self.agent_id,
             "status": self.status.value,
             "max_concurrency": self.max_concurrency,
             "observed_at": self.observed_at.isoformat(),
             "valid_until": self.valid_until.isoformat(),
         }
+        if self.observation_id is not None:
+            payload["observation_id"] = self.observation_id
+        return payload
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> AgentPresence:
@@ -727,12 +733,26 @@ class AgentPresence:
             max_concurrency=int(cast(int, data["max_concurrency"])),
             observed_at=_datetime(data, "observed_at"),
             valid_until=_datetime(data, "valid_until"),
+            observation_id=str(data["observation_id"])
+            if data.get("observation_id") is not None
+            else None,
         )
+
+    def _event_id(self) -> str:
+        if self.observation_id is not None:
+            return _canonical_id(
+                "agent-presence",
+                {
+                    "agent_id": self.agent_id,
+                    "observation_id": self.observation_id,
+                },
+            )
+        return _canonical_id("agent-presence", self.to_dict())
 
     def to_event(self, *, source: str) -> Event:
         payload = self.to_dict()
         return _event(
-            event_id=_canonical_id("agent-presence", payload),
+            event_id=self._event_id(),
             event_type=AGENT_PRESENCE_RECORDED_EVENT,
             source=source,
             subject=self.agent_id,
@@ -745,7 +765,7 @@ class AgentPresence:
         if event.type != AGENT_PRESENCE_RECORDED_EVENT:
             raise ValueError(f"not an agent presence event: {event.type}")
         value = cls.from_dict(event.payload)
-        expected_id = _canonical_id("agent-presence", value.to_dict())
+        expected_id = value._event_id()
         if event.id != expected_id:
             raise ValueError("agent presence event id is inconsistent")
         if event.subject != value.agent_id or event.timestamp != value.observed_at:
@@ -857,6 +877,8 @@ class CompetenceEstimate:
         evidence_refs: tuple[str, ...],
         estimated_at: datetime,
     ) -> CompetenceEstimate:
+        score = float(score)
+        evidence_confidence = float(evidence_confidence)
         payload: JSONObject = {
             "agent_id": agent_id,
             "capability": capability,
