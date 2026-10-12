@@ -108,3 +108,118 @@ class ReferenceTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class RecoveryTests(unittest.IsolatedAsyncioTestCase):
+    async def run_probe(self, mode, **limits):
+        from evidence_analyst import EvidenceAnalyst
+        from evidence_analyst_fixtures import public_scenario
+
+        class Probe(EvidenceAnalyst):
+            async def setup(self):
+                await super().setup()
+                original = self.worker._append_epoch_start
+                self.attempts = 0
+
+                async def interfere(epoch):
+                    self.attempts += 1
+                    if mode == "repeated" or self.attempts == 1:
+                        await self.emit("test.concurrent_observation", {"attempt": self.attempts})
+                        if mode == "cancel":
+                            from noema import GoalStatus
+
+                            await self.record_goal(GoalStatus.CANCELLED, "test cancellation")
+                        elif mode == "relevant":
+                            for name in self.paths:
+                                self.paths[name].write_text(
+                                    self.paths[name].read_text().replace(",10\n", ",11\n")
+                                )
+                                await self.intervene(
+                                    {
+                                        "phase": "while_scan_queued",
+                                        "op": "new_source_claim",
+                                        "file": name,
+                                        "claims": {
+                                            "period_amount": str(
+                                                int(self.claims[name]["period_amount"]) + 1
+                                            )
+                                        },
+                                    }
+                                )
+                        elif mode == "revoke":
+                            self.authorized = False
+                    return await original(epoch)
+
+                self.worker._append_epoch_start = interfere
+
+        with tempfile.TemporaryDirectory() as directory:
+            case = public_scenario("recovery_" + mode)
+            case.update(limits)
+            app = Probe(case, Path(directory) / case["name"])
+            report = await app.run()
+            self.assertEqual(report["bus_errors"], [])
+            return report
+
+    async def test_one_lost_cut_recovers(self):
+        report = await self.run_probe("once")
+        self.assertEqual(report["metrics"]["scans"], 2)
+        self.assertEqual(report["metrics"]["scan_retries"], 1)
+        self.assertEqual(report["metrics"]["source_reads_used"], 4)
+        self.assertEqual(report["metrics"]["preparations_reserved"], 1)
+        self.assertEqual(report["metrics"]["current_publications"], 1)
+        recovered = next(
+            e["payload"] for e in report["events"] if e["type"] == "reference.scan_recovered"
+        )
+        self.assertGreater(recovered["causal_cursor"], recovered["reservation_sequence"])
+
+    async def test_relevant_claim_and_bytes_recomputed(self):
+        report = await self.run_probe("relevant")
+        self.assertEqual(report["current_artifact"]["metrics"]["a_total"], "111")
+        self.assertEqual(report["current_artifact"]["metrics"]["b_total"], "121")
+        self.assertEqual(report["metrics"]["scans"], 2)
+        claims = [e["sequence"] for e in report["events"] if e["type"] == "reference.source_claim"]
+        recovered = next(
+            e["payload"] for e in report["events"] if e["type"] == "reference.scan_recovered"
+        )
+        self.assertGreater(recovered["causal_cursor"], max(claims))
+        new_assertions = {
+            "event:" + e["id"]
+            for e in report["events"]
+            if e["type"] == "memory.assertion_recorded"
+            and e["source"] == "reference:new-reported-memory"
+        }
+        bridge = next(
+            e["payload"] for e in report["events"] if e["type"] == "reference.bridge_admitted"
+        )
+        inquiry = next(
+            e["payload"]["inquiry"]
+            for e in report["events"]
+            if e["type"] == "endogenous.inquiry_recorded"
+            and e["payload"]["inquiry"]["inquiry_id"] == bridge["inquiry_id"]
+        )
+        self.assertTrue(new_assertions.intersection(inquiry["evidence_refs"]))
+
+    async def test_interference_and_stop_gates(self):
+        for mode, limits, attempts, reason in [
+            ("repeated", {}, 3, "per-wake retry ceiling"),
+            ("repeated", {"scan_attempt_ceiling": 2}, 2, "lifetime scan attempt"),
+            ("once", {"scan_retry_limit": 0}, 1, "per-wake retry ceiling"),
+            ("cancel", {}, 1, "canonical goal is not active"),
+            ("revoke", {}, 1, "permission absent"),
+            ("once", {"source_read_budget": 3}, 1, "read reservation insufficient"),
+        ]:
+            with self.subTest(mode=mode, limits=limits):
+                report = await self.run_probe(mode, **limits)
+                self.assertIsNone(report["current_artifact"])
+                self.assertEqual(report["metrics"]["scans"], attempts)
+                self.assertEqual(report["metrics"]["source_reads_used"], 0)
+                self.assertEqual(report["metrics"]["scan_compute_units_reserved"], attempts)
+                self.assertEqual(
+                    report["metrics"]["scan_wall_time_seconds_reserved"], 60 * attempts
+                )
+                stops = [
+                    e["payload"]["reason"]
+                    for e in report["events"]
+                    if e["type"] == "reference.scan_recovery_stopped"
+                ]
+                self.assertTrue(any(reason in stop for stop in stops), stops)
