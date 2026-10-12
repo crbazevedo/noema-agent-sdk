@@ -614,3 +614,10 @@ and the exact-SHA lock recorded on the review branch.
 scheduled inquiry, read-back-verified report reconciliation, and an explicitly
 re-authorized revised wake under cumulative budgets. The example uses deterministic
 rules and an application execution bridge; endogenous SDK selection remains shadow-only.
+
+### Native typed decisions
+
+Optional decision adapters support OpenAI Decisions and TypeSafe Jev, directly or
+through a configured LiteLLM Decisions gateway. Predicate, choice and score
+judgments are separate from free-text generation and never grant action authority.
+See [setup, support matrix and offline/live testing](docs/typed-decisions.md).

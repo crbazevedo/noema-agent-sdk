@@ -33,6 +33,10 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e '.[dev,all]'
       - run: make lint typecheck build
+      - name: Exercise offline native decision HTTP contracts
+        env:
+          NOEMA_DECISIONS_LIVE: "0"
+        run: python -m unittest discover -s tests -p test_decision_providers.py -v
 
   distributed-acceptance:
     runs-on: ubuntu-latest
