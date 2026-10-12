@@ -1,0 +1,31 @@
+{
+  "schema": "noema.artifact-import.v1",
+  "aliases": {},
+  "contract": {
+    "requirements": [
+      {
+        "class": "schema"
+      },
+      {
+        "class": "provenance-license"
+      },
+      {
+        "class": "source-version"
+      }
+    ],
+    "source_fields": {
+      "class": "evidence_class",
+      "verdict": "passed",
+      "revision": "dataset_revision",
+      "valid_until": "valid_until"
+    },
+    "expected_verdict": true,
+    "postcondition": {
+      "fact": "import_verified",
+      "verdict": "passed",
+      "expected": true,
+      "revision": "dataset_revision",
+      "effect": "effect_index"
+    }
+  }
+}

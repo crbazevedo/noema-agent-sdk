@@ -1,0 +1,255 @@
+[
+  {
+    "name": "import_valid_csv",
+    "expected_revision": 1,
+    "commands": [
+      {
+        "op": "update",
+        "facts": {
+          "revision": 1,
+          "authorized": true,
+          "now": 1,
+          "deadline": 10,
+          "source_csv": "id,value\n1,alpha\n2,beta\n",
+          "sources": {
+            "schema": {
+              "available": true,
+              "cost": 1,
+              "text": "schema attestation",
+              "evidence_class": "schema",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            },
+            "provenance-license": {
+              "available": true,
+              "cost": 1,
+              "text": "provenance-license attestation",
+              "evidence_class": "provenance-license",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            },
+            "source-version": {
+              "available": true,
+              "cost": 1,
+              "text": "source-version attestation",
+              "evidence_class": "source-version",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            }
+          },
+          "artifact_contract": {
+            "operation": "import_csv",
+            "columns": [
+              "id",
+              "value"
+            ],
+            "row_count": 2,
+            "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27",
+            "content_binding": {
+              "source_class": "source-version",
+              "digest_field": "sha256"
+            }
+          }
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "restart"
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      }
+    ]
+  },
+  {
+    "name": "import_waits_for_permission_evidence",
+    "expected_revision": 1,
+    "commands": [
+      {
+        "op": "update",
+        "facts": {
+          "revision": 1,
+          "authorized": true,
+          "now": 1,
+          "deadline": 10,
+          "source_csv": "id,value\n1,alpha\n2,beta\n",
+          "sources": {
+            "schema": {
+              "available": true,
+              "cost": 1,
+              "text": "schema attestation",
+              "evidence_class": "schema",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            },
+            "provenance-license": {
+              "available": true,
+              "cost": 1,
+              "text": "provenance-license attestation",
+              "evidence_class": "provenance-license",
+              "passed": false,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            },
+            "source-version": {
+              "available": true,
+              "cost": 1,
+              "text": "source-version attestation",
+              "evidence_class": "source-version",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            }
+          },
+          "artifact_contract": {
+            "operation": "import_csv",
+            "columns": [
+              "id",
+              "value"
+            ],
+            "row_count": 2,
+            "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27",
+            "content_binding": {
+              "source_class": "source-version",
+              "digest_field": "sha256"
+            }
+          }
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "update",
+        "facts": {
+          "sources": {
+            "schema": {
+              "available": true,
+              "cost": 1,
+              "text": "schema attestation",
+              "evidence_class": "schema",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            },
+            "provenance-license": {
+              "available": true,
+              "cost": 1,
+              "text": "provenance-license attestation",
+              "evidence_class": "provenance-license",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            },
+            "source-version": {
+              "available": true,
+              "cost": 1,
+              "text": "source-version attestation",
+              "evidence_class": "source-version",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            }
+          }
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      }
+    ]
+  },
+  {
+    "name": "unsupported_transaction",
+    "expected_revision": null,
+    "commands": [
+      {
+        "op": "update",
+        "facts": {
+          "revision": 1,
+          "authorized": true,
+          "now": 1,
+          "deadline": 10,
+          "source_csv": "id,value\n1,alpha\n2,beta\n",
+          "sources": {
+            "schema": {
+              "available": true,
+              "cost": 1,
+              "text": "schema attestation",
+              "evidence_class": "schema",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            },
+            "provenance-license": {
+              "available": true,
+              "cost": 1,
+              "text": "provenance-license attestation",
+              "evidence_class": "provenance-license",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            },
+            "source-version": {
+              "available": true,
+              "cost": 1,
+              "text": "source-version attestation",
+              "evidence_class": "source-version",
+              "passed": true,
+              "dataset_revision": 1,
+              "valid_until": 20,
+              "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27"
+            }
+          },
+          "artifact_contract": {
+            "operation": "two_resource_transaction_with_compensation",
+            "columns": [
+              "id",
+              "value"
+            ],
+            "row_count": 2,
+            "sha256": "0b966fe7d6bc61e014593e88849414493cfaf5bec4750bb9bf0d3b6694e75c27",
+            "content_binding": {
+              "source_class": "source-version",
+              "digest_field": "sha256"
+            }
+          }
+        }
+      },
+      {
+        "op": "wake"
+      },
+      {
+        "op": "wake"
+      }
+    ]
+  }
+]

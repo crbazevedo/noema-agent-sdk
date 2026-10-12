@@ -1,0 +1,12 @@
+test_all_public_cases_reach_useful_and_safe_outcomes (test_commitment_lifecycle_example.CommitmentLifecycleExampleTests.test_all_public_cases_reach_useful_and_safe_outcomes) ... ok
+test_changed_revision_after_delivery_requires_new_delivery (test_commitment_lifecycle_example.CommitmentLifecycleExampleTests.test_changed_revision_after_delivery_requires_new_delivery) ... ok
+test_policy_ablation_exposes_unsafe_effect (test_commitment_lifecycle_example.CommitmentLifecycleExampleTests.test_policy_ablation_exposes_unsafe_effect) ... ok
+test_replay_ablation_loses_useful_outcome (test_commitment_lifecycle_example.CommitmentLifecycleExampleTests.test_replay_ablation_loses_useful_outcome) ... ok
+test_all_classes_required_and_field_names_are_declarative (test_compositional_lifecycle_example.CompositionalDomainTests.test_all_classes_required_and_field_names_are_declarative) ... ok
+test_future_report_cannot_replace_causally_later_evidence (test_compositional_lifecycle_example.CompositionalDomainTests.test_future_report_cannot_replace_causally_later_evidence) ... ok
+test_restart_preserves_causal_observation_and_effect_order (test_compositional_lifecycle_example.CompositionalRuntimeTests.test_restart_preserves_causal_observation_and_effect_order) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.444s
+
+OK

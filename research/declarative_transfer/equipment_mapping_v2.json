@@ -1,0 +1,53 @@
+{
+  "schema": "noema.compositional-transfer.v2",
+  "domain": "equipment-return-to-service",
+  "engine_frozen_commit": "d50a90b990f58215f99b2f7c291dcd00301f847a",
+  "aliases": {
+    "equipment_revision": "revision",
+    "release_authorized": "authorized",
+    "withdrawn": "cancelled",
+    "evidence_sources": "sources",
+    "max_source_cost": "budget",
+    "logical_time": "now",
+    "release_deadline": "deadline",
+    "release_receipt_visible": "receipt_visible"
+  },
+  "capability_labels": {
+    "prepare_brief": "prepare_release_evidence",
+    "deliver_brief": "release_equipment",
+    "verify_receipt": "inspect_release_receipt"
+  },
+  "requirements": {
+    "all_evidence_classes": [
+      "inspection",
+      "calibration"
+    ],
+    "evidence_condition": "passed, current equipment revision, not expired at release",
+    "closure_condition": "independent functional test passed after release",
+    "requirements_are_metadata_not_executable": false
+  },
+  "contract": {
+    "requirements": [
+      {
+        "class": "inspection"
+      },
+      {
+        "class": "calibration"
+      }
+    ],
+    "source_fields": {
+      "class": "evidence_class",
+      "verdict": "passed",
+      "revision": "equipment_revision",
+      "valid_until": "valid_until"
+    },
+    "expected_verdict": true,
+    "postcondition": {
+      "fact": "functional_test",
+      "verdict": "passed",
+      "expected": true,
+      "revision": "equipment_revision",
+      "effect": "effect_index"
+    }
+  }
+}
