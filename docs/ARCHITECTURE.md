@@ -967,6 +967,18 @@ idempotency keys and reconstructs authorized actions with no terminal outcome.
 Only idempotent capabilities retry automatically; non-idempotent actions are
 durably abandoned for explicit reconciliation and new authorization.
 
+Before each capability invocation, including after queuing and retry backoff,
+the runtime rechecks the current policy against a fresh local situation snapshot.
+The same snapshot is passed to that attempt's capability context. A denial
+records `action.abandoned` with the number of prior invocations and prevents
+further automatic invocation, compensation, and restart replay of that intent.
+Prior attempts may still have effects: abandonment is not an effect-free receipt
+or a rollback. These local preflight checks do not provide atomic authorization
+at a third-party effect boundary or eliminate distributed projection lag;
+capability adapters remain responsible for commit-time enforcement and effect
+reconciliation. Policy rules should be side-effect-free because authorization
+can be evaluated more than once.
+
 ## Model boundary
 
 Model providers implement a small provider-neutral request/response contract. A

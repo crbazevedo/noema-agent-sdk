@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- revalidate current action policy before every capability attempt, including
+  queued execution and retries, and durably abandon denied continuations without
+  implying that earlier attempts were effect-free or authorizing compensation;
+- pass the revalidated situation snapshot to each capability invocation.
+
 ## 0.6.2 — 2026-09-02
 
 - added projection-only dormant-`Inquiry` discovery with deterministic,

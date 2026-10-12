@@ -377,12 +377,19 @@ class AutonomousAgent:
         request: DeliberationRequest,
         authorization_event: Event,
         lease: Any,
+        *,
+        original_authorization_event_id: str | None = None,
     ) -> ActionOutcome | None:
         async with lease:
             async with self._action_semaphore:
                 self._active_actions += 1
                 try:
-                    return await self._execute_intent(intent, request, authorization_event)
+                    return await self._execute_intent(
+                        intent,
+                        request,
+                        authorization_event,
+                        original_authorization_event_id=original_authorization_event_id,
+                    )
                 finally:
                     self._active_actions -= 1
 
@@ -391,6 +398,8 @@ class AutonomousAgent:
         intent: ActionIntent,
         request: DeliberationRequest,
         authorization_event: Event,
+        *,
+        original_authorization_event_id: str | None = None,
     ) -> ActionOutcome | None:
         capability = self.capabilities.get(intent.capability)
         if intent.idempotency_key is not None:
@@ -444,11 +453,40 @@ class AutonomousAgent:
         result = CapabilityResult.fail("capability was not invoked")
         max_retries = capability.spec.max_retries if capability.spec.idempotent else 0
         while attempts <= max_retries:
+            # Queuing and retry backoff can outlive the original authorization.
+            # Idempotence permits safe replay; it does not preserve permission.
+            snapshot = await self.kernel.snapshot()
+            authorization = self.policy.authorize(intent, capability.spec, snapshot)
+            if not authorization.allowed:
+                await self.kernel.emit(
+                    Event(
+                        type="action.abandoned",
+                        source=self.agent_id,
+                        subject=intent.intent_id,
+                        correlation_id=started_event.correlation_id,
+                        causation_id=started_event.id,
+                        payload={
+                            "reason": f"execution reauthorization failed: {authorization.reason}",
+                            "capability": intent.capability,
+                            "idempotency_key": intent.idempotency_key,
+                            "attempts": attempts,
+                            "original_authorization_event_id": (
+                                original_authorization_event_id or authorization_event.id
+                            ),
+                            "situation_version": snapshot.version,
+                            "previous_attempt_error": result.error if attempts else None,
+                        },
+                    )
+                )
+                # A prior attempt may already have effects. Abandonment prevents
+                # further invocation; it does not certify an effect-free failure
+                # or authorize compensation.
+                return None
             attempts += 1
             context = CapabilityContext(
                 agent_id=self.agent_id,
                 trigger=request.trigger,
-                situation=request.situation,
+                situation=snapshot,
                 emit=self.kernel.emit,
                 attempt=attempts,
                 idempotency_key=intent.idempotency_key,
@@ -723,6 +761,7 @@ class AutonomousAgent:
                 request,
                 recovery_event,
                 lease,
+                original_authorization_event_id=authorization_event.id,
             )
             if outcome is not None:
                 for reflection_event in await self.controller.reflect(outcome, request):
