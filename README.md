@@ -5,7 +5,8 @@
 Noema is a Python SDK for long-running, event-driven agents. It gives an agent
 persistent history, a queryable model of its situation, and a controlled path
 from a proposed action to an executed capability. You supply the reasoning,
-tools, and application policy.
+tools, and application policy. Commitments are explicit records; your
+application or model supplies their meaning.
 
 ## The vision
 
@@ -17,7 +18,10 @@ Noema's thesis is that these responsibilities belong in the system around the
 model: durable memory, explicit intent, limited attention, verifiable work, and
 bounded authority. The aspiration is **“Run my work. Improve my decisions. Help
 me improve.”** This SDK builds the infrastructure for that aspiration; the
-full developmental partner is still a roadmap goal.
+full developmental partner is still a roadmap goal. The direction is reusable
+situation and commitment semantics beyond prewritten domain workflows, with
+bounded inquiry into what deserves attention. Today those background inquiry
+workers remain shadow-only.
 
 Three principles guide it:
 
